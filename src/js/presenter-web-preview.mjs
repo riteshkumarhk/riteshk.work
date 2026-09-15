@@ -1,6 +1,6 @@
 import { presenterIcon } from "./presenter-panel.mjs";
 import { createPresenterLaser } from "./presenter-pointer.mjs";
-import { dispatchPresenterInput, presentationContains, presentationHover, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
+import { createPresentationHover, dispatchPresenterInput, presentationContains, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
 export function requestPresenterCapture() {
   const handle = crypto.randomUUID();
   let cancelled = false, captured = null;
@@ -17,7 +17,12 @@ export function requestPresenterCapture() {
 export function installWebPresenterPreview({ frame, pointer, container, presenterWindow, button, status, onDisconnect, captureTicket }) {
   const doc = container.ownerDocument;
   const previewSurface = container.parentElement;
+  previewSurface.tabIndex = 0;
+  previewSurface.setAttribute("aria-label", "Audience slide controls");
+  previewSurface.style.touchAction = "none";
+  container.style.pointerEvents = "none";
   const localLaser = createPresenterLaser(previewSurface, true);
+  const hover = createPresentationHover(frame);
   const mediaDevices = navigator.mediaDevices;
   const handle = captureTicket?.handle || crypto.randomUUID();
   let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
@@ -38,6 +43,18 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   if (bottomControls) bottomControls.before(controls); else container.parentElement.after(controls);
   const playButton = controls.querySelector("button"), seek = controls.querySelector("input");
   function activeMedia() { return (presentationContains(frame, focused?.target) && focused.target.closest("video,audio")) || presentationMedia(frame); }
+  function syncMedia() {
+    const media = stopped ? null : activeMedia();
+    controls.hidden = !media;
+    if (!media) return;
+    playButton.setAttribute("aria-label", media.paused ? "Play slide media" : "Pause slide media");
+    playButton.title = media.paused ? "Play slide media" : "Pause slide media";
+    playButton.querySelector("path").setAttribute("d", media.paused ? "m5 3 14 9-14 9Z" : "M8 3v18M16 3v18");
+    seek.disabled = !Number.isFinite(media.duration) || media.duration <= 0;
+    if (!seek.disabled && doc.activeElement !== seek) seek.value = String(media.currentTime / media.duration * 100);
+  }
+  const mediaTimer = presenterWindow.setInterval(syncMedia, 250);
+  syncMedia();
   function toggleMedia(media = activeMedia()) {
     if (!media) return;
     if (media.paused) media.play().catch(() => { status.textContent = "Playback blocked. Start this media in the audience window."; });
@@ -52,13 +69,13 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     const cancelled = pressed;
     pressed = null;
     if (cancelled && presentationContains(frame, cancelled.target)) dispatchPresenterInput(cancelled.target, "pointercancel", { pointerId: 1, pointerType: "mouse", buttons: 0, clientX: cancelled.x, clientY: cancelled.y });
-    if (canvas && cancelled && canvas.hasPointerCapture(cancelled.pointerId)) canvas.releasePointerCapture(cancelled.pointerId);
-    presentationHover(frame, hovered, null, { pointerId: 1, pointerType: "mouse", buttons: 0 });
+    if (cancelled && previewSurface.hasPointerCapture(cancelled.pointerId)) previewSurface.releasePointerCapture(cancelled.pointerId);
+    hover.update(hovered, null, { pointerId: 1, pointerType: "mouse", buttons: 0 });
     hovered = null;
     pointer.hide();
     localLaser.hide();
   }
-  function stop(message = "Live preview stopped. Pointer remains connected.") {
+  function stop(message = "Live preview stopped. Controls remain connected.") {
     release();
     focused = null;
     presenterWindow.cancelAnimationFrame(animation);
@@ -70,7 +87,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     video = null;
     if (canvas) canvas.remove();
     canvas = null;
-    controls.hidden = true;
+    syncMedia();
     container.classList.remove("pp__now--live");
     button.disabled = !supported;
     connection("disconnected", message);
@@ -101,13 +118,16 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       status.textContent = "Embedded player: use its controls directly in the audience window.";
       return hit;
     }
-    if (status.textContent.startsWith("Embedded player:")) status.textContent = stream ? "Live preview" : "Pointer connected";
+    if (status.textContent.startsWith("Embedded player:")) status.textContent = stream ? "Live preview" : "Controls connected";
     return hit;
   }
-  function pointPreview(event) { if (event.target !== canvas) targetAt(event); }
   function leavePreview() { if (!pressed) release(); }
-  previewSurface.addEventListener("pointermove", pointPreview, true);
+  for (const type of ["pointerdown", "pointermove", "pointerup"]) previewSurface.addEventListener(type, forward);
+  previewSurface.addEventListener("pointercancel", release);
   previewSurface.addEventListener("pointerleave", leavePreview);
+  previewSurface.addEventListener("blur", release);
+  previewSurface.addEventListener("wheel", wheel, { passive: false });
+  previewSurface.addEventListener("dblclick", doubleClick);
   presenterWindow.addEventListener("blur", release);
   presenterWindow.addEventListener("resize", release);
   function setRange(target, x) {
@@ -126,12 +146,12 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     const hit = targetAt(event);
     const options = { ...modifiers(event), button: event.type === "pointermove" ? -1 : 0, buttons: event.buttons, pointerId: 1, pointerType: "mouse", isPrimary: true };
     const actionable = hit && !hit.blocked && !hit.disabled ? hit : null;
-    if (!pressed) { presentationHover(frame, hovered, actionable, options); hovered = actionable; }
+    if (!pressed) { hover.update(hovered, actionable, options); hovered = actionable; }
     if (event.type === "pointerdown") {
       if (!actionable) return;
       event.preventDefault();
-      canvas.focus();
-      canvas.setPointerCapture(event.pointerId);
+      previewSurface.focus({ preventScroll: true });
+      previewSurface.setPointerCapture(event.pointerId);
       pressed = { ...hit, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, moved: false, compatibilityMouse: true };
       focused = hit;
     }
@@ -153,14 +173,18 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (event.type === "pointerup") {
       const clicked = pressed;
       pressed = null;
-      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      if (previewSurface.hasPointerCapture(event.pointerId)) previewSurface.releasePointerCapture(event.pointerId);
       if (clicked && !clicked.moved && actionable && (clicked.target === hit.target || clicked.control && clicked.control === hit.control)) {
         if (hit.target.closest("video[controls],audio[controls]")) toggleMedia(hit.target.closest("video,audio"));
         else if (!hit.target.matches('input[type="range"]')) dispatchPresenterInput(hit.target, "click", { ...options, clientX: hit.x, clientY: hit.y, detail: 1 });
-        canvas?.focus({ preventScroll: true });
+        previewSurface.focus({ preventScroll: true });
       }
-      presentationHover(frame, hovered, actionable, options); hovered = actionable;
+      hover.update(hovered, actionable, options); hovered = actionable;
     }
+  }
+  function doubleClick(event) {
+    const hit = targetAt(event);
+    if (hit && !hit.blocked && !hit.disabled) { event.preventDefault(); dispatchPresenterInput(hit.target, "dblclick", { ...modifiers(event), clientX: hit.x, clientY: hit.y, detail: 2 }); }
   }
   function wheel(event) {
     const hit = targetAt(event);
@@ -180,7 +204,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     }
   }
   function key(event) {
-    if (!liveFrame || event.target !== canvas && event.target !== doc.body) return;
+    if (event.target !== previewSurface && event.target !== canvas && event.target !== doc.body) return;
     if (!presentationContains(frame, focused?.target)) return;
     const owner = focused.document;
     const modal = [...owner.querySelectorAll('[role="dialog"][aria-modal="true"]')].find(element => presentationContains(frame, element) && !element.hidden && element.getClientRects().length && owner.defaultView.getComputedStyle(element).visibility !== "hidden");
@@ -226,15 +250,6 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       container.classList.toggle("pp__now--live", drawable);
       connection("live", drawable ? "Live preview" : "Capture paused. Showing the current slide thumbnail.");
     }
-    const media = activeMedia();
-    controls.hidden = !liveFrame || !media;
-    if (media) {
-      playButton.setAttribute("aria-label", media.paused ? "Play slide media" : "Pause slide media");
-      playButton.title = media.paused ? "Play slide media" : "Pause slide media";
-      playButton.querySelector("path").setAttribute("d", media.paused ? "m5 3 14 9-14 9Z" : "M8 3v18M16 3v18");
-      seek.disabled = !Number.isFinite(media.duration) || media.duration <= 0;
-      if (!seek.disabled && doc.activeElement !== seek) seek.value = String(media.currentTime / media.duration * 100);
-    }
     animation = presenterWindow.requestAnimationFrame(paint);
   }
   async function connect() {
@@ -271,45 +286,46 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       await player.play();
       if (stopped || stream !== captured || video !== player) return;
       canvas = doc.createElement("canvas");
-      canvas.tabIndex = 0;
       canvas.setAttribute("aria-label", "Live audience slide controls");
       canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;visibility:hidden";
       container.appendChild(canvas);
-      for (const type of ["pointerdown", "pointermove", "pointerup"]) canvas.addEventListener(type, forward);
-      canvas.addEventListener("pointercancel", release);
-      canvas.addEventListener("pointerleave", () => { if (!pressed) pointer.hide(); });
-      canvas.addEventListener("blur", release);
-      canvas.addEventListener("wheel", wheel, { passive: false });
-      canvas.addEventListener("dblclick", event => {
-        const hit = targetAt(event);
-        if (hit && !hit.blocked && !hit.disabled) { event.preventDefault(); dispatchPresenterInput(hit.target, "dblclick", { ...modifiers(event), clientX: hit.x, clientY: hit.y, detail: 2 }); }
-      });
       connection("live", "Waiting for audience frames");
       paint();
     } catch (error) {
-      if (!stopped) stop(error.name === "NotAllowedError" ? "Capture cancelled or denied. Slides and notes remain available; reconnect when ready." : "Live preview unavailable. Use the audience window for slide interactions.");
+      if (!stopped) stop(error.name === "NotAllowedError" ? "Capture cancelled or denied. Controls remain connected." : "Live preview unavailable. Controls remain connected.");
     } finally { pending = false; pendingTicket = null; if (!stopped) button.disabled = !supported; }
   }
   button.addEventListener("click", connect);
   presenterWindow.addEventListener("keydown", key, true);
-  if (!supported) { button.disabled = true; status.textContent = "Pointer connected. Live video preview is unavailable in this browser."; }
+  status.textContent = "Controls connected";
+  if (!supported) { button.disabled = true; status.textContent = "Controls connected. Live video preview is unavailable in this browser."; }
   return {
     connect,
     resetPointer() { release(); focused = null; },
     get live() { return liveFrame; },
     dispose() {
       stopped = true;
+      presenterWindow.clearInterval(mediaTimer);
       captureTicket?.cancel(); captureTicket = null;
       pendingTicket?.cancel(); pendingTicket = null;
       stop();
+      hover.dispose();
       button.removeEventListener("click", connect);
-      previewSurface.removeEventListener("pointermove", pointPreview, true);
+      for (const type of ["pointerdown", "pointermove", "pointerup"]) previewSurface.removeEventListener(type, forward);
+      previewSurface.removeEventListener("pointercancel", release);
       previewSurface.removeEventListener("pointerleave", leavePreview);
+      previewSurface.removeEventListener("blur", release);
+      previewSurface.removeEventListener("wheel", wheel);
+      previewSurface.removeEventListener("dblclick", doubleClick);
       presenterWindow.removeEventListener("blur", release);
       presenterWindow.removeEventListener("resize", release);
       presenterWindow.removeEventListener("keydown", key, true);
       localLaser.dispose();
       previewSurface.style.cursor = "";
+      previewSurface.style.touchAction = "";
+      previewSurface.removeAttribute("tabindex");
+      previewSurface.removeAttribute("aria-label");
+      container.style.pointerEvents = "";
       controls.remove();
       try { mediaDevices?.setCaptureHandleConfig?.({}); } catch (error) {}
     }

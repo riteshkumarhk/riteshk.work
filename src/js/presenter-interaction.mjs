@@ -116,6 +116,56 @@ export function dispatchPresenterInput(target, type, options = {}) {
 
 export function isPresenterInput(event) { return forwardedEvents.has(event); }
 
+export function createPresentationHover(root) {
+  const patched = new Map(), marked = new Map();
+  function clear() {
+    for (const [element, value] of marked) {
+      if (value === null) element.removeAttribute("data-rk-dj-hover");
+      else element.setAttribute("data-rk-dj-hover", value);
+    }
+    marked.clear();
+  }
+  function patchStyles(document) {
+    const visited = new Set();
+    function visit(parent) {
+      if (!parent || visited.has(parent)) return;
+      visited.add(parent);
+      let rules;
+      try { rules = parent.cssRules; } catch { return; }
+      for (const rule of rules || []) {
+        if (rule.selectorText?.includes(":hover") && !patched.has(rule)) {
+          const original = rule.selectorText;
+          rule.selectorText = original.replace(/:hover\b/g, ":is(:hover,[data-rk-dj-hover])");
+          patched.set(rule, { original, replacement: rule.selectorText });
+        }
+        visit(rule.styleSheet || rule);
+      }
+    }
+    for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets]) visit(sheet);
+  }
+  return {
+    update(previous, next, options) {
+      if (previous?.target !== next?.target) {
+        clear();
+        const documents = new Set();
+        for (let element = next?.target; element && presentationContains(root, element); element = element.parentElement || element.ownerDocument.defaultView.frameElement) {
+          marked.set(element, element.getAttribute("data-rk-dj-hover"));
+          element.setAttribute("data-rk-dj-hover", "");
+          documents.add(element.ownerDocument);
+          if (element === root) break;
+        }
+        for (const document of documents) patchStyles(document);
+      }
+      presentationHover(root, previous, next, options);
+    },
+    dispose() {
+      clear();
+      for (const [rule, { original, replacement }] of patched) if (rule.selectorText === replacement) rule.selectorText = original;
+      patched.clear();
+    }
+  };
+}
+
 export function presentationHover(root, previous, next, options = {}) {
   if (previous?.target === next?.target) return;
   const ancestors = hit => {

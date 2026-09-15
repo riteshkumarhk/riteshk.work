@@ -10,12 +10,12 @@ await build({ entryPoints: [fileURLToPath(new URL("./tools/studio-presenter/fixt
 const baseURL = process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510";
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 
-async function openFixture(browser) {
+async function openFixture(browser, { floating = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
-  await page.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
+  if (!floating) await page.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
   await page.goto(baseURL + "/tools/studio-presenter/fixture.html");
   await page.click("#start");
-  const waiting = page.waitForEvent("popup");
+  const waiting = page.context().waitForEvent("page");
   await page.getByRole("button", { name: "Open presenter window", exact: true }).click();
   const popup = await waiting;
   await popup.waitForSelector("[data-pp-live]");
@@ -26,9 +26,59 @@ async function pointFor(page, popup, selector) {
   const bounds = await (typeof selector === "string" ? page.locator(selector) : selector).boundingBox();
   const frame = await page.locator("[data-pjp-frame]").evaluate(frame => (document.fullscreenElement && frame.contains(document.fullscreenElement) ? document.fullscreenElement : frame).getBoundingClientRect().toJSON());
   const relative = { x: (bounds.x + bounds.width / 2 - frame.x) / frame.width, y: (bounds.y + bounds.height / 2 - frame.y) / frame.height };
-  const canvas = await popup.locator("[data-pp-now] canvas").boundingBox();
+  const canvas = await popup.locator("[data-pp-now]").boundingBox();
   return { x: canvas.x + canvas.width * relative.x, y: canvas.y + canvas.height * relative.y };
 }
+
+test("floating DJ forwards hover and controls before connecting capture", { timeout: 45000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"] });
+  try {
+    const { page, popup } = await openFixture(browser, { floating: true });
+    assert.equal(await popup.locator("html").getAttribute("data-presenter-window"), "always-on-top");
+    await page.evaluate(() => {
+      window.captureRequests = 0;
+      navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException("Denied", "NotAllowedError")); };
+      const action = document.querySelector("#action");
+      action.addEventListener("mouseenter", () => action.dataset.hovered = "yes");
+      action.addEventListener("mouseleave", () => action.dataset.hovered = "no");
+      const style = document.createElement("style");
+      style.textContent = "#action{outline:0 solid transparent}@media(min-width:600px){#action:hover{outline:3px solid rgb(20, 220, 60)}}";
+      document.head.appendChild(style);
+    });
+    const action = await pointFor(page, popup, "#action");
+    await popup.mouse.move(action.x, action.y);
+    assert.equal(await page.locator("#action").getAttribute("data-hovered"), "yes");
+    assert.equal(await page.locator("#action").evaluate(element => getComputedStyle(element).outlineWidth), "3px");
+    await popup.mouse.click(action.x, action.y);
+    assert.equal(await page.evaluate(() => window.fixture.clicks), 1);
+    const summary = await pointFor(page, popup, "#section");
+    await popup.mouse.click(summary.x, summary.y);
+    assert.equal(await page.locator("#action").getAttribute("data-hovered"), "no");
+    assert.equal(await page.locator("#action").evaluate(element => getComputedStyle(element).outlineWidth), "0px");
+    assert.equal(await page.locator("details").evaluate(element => element.open), true);
+    const play = await pointFor(page, popup, "#play");
+    await popup.mouse.click(play.x, play.y);
+    await page.waitForFunction(() => !document.querySelector("video").paused);
+    await popup.mouse.click(play.x, play.y);
+    await page.waitForFunction(() => document.querySelector("video").paused);
+    const range = await pointFor(page, popup, "#seek");
+    await popup.mouse.click(range.x, range.y);
+    const before = Number(await page.locator("#seek").inputValue());
+    await popup.keyboard.press("ArrowRight");
+    assert.equal(Number(await page.locator("#seek").inputValue()), before + 1);
+    assert.equal(await page.evaluate(() => window.captureRequests), 0);
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0);
+    await popup.locator("[data-pp-live]").click();
+    await popup.waitForFunction(() => document.querySelector("[data-pp-status]").dataset.state === "disconnected");
+    await popup.mouse.click(action.x, action.y);
+    assert.equal(await page.evaluate(() => window.fixture.clicks), 2, "Denied capture must not disconnect input");
+    await popup.close();
+    await page.waitForSelector(".pjp--popped", { state: "detached" });
+    assert.equal(await page.locator("[data-rk-dj-hover]").count(), 0);
+    assert.equal(await page.evaluate(() => [...document.styleSheets].at(-1).cssRules[1].cssRules[0].selectorText), "#action:hover");
+    assert.equal(await page.locator(".pjp").count(), 1, "Closing the pad must not end the audience");
+  } finally { await browser.close(); }
+});
 
 test("real audience tab capture mirrors live pixels and forwards web controls", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
@@ -180,10 +230,10 @@ test("DJ thumbnail shares the laser and clears it on navigation without capture"
   } finally { await browser.close(); }
 });
 
-test("DJ input reaches native section controls while ordinary section content keeps the laser", { timeout: 45000 }, async () => {
+for (const capture of [false, true]) test(`DJ input reaches native section controls while ordinary section content keeps the laser (${capture ? "live capture" : "without capture"})`, { timeout: 45000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"], args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
-    const { page, popup } = await openFixture(browser);
+    const { page, popup } = await openFixture(browser, { floating: !capture });
     await page.evaluate(() => {
       const image = document.createElement("canvas"); image.width = 640; image.height = 360;
       const context = image.getContext("2d"); context.fillStyle = "#ba284a"; context.fillRect(0, 0, 640, 360);
@@ -197,8 +247,10 @@ test("DJ input reaches native section controls while ordinary section content ke
     });
     const section = page.frameLocator('iframe[data-section="compare"]');
     await section.locator(".pjb__cmp-base").evaluate(image => image.decode());
-    await popup.locator("[data-pp-live]").click();
-    await popup.locator("[data-pp-now] canvas").waitFor();
+    if (capture) {
+      await popup.locator("[data-pp-live]").click();
+      await popup.locator("[data-pp-now] canvas").waitFor();
+    }
     const audience = await page.locator("[data-pjp-frame]").boundingBox();
     const preview = await popup.locator("[data-pp-now]").boundingBox();
     const previewPoint = bounds => ({ x: preview.x + (bounds.x + bounds.width / 2 - audience.x) / audience.width * preview.width, y: preview.y + (bounds.y + bounds.height / 2 - audience.y) / audience.height * preview.height });
@@ -218,7 +270,7 @@ test("DJ input reaches native section controls while ordinary section content ke
     assert.equal(await section.locator(".pjb__h").evaluate(element => getComputedStyle(element).cursor), "none");
     await popup.mouse.move(grip.x, grip.y); await popup.mouse.down();
     await popup.mouse.move(grip.x + 25, grip.y, { steps: 4 });
-    await popup.locator("[data-pp-now] canvas").dispatchEvent("pointercancel", { pointerId: 1, pointerType: "mouse" });
+    await popup.locator(".pp__nowwrap").dispatchEvent("pointercancel", { pointerId: 1, pointerType: "mouse" });
     const cancelled = await section.locator(".pjb__cmp").evaluate(element => element.style.getPropertyValue("--pos"));
     await popup.mouse.move(grip.x - 60, grip.y, { steps: 4 });
     assert.equal(await section.locator(".pjb__cmp").evaluate(element => element.style.getPropertyValue("--pos")), cancelled, "Cancelled gestures must release the section's document-level drag handler");
@@ -231,10 +283,10 @@ test("DJ input reaches native section controls while ordinary section content ke
   } finally { await browser.close(); }
 });
 
-test("DJ forwards native gallery, annotation, generated gestures and nested media controls", { timeout: 60000 }, async () => {
+for (const capture of [false, true]) test(`DJ forwards native gallery, annotation, generated gestures and nested media controls (${capture ? "live capture" : "without capture"})`, { timeout: 60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
-    const { page, popup } = await openFixture(browser);
+    const { page, popup } = await openFixture(browser, { floating: !capture });
     await page.evaluate(() => {
       const embedded = document.createElement("iframe"); embedded.id = "section-controls";
       embedded.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0";
@@ -258,7 +310,7 @@ test("DJ forwards native gallery, annotation, generated gestures and nested medi
     }
     async function click(locator) { const point = await position(locator); await popup.mouse.click(point.x, point.y); }
     await render({ type: "gallery", heading: "Gallery content", items: Array.from({ length: 4 }, (_, index) => ({ src: "$image", caption: "Image " + index })) });
-    await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor();
+    if (capture) { await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor(); }
     await section.locator(".pjb__gallery img").first().evaluate(image => image.decode());
     await section.locator(".pjb__gallery img").first().click({ trial: true });
     const originalStyle = await page.locator('#section-controls').evaluate(frame=>{frame.style.cssText='position:absolute;left:12%;top:15%;width:65%;height:65%;border:0';return frame.getAttribute('style');});

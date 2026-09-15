@@ -128,7 +128,7 @@ for (const denyAutomatic of [false,true]) test(`owner case-study Present floats 
     await pad.getByRole('button', {name:'Next slide', exact:true}).click();
     assert.equal(await audience.locator('[data-pjp-count]').textContent(), '2 / 2');
     assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE OWNER SECOND');
-    await pad.locator('[data-pp-now]').hover({position:{x:80,y:60}});
+    await pad.locator('.pp__nowwrap').hover({position:{x:80,y:60}});
     await audience.waitForFunction(() => !document.querySelector('.pjp__pointer').hidden);
     await pad.getByRole('button', {name:'Pause timer', exact:true}).click();
     assert.equal(await pad.locator('[data-pp-elapsed]').textContent(), 'paused');
