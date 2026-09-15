@@ -8,6 +8,7 @@ export const browserShards = {
   authoring: [{ files: [deck], pattern: '^' + authoring }],
   sections: [{ files: [deck], pattern: '^(?!' + authoring + ')' }],
   recovery: [{ files: [
+    'ai-ribbon.test.mjs',
     'project-recovery.browser.test.mjs', 'slide-presenter-readonly.browser.test.mjs',
     'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs',
     'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs',
