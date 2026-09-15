@@ -430,6 +430,47 @@ test('rich notes and full deck history preserve formatting, reordering and slide
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
     assert.equal((await order()).length,3);
     assert.match(await page.evaluate(() => window.__slideMerge.deck().slides[0].notes),/<(?:b|strong)>/);
+    const savedOrder = await order();
+    const retained = () => page.evaluate(ids => window.__slideMerge.deck().slides.filter(slide => ids.includes(slide.id)).map(({ id, title, notes, hidden, section, scene }) => ({ id, title, notes, hidden, section, files:scene.files })), savedOrder);
+    const savedContent = await retained();
+    for (const index of [0, 1, 2]) {
+      await page.locator('.merge-slide-card').nth(index).locator('.merge-slide').hover();
+      const button = page.locator('.merge-slide-card').nth(index).getByRole('button',{name:'Add slide below',exact:true});
+      assert.equal(await button.getAttribute('title'),'Add slide below');
+      await button.click();
+      await page.waitForFunction(() => window.__slideMerge.deck().slides.length===4&&!document.querySelector('.merge-layout-toggle').disabled);
+      const added = await page.evaluate(() => window.__slideMerge.deck().selected);
+      const expected = [...savedOrder]; expected.splice(index + 1, 0, added);
+      assert.ok(!savedOrder.includes(added));
+      assert.deepEqual(await order(),expected);
+      assert.deepEqual(await retained(),savedContent);
+      await page.getByRole('button',{name:'Undo',exact:true}).click();
+      await page.waitForFunction(() => window.__slideMerge.deck().slides.length===3&&!document.querySelector('.merge-layout-toggle').disabled);
+      assert.deepEqual(await order(),savedOrder);
+      await page.getByRole('button',{name:'Redo',exact:true}).click();
+      await page.waitForFunction(() => window.__slideMerge.deck().slides.length===4&&!document.querySelector('.merge-layout-toggle').disabled);
+      assert.deepEqual(await order(),expected);
+      assert.deepEqual(await retained(),savedContent);
+      if (index === 2) {
+        await page.reload();
+        await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+        assert.deepEqual(await order(),expected);
+        assert.deepEqual(await retained(),savedContent);
+        break;
+      }
+      await page.getByRole('button',{name:'Undo',exact:true}).click();
+      await page.waitForFunction(() => window.__slideMerge.deck().slides.length===3&&!document.querySelector('.merge-layout-toggle').disabled);
+      assert.deepEqual(await order(),savedOrder);
+    }
+    const beforeGap = await order();
+    await page.getByRole('button',{name:'Insert before slide 2',exact:true}).click();
+    await page.getByRole('group',{name:'Insert here',exact:true}).getByRole('button',{name:'Add slide',exact:true}).click();
+    await page.waitForFunction(() => window.__slideMerge.deck().slides.length===5&&!document.querySelector('.merge-layout-toggle').disabled);
+    const gapOrder = await order();
+    assert.equal(gapOrder[0],beforeGap[0]);
+    assert.ok(!beforeGap.includes(gapOrder[1]));
+    assert.deepEqual(gapOrder.slice(2),beforeGap.slice(1));
+    assert.deepEqual(await retained(),savedContent);
   } finally { await browser.close(); }
 });
 

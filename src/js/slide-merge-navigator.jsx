@@ -55,7 +55,7 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
         {editing && <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
           <Action icon="up" label="Move slide up" disabled={busy || index === 0} onClick={() => modify("up", slide.id)} />
           <Action icon="down" label="Move slide down" disabled={busy || index === deck.slides.length - 1} onClick={() => modify("down", slide.id)} />
-          <Action icon="add" label="Add slide above" disabled={busy} onClick={() => add("blank", slide.id)} />
+          <Action icon="add" label="Add slide below" disabled={busy} onClick={() => add("blank", deck.slides[index + 1]?.id ?? null)} />
           <Action icon="copy" label="Duplicate slide" disabled={busy} onClick={() => modify("duplicate", slide.id)} />
           <Action icon={slide.hidden ? "eyeoff" : "eye"} label={slide.hidden ? "Include in rehearsal" : "Skip in rehearsal"} aria-pressed={!!slide.hidden} disabled={busy} onClick={() => modify("hide", slide.id)} />
           <Action icon="trash" label="Delete slide" disabled={busy} onClick={() => remove(slide.id)} />
