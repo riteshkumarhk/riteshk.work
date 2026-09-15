@@ -105,6 +105,7 @@ jobs:
       - name: Run required browser shard
         env:
           BROWSER_SHARD: ${{ matrix.shard }}
+          TMPDIR: ${{ runner.temp }}
         run: |
           python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
           server=$!
@@ -113,6 +114,17 @@ jobs:
           export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
           curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
           node tools/browser-shards.mjs "$BROWSER_SHARD"
+
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rk-*.png
+            ${{ runner.temp }}/site-test.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   deploy-pages:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

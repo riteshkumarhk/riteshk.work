@@ -363,7 +363,7 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
         assert.equal(await budget().inputValue(),original);
         assert.equal(await page.locator('#merge-speaker-notes').isVisible(),true);
         await page.getByRole('button',{name:'Help',exact:true}).click();
-        await page.locator('.HelpDialog').waitFor();
+        await page.waitForFunction(() => document.querySelector('.HelpDialog')?.contains(document.activeElement));
         await page.keyboard.press('Escape');
         await page.locator('.HelpDialog').waitFor({state:'detached'});
         assert.equal(await page.locator('#merge-speaker-notes').isVisible(),true, 'Closing Help must not close notes');
@@ -425,7 +425,7 @@ test('rich notes and full deck history preserve formatting, reordering and slide
     await page.getByRole('button',{name:'Undo',exact:true}).click();
     await page.waitForFunction(() => window.__slideMerge.deck().slides.length===2);
     await page.getByRole('button',{name:'Redo',exact:true}).click();
-    await page.waitForFunction(() => window.__slideMerge.deck().slides.length===3);
+    await page.waitForFunction(() => window.__slideMerge.deck().slides.length===3&&!document.querySelector('.merge-layout-toggle').disabled);
     await page.reload();
     await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
     assert.equal((await order()).length,3);
@@ -715,6 +715,8 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
     }
     const original=deckDocumentKey(await page.evaluate(()=>window.__slideMerge.deck()));
     await page.evaluate(()=>{document.title='DJ section reopen regression';});
+    await page.bringToFront();
+    await page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==='visible');
     await page.getByRole('button',{name:'Slide Show',exact:true}).click();
     for (let cycle=0;cycle<3;cycle++) {
       await page.waitForFunction(()=>window.documentPictureInPicture.window?.document.querySelector('[data-pp-notes]'));
@@ -782,7 +784,11 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
       await page.waitForFunction(()=>!document.querySelector('.pjp').classList.contains('pjp--popped'));
       assert.equal(await page.evaluate(()=>window.closedThumbnailDocument.querySelectorAll('.merge-present-thumbnail').length),0,'Closed presenter documents must release their React thumbnail roots');
       if(live)assert.equal(await page.evaluate(()=>window.captureStreams.every(stream=>stream.getTracks().every(track=>track.readyState==='ended'))),true);
-      if(cycle<2) await page.getByRole('button',{name:'Open presenter window',exact:true}).click();
+      if(cycle<2){
+        await page.bringToFront();
+        await page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==='visible');
+        await page.getByRole('button',{name:'Open presenter window',exact:true}).click();
+      }
     }
     await page.getByRole('button',{name:'Exit presentation',exact:true}).click();
     await page.waitForSelector('.pjp',{state:'detached'});
