@@ -47,6 +47,7 @@ test("fixed cover fields preserve geometry, originals and independent instances"
   const logo = withLogo.find(element => element.customData.slideCover === "logo");
   assert.equal(logo.fileId, "logo-original");
   assert.equal(logo.width / logo.height, 2);
+  assert.deepEqual(logo.customData.labCorners, { mode: "squircle", radius: logo.height / 4 });
   assert.ok(logo.width <= 54 && logo.height <= 54);
   assert.equal(withLogo.some(element => element.customData.slideCover === "mark"), false);
 });
@@ -75,11 +76,23 @@ test("fixed cover fields preserve geometry, originals and independent instances"
       assert.equal(chip.fontSize, 14);
       assert.equal(chip.text.includes("\n"), false);
       assert.equal(box.customData.labCorners.radius, box.height / 2);
-      assert.ok(box.x >= 184 && box.x + box.width <= 481);
+      assert.ok(box.x >= 174 && box.x + box.width <= 481);
+      if (box.x === 174) assert.equal(chip.x, role("role").x);
       assert.ok(box.y + box.height + 32 <= role("role-heading").y);
     }
     assert.ok(role("role").y + role("role").height + 24 <= role("footnote").y);
   });
+test("cover status hugs measured text at the duration size and wraps badges without colliding with title", () => {
+  for (const status of ["Worldwide experimentation - Canary state", "W".repeat(40)]) {
+    const measure = (text, size) => text.length * size * .8;
+    const elements = coverSkeleton({status, duration:"2025 - Current", role:"Lead"},123,"cover",measure);
+    const role = key => elements.find(element => element.customData.slideCover === key);
+    assert.equal(role("status").fontSize, role("duration").fontSize);
+    assert.equal(role("status-box").width, Math.ceil(measure(status,18))+24);
+    assert.ok(role("duration-box").x+role("duration-box").width <= 1232);
+    assert.ok(role("title").y > role("duration-box").y+36);
+  }
+});
   test("nine layouts preserve real content, locks and groups; placeholders do not accumulate", () => {
   assert.equal(PROPERTY_LAYOUTS.length,9);
   const source = [{id:"text",type:"text",text:"Keep me",x:2,y:3,width:100,height:20}, {id:"locked",type:"text",locked:true,text:"Stay"}, {id:"group",type:"text",groupIds:["group"]}, {id:"bound",type:"text",containerId:"shape"}];

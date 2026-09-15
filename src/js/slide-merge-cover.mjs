@@ -39,7 +39,7 @@ export function coverDepth(value) {
   return result;
 }
 export function coverValues(value = {}) {
-  const result = { ...COVER_DEFAULTS, layoutVersion: 3 };
+  const result = { ...COVER_DEFAULTS, layoutVersion: 4 };
   for (const [key] of COVER_FIELDS) if (typeof value[key] === "string") result[key] = value[key];
   if (typeof value.mark === "string") result.mark = value.mark;
   for (const key of ["background", "rail", "panel", "text", "muted"])
@@ -64,17 +64,19 @@ export function coverSkeleton(value, fontFamily, prefix = "cover", measureText =
   const elements = [shape("background", 0, 0, 1280, 720, cover.background, { customData: { slideCover: "background", slideBackground: true } }), shape("rail", 0, 0, 136, 720, cover.rail)];
   if (cover.logo) {
     const scale = Math.min(40 / cover.logo.width, 54 / cover.logo.height), width = cover.logo.width * scale, height = cover.logo.height * scale;
-    elements.push({ ...common, id: `${prefix}-logo`, type: "image", x: 68 - width / 2, y: inset, width, height, fileId: cover.logo.fileId, scale: [1, 1], customData: { slideCover: "logo" } });
+    elements.push({ ...common, id: `${prefix}-logo`, type: "image", x: 68 - width / 2, y: inset, width, height, fileId: cover.logo.fileId, scale: [1, 1], customData: { slideCover: "logo", labCorners: { mode: "squircle", radius: Math.min(width, height) / 4 } } });
   } else if (cover.mark) elements.push(shape("mark-box", 50, inset, 36, 36, cover.panel, { opacity: 25, roundness: { type: 3 } }), label("mark", cover.mark, 52, inset + 11, 32, 14, 11, { textAlign: "center" }));
   if (cover.client) elements.push(label("client", cover.client, -52, 534, 240, 36, 30, { angle: -Math.PI / 2 }));
-  let badgeX = contentX;
+  let badgeX = contentX, badgeY = inset;
   for (const [key, content] of [["status", cover.status], ["duration", cover.duration && `Duration: ${cover.duration}`]]) {
     if (!content) continue;
-    const width = Math.min(key === "status" ? 230 : 440, Math.max(120, content.length * 9 + 24));
-    elements.push(shape(`${key}-box`, badgeX, inset, width, 36, cover.panel, { opacity: 45, roundness: { type: 3 }, customData: { slideCover: `${key}-box`, labCorners: { mode: "round", radius: 18 } } }), label(key, content, badgeX + 12, inset + 7, width - 24, 22, 18, { strokeColor: cover.muted }));
+    const width = Math.ceil(measureText(content, 18)) + 24;
+    if (badgeX > contentX && badgeX + width > 1280 - inset) { badgeX = contentX; badgeY += 44; }
+    elements.push(shape(`${key}-box`, badgeX, badgeY, width, 36, cover.panel, { opacity: 45, roundness: { type: 3 }, customData: { slideCover: `${key}-box`, labCorners: { mode: "round", radius: 18 } } }), label(key, content, badgeX + 12, badgeY + 7, width - 24, 22, 18, { strokeColor: cover.muted }));
     badgeX += width + 16;
   }
-  elements.push(label("title", cover.title, contentX, 110, 1280 - inset - contentX, 91, 60, { fontFamily: cover.titleFont || fontFamily }));
+  const headerOffset = badgeY - inset;
+  elements.push(label("title", cover.title, contentX, 110 + headerOffset, 1280 - inset - contentX, 91, 60, { fontFamily: cover.titleFont || fontFamily }));
   const team = cover.team.split(/\r?\n|,/).map(item => item.trim()).filter(Boolean);
   if (team.length > 8) throw new Error("A cover supports up to eight team entries.");
   const segments = [], chipFont = 14, chipPadding = 10, chipHeight = 28, chipGap = 6;
@@ -88,25 +90,25 @@ export function coverSkeleton(value, fontFamily, prefix = "cover", measureText =
     }
     if (line) segments.push(line);
   }
-  let chipX = contentX, chipY = 242;
+  let chipX = contentX - chipPadding, chipY = 242 + headerOffset;
   for (const [index, item] of segments.entries()) {
     const width = Math.ceil(measureText(item, chipFont)) + chipPadding * 2;
-    if (chipX + width > contentX + contentWidth) { chipX = contentX; chipY += chipHeight + chipGap; }
+    if (chipX + width > contentX + contentWidth) { chipX = contentX - chipPadding; chipY += chipHeight + chipGap; }
     if (chipY + chipHeight > 480) throw new Error("Team chips exceed the cover's available rows.");
     elements.push(shape(`team-box-${index}`, chipX, chipY, width, chipHeight, cover.panel, { opacity: 45, roundness: { type: 3 }, customData: { slideCover: `team-box-${index}`, labCorners: { mode: "round", radius: chipHeight / 2 } } }), label(`team-${index}`, item, chipX + chipPadding, chipY + 5, width - chipPadding * 2, 18, chipFont, { strokeColor: cover.muted }));
     chipX += width + chipGap;
   }
-  const roleY = Math.max(378, segments.length ? chipY + chipHeight + 32 : 378);
+  const roleY = Math.max(378 + headerOffset, segments.length ? chipY + chipHeight + 32 : 378 + headerOffset);
   if (cover.role) {
     if (cover.roleLabel) elements.push(label("role-heading", cover.roleLabel, contentX, roleY, contentWidth, 25, 18, { strokeColor: cover.muted }));
     elements.push(label("role", cover.role, contentX, roleY + 32, contentWidth, 618 - roleY - 32, 18, { strokeColor: cover.muted }));
   }
   if (cover.footnote) elements.push(label("footnote", cover.footnote, contentX, 720 - inset - 30, contentWidth, 30, 9, { strokeColor: cover.muted }));
-  elements.push(shape("media-panel", 529, 217, 751, 503, cover.panel, { roundness: { type: 3 }, customData: { slideCover: "media-panel", labCorners: { mode: "squircle", radius: 32, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 } } }));
+  elements.push(shape("media-panel", 529, 217 + headerOffset, 751, 503 - headerOffset, cover.panel, { roundness: { type: 3 }, customData: { slideCover: "media-panel", labCorners: { mode: "squircle", radius: 32, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 } } }));
   if (cover.image) {
-    const width = 1280 - 529 - inset, height = 720 - 217 - inset, scale = Math.max(width / cover.image.width, height / cover.image.height);
+    const width = 1280 - 529 - inset, height = 720 - 217 - headerOffset - inset, scale = Math.max(width / cover.image.width, height / cover.image.height);
     const cropWidth = width / scale, cropHeight = height / scale;
-    elements.push({ ...common, id: `${prefix}-image`, type: "image", x: 529 + inset, y: 217 + inset, width, height, fileId: cover.image.fileId, scale: [1, 1], customData: { slideCover: "image", labCorners: { mode: "squircle", radius: 24, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 }, ...(cover.motion && cover.depth && !cover.source?.overrides.includes("image") ? { slideDepth: coverDepth(cover.depth) } : {}) }, crop: { x: (cover.image.width - cropWidth) * cover.crop.x / 100, y: (cover.image.height - cropHeight) * cover.crop.y / 100, width: cropWidth, height: cropHeight, naturalWidth: cover.image.width, naturalHeight: cover.image.height } });
+    elements.push({ ...common, id: `${prefix}-image`, type: "image", x: 529 + inset, y: 217 + headerOffset + inset, width, height, fileId: cover.image.fileId, scale: [1, 1], customData: { slideCover: "image", labCorners: { mode: "squircle", radius: 24, topRightCornerRadius: 0, bottomRightCornerRadius: 0, bottomLeftCornerRadius: 0 }, ...(cover.motion && cover.depth && !cover.source?.overrides.includes("image") ? { slideDepth: coverDepth(cover.depth) } : {}) }, crop: { x: (cover.image.width - cropWidth) * cover.crop.x / 100, y: (cover.image.height - cropHeight) * cover.crop.y / 100, width: cropWidth, height: cropHeight, naturalWidth: cover.image.width, naturalHeight: cover.image.height } });
   }
   return elements.filter(element => {
     const role = element.customData.slideCover;

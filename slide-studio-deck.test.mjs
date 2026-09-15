@@ -136,7 +136,7 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     const coverId = result.deck.selected;
     const published = publicDeckPayload(setDeckVisibility({ ...result.deck, slides: result.deck.slides.filter(slide => slide.id === coverId) }, 'public'), { reviewedSources: true, production: true });
     assert.equal(published.slides[0].scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover, undefined, 'Public audience gets visible objects, not duplicate editor fields');
-    assert.deepEqual(published.slides[0].scene.elements.find(element => element.customData?.labCorners?.mode === 'squircle').customData.labCorners, coverPart('media-panel').customData.labCorners);
+    assert.deepEqual(published.slides[0].scene.elements.find(element => element.type === 'rectangle' && element.x === coverPart('media-panel').x && element.y === coverPart('media-panel').y).customData.labCorners, coverPart('media-panel').customData.labCorners);
     assert.ok(published.slides[0].scene.elements.some(element => element.type === 'text' && element.text === result.cover.title));
     const publicImages = published.slides[0].scene.elements.filter(element => element.type === 'image');
     assert.equal(published.slides[0].scene.files[publicImages.find(element => element.crop).fileId].dataURL, imageData);
@@ -267,9 +267,9 @@ test("empty hosted deck adds a cover when project media fails and retries withou
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
     let available = false;
-    await openIntegratedFixture(page, undefined, { role: 'Product designer', team: 'Designer, Engineer' }, { image: 'https://cover.fixture/original.png' });
+    await openIntegratedFixture(page, undefined, { status:'Worldwide experimentation - Canary state', role: 'Product designer', team: '1 Designer, 1 Product Manager, 3 Engineers, 1 Content Designer, Privacy, Data Science' }, { image: 'https://cover.fixture/original.png', brandLogo:'https://cover.fixture/original.png', period:'2025 - Current' });
     const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0]));
-    const image = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 80; canvas.getContext('2d').fillRect(0, 0, 120, 80); return canvas.toDataURL(); });
+    const image = await page.evaluate(() => { const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 80; const context=canvas.getContext('2d');context.fillStyle='#1678a0';context.fillRect(0, 0, 120, 80); return canvas.toDataURL(); });
     await page.context().route('https://cover.fixture/original.png', route => available ? route.fulfill({ contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: Buffer.from(image.split(',')[1], 'base64') }) : route.fulfill({ status: 503, headers: { 'access-control-allow-origin': '*' }, body: 'Unavailable' }));
     await openProjectSlides(page);
     await page.getByRole('button', { name: 'Add cover', exact: true }).click();
@@ -284,10 +284,37 @@ test("empty hosted deck adds a cover when project media fails and retries withou
     assert.equal(await page.locator('.merge-cover-error').count(), 0);
     assert.equal(await page.getByLabel('Cover title', { exact: true }).inputValue(), 'Retain this cover edit');
     await page.locator('.merge-cover-overrides').getByRole('button', { name: 'Replace hero image', exact: true }).waitFor();
+    const readSaved=()=>page.evaluate(async()=>{
+      const reference=window.__RKStudio.getDraft().work[0].study.nativeDeck;
+      const requested=request=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Cover fixture storage request timed out')),5000);request.onsuccess=()=>{clearTimeout(timer);resolve(request.result);};request.onerror=()=>{clearTimeout(timer);reject(request.error);};});
+      const database=await requested(indexedDB.open('rk-studio-slide-decks-v1'));
+      try{const record=await requested(database.transaction('documents').objectStore('documents').get([reference.id,reference.revision]));const scene=record.document.slides[0].scene;await Promise.all(Object.entries(scene.files).map(async([id,key])=>{scene.files[id]=await requested(database.transaction('assets').objectStore('assets').get(key));}));return scene;}finally{database.close();}
+    });
+    const assertImagePixels=()=>page.waitForFunction(()=>{const canvas=document.querySelector('.excalidraw__canvas.static'),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let count=0;for(let offset=0;offset<pixels.length;offset+=4)if(pixels[offset]===22&&pixels[offset+1]===120&&pixels[offset+2]===160)count++;return count>1000;},null,{timeout:10000});
+    const savedScene=await readSaved(),part=role=>savedScene.elements.find(element=>element.customData?.slideCover===role);
+    const geometry={status:part('status'),duration:part('duration'),statusBox:part('status-box'),team:part('team-0'),role:part('role'),logo:part('logo')};
+    assert.equal(geometry.status.fontSize,18);assert.equal(geometry.duration.fontSize,18);
+    assert.equal(geometry.statusBox.width,geometry.status.width+24);
+    assert.equal(geometry.team.x,geometry.role.x);
+    assert.equal(geometry.logo.customData.labCorners.mode,'squircle');
+    await assertImagePixels();
+    await page.screenshot({path:join(tmpdir(),'rk-cover-recovered-1440.png')});
     await page.locator('[data-l2-back]').click();
+    const savedCover=await page.evaluate(async()=>{
+      const reference=window.__RKStudio.getDraft().work[0].study.nativeDeck;
+      const database=await new Promise(resolve=>{const request=indexedDB.open('rk-studio-slide-decks-v1');request.onsuccess=()=>resolve(request.result);});
+      try{return await new Promise((resolve,reject)=>{const transaction=database.transaction('documents','readwrite'),store=transaction.objectStore('documents'),request=store.get([reference.id,reference.revision]);let cover;request.onsuccess=()=>{const record=request.result,scene=record.document.slides[0].scene;cover=scene.elements.find(element=>element.id==='lab-slide').customData.slideSettings.cover;delete scene.files[cover.image.fileId];store.put(record,[reference.id,reference.revision]);};transaction.oncomplete=()=>resolve(cover);transaction.onerror=()=>reject(transaction.error);});}finally{database.close();}
+    });
     await openProjectSlides(page);
     await page.locator('.merge-cover-overrides > summary').click();
     assert.equal(await page.getByLabel('Cover title', { exact: true }).inputValue(), 'Retain this cover edit');
+    const recoveredScene=await readSaved(),cover=recoveredScene.elements.find(element=>element.id==='lab-slide').customData.slideSettings.cover;
+    const recovered={cover,image:recoveredScene.files[cover.image.fileId]?.dataURL};
+    assert.deepEqual(recovered.cover,savedCover,'Recovery with unchanged hashed metadata retains the file');
+    assert.equal(recovered.image,image);
+    await assertImagePixels();
+    await page.setViewportSize({width:390,height:844});
+    await page.screenshot({path:join(tmpdir(),'rk-cover-recovered-390.png')});
     const work = await page.evaluate(() => window.__RKStudio.getDraft().work[0]);
     assert.deepEqual(work.study.blocks, JSON.parse(original).study.blocks);
     assert.equal(work.image, JSON.parse(original).image);

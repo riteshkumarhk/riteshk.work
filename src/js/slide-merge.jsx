@@ -882,7 +882,8 @@ function Merger({ integration, controller }) {
         if (!previous?.source) continue;
         try {
           const resolved = await resolveCoverSource(previous, slide.scene.files);
-          if (JSON.stringify(resolved.cover) === JSON.stringify(previous)) continue;
+          const recoveredFiles = Object.entries(resolved.files).some(([id, file]) => file !== slide.scene.files[id]);
+          if (JSON.stringify(resolved.cover) === JSON.stringify(previous) && !recoveredFiles) continue;
           const elements = replaceCoverElements(slide.scene.elements, resolved.cover);
           slide.scene.elements = elements.map(element => element.id === FRAME_ID ? changed(element, { customData: { ...element.customData, slideSettings: { ...slideSettings(elements), cover: resolved.cover } } }) : element);
           slide.scene.files = resolved.files; refreshed = true;

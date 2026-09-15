@@ -356,7 +356,11 @@ test('Workflow visitor keeps complete graphs inline on phones and preserves the 
       await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Expand diagram');
       assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Expand diagram');
     }
-    await page.getByText('Flow outline',{exact:true}).click();
+    assert.equal(await page.getByText('Flow outline',{exact:true}).count(),0);
+    const described=page.getByRole('group',{name:'Workflow diagram',exact:true});
+    await described.focus();
+    assert.ok(await described.evaluate(element=>document.getElementById(element.getAttribute('aria-describedby')).textContent.includes('Return to Step 2')));
+    assert.equal(await page.locator('.wf-outline').evaluate(element=>element.getBoundingClientRect().width),1);
     await page.setViewportSize({width:390,height:844});
     await page.evaluate(()=>{document.querySelector('#workflow-fixture').style.paddingBottom='800px';window.scrollTo(0,0);document.querySelector('.wf-inline-scroll').scrollLeft=0;});
     const touch=await page.context().newCDPSession(page),bounds=await page.locator('.wf-inline-scroll').boundingBox();

@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState,useReducer} from 'react';
+import React,{useEffect,useRef,useState,useReducer,useId} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ReactFlow,ReactFlowProvider,Handle,Position,ConnectionMode,MarkerType,MiniMap,Background,BackgroundVariant,BaseEdge,EdgeLabelRenderer,ViewportPortal,getSmoothStepPath,getViewportForBounds,applyNodeChanges,addEdge,reconnectEdge,useReactFlow,useStore} from '@xyflow/react';
 import {Monitor,Smartphone,MousePointer2,Maximize2,ZoomIn,ZoomOut,LocateFixed,Scan,X,ChevronLeft,ChevronRight,Plus,Undo2,Redo2,Trash2,Link,Magnet,RotateCcw} from 'lucide-react';
@@ -82,6 +82,7 @@ function GraphControls({canvas,start}){
 }
 function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRef,onTitleFocus,inlineFit=false,snapping=true}){
   const editor=mode==='editor',inline=mode==='inline',canvas=useRef(null),api=useRef(null),[guides,setGuides]=useState([]),bypassSnap=useRef(false),measurements=useRef(new Map());
+  const outlineId=useId();
   const minX=Math.min(0,...doc.nodes.map(node=>node.position.x)),maxX=Math.max(300,...doc.nodes.map(node=>node.position.x+FLOW_NODE_WIDTH));
   const start={x:24-minX*.92,y:26-(doc.nodes[0]?.position.y||0)*.92,zoom:.92};
   const selected=selection?.type==='node'?selection.id:null;
@@ -89,7 +90,8 @@ function Diagram({doc,mode='web',selection,setSelection,change,checkpoint,flowRe
   const nodes=doc.nodes.map(node=>({...node,type:'step',width:FLOW_NODE_WIDTH,initialHeight:FLOW_NODE_HEIGHT,measured:measurements.current.get(node.id),selected:selection?.type==='node'&&selection.id===node.id,className:!editor&&selected&&!neighbors.has(node.id)?'is-dimmed':''}));
   const setCurve=(id,curve)=>change(current=>({...current,edges:current.edges.map(edge=>edge.id===id?{...edge,data:{...edge.data,curve}}:edge)}),false);
   const edges=doc.edges.map(edge=>({...edge,type:'connection',data:{...edge.data,editable:editor,setCurve,checkpoint},selected:selection?.type==='edge'&&selection.id===edge.id,style:{stroke:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)',strokeWidth:selection?.id===edge.id?2.5:1.5,opacity:!editor&&selected?(edge.source===selected||edge.target===selected?1:.15):.9,strokeDasharray:edge.data.kind==='return'?'5 5':undefined},markerEnd:{type:MarkerType.ArrowClosed,width:16,height:16,color:edge.data.kind==='alternative'?'var(--text-dim)':'var(--accent)'}}));
-  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined} onPointerMoveCapture={event=>{bypassSnap.current=event.altKey;}} onPointerDownCapture={event=>{bypassSnap.current=event.altKey;}}>
+  return <div ref={canvas} className={`wf-diagram wf-diagram-${mode}`} role={editor?undefined:'group'} tabIndex={editor?undefined:0} aria-label={editor?undefined:'Workflow diagram'} aria-describedby={editor?undefined:outlineId} data-inline-fit={inline?inlineFit:undefined} style={inline?{width:inlineFit?'100%':(maxX-minX)*.92+60,height:340}:undefined} onPointerMoveCapture={event=>{bypassSnap.current=event.altKey;}} onPointerDownCapture={event=>{bypassSnap.current=event.altKey;}}>
+    {!editor&&<Outline doc={doc} id={outlineId}/>}
     <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} connectionMode={ConnectionMode.Loose} minZoom={.001} maxZoom={2}
       nodesDraggable={editor} nodesConnectable={editor} edgesReconnectable={editor} deleteKeyCode={null} selectionOnDrag={false}
       panOnDrag={!inline} panOnScroll={false} zoomOnScroll={false} zoomOnPinch={!inline} zoomOnDoubleClick={false} preventScrolling={false}
@@ -116,8 +118,8 @@ function Summary({doc,selection}){
   const selected=doc.nodes.find(node=>selection?.type==='node'&&node.id===selection.id);
   return <span>{selected?<><strong>{selected.data.title||'Untitled step'}</strong><span className="wf-separator">/</span>{doc.edges.filter(edge=>edge.target===selected.id).length} in / {doc.edges.filter(edge=>edge.source===selected.id).length} out</>:<>{doc.nodes.length} steps / {doc.edges.length} connections</>}</span>;
 }
-function Outline({doc}){
-  return <details className="wf-outline"><summary>Flow outline</summary><ol>{doc.nodes.map(node=><li key={node.id}><strong>{node.data.number&&`${node.data.number} `}{node.data.title||'Untitled step'}</strong>{node.data.note&&<p>{node.data.note}</p>}<ul>{doc.edges.filter(edge=>edge.source===node.id).map(edge=><li key={edge.id}>{edge.label?`${edge.label}: `:''}{edge.data.kind==='return'?'Return to ':'To '}{doc.nodes.find(target=>target.id===edge.target)?.data.title||'Untitled step'}</li>)}</ul></li>)}</ol></details>;
+function Outline({doc,id}){
+  return <div className="wf-outline" id={id}><ol>{doc.nodes.map(node=><li key={node.id}><strong>{node.data.number&&`${node.data.number} `}{node.data.title||'Untitled step'}</strong>{node.data.note&&<p>{node.data.note}</p>}<ul>{doc.edges.filter(edge=>edge.source===node.id).map(edge=><li key={edge.id}>{edge.label?`${edge.label}: `:''}{edge.data.kind==='return'?'Return to ':'To '}{doc.nodes.find(target=>target.id===edge.target)?.data.title||'Untitled step'}</li>)}</ul></li>)}</ol></div>;
 }
 function Explorer({doc,selection,setSelection,onClose,title}){
   const dialog=useRef(null);
@@ -157,7 +159,6 @@ function Reader({doc,title='',mobile:forcedMobile}){
       {mobile?<div className="wf-inline-scroll" ref={scroll} {...drag} tabIndex={0} aria-label="Scrollable flow diagram"><ReactFlowProvider><Diagram doc={doc} mode="inline" inlineFit={inlineFit} selection={selection} setSelection={setSelection}/></ReactFlowProvider></div>:<ReactFlowProvider><Diagram doc={doc} selection={selection} setSelection={setSelection}/></ReactFlowProvider>}
       <footer className="wf-footer"><Summary doc={doc} selection={selection}/>{mobile&&<div className="wf-scroll-actions" role="group" aria-label="Inline diagram view"><IconButton label="Fit diagram" aria-pressed={inlineFit} onClick={fit}><Scan size={18}/></IconButton><IconButton label="Readable size" aria-pressed={!inlineFit} onClick={readable}><LocateFixed size={18}/></IconButton><IconButton label="Previous part of diagram" disabled={inlineFit} onClick={()=>scroll.current.scrollBy({left:-285,behavior:motion()?'smooth':'instant'})}><ChevronLeft size={18}/></IconButton><IconButton label="Next part of diagram" disabled={inlineFit} onClick={()=>scroll.current.scrollBy({left:285,behavior:motion()?'smooth':'instant'})}><ChevronRight size={18}/></IconButton></div>}</footer>
     </div>
-    <Outline doc={doc}/>
     {expanded&&<Explorer doc={doc} title={title} selection={selection} setSelection={setSelection} onClose={close}/>}
   </div>;
 }
