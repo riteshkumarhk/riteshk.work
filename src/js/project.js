@@ -1825,7 +1825,7 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
               const ids = [work.id, ...(document?.slides || []).flatMap(slide => (slide.scene?.elements || []).map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
               const disconnect = connectSectionAccess(audience, ids);
               try {
-                const player = await audience.RK.presentDeck(work, { presenterWindow, onClose:() => { disconnect(); onClose(); }, autoStart:false });
+                const player = await audience.RK.presentDeck(work, { floatingPresenter:true, presenterOwner:window, presenterWindow, onClose:() => { disconnect(); onClose(); }, autoStart:false });
                 if (!player) disconnect();
                 return player;
               } catch (error) { disconnect(); throw error; }

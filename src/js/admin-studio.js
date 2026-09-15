@@ -6648,7 +6648,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
         if (!saveDraft(true)) throw new Error("The current draft could not be saved. Free local storage and try again.");
       },
       present: (audience, presenterWindow, _prepared, onClose) => {
-        const settings = { ...options, draft:true, autoStart:false, presenterWindow, onClose:() => { options.onClose?.(); onClose(); } };
+        const settings = { ...options, draft:true, autoStart:false, floatingPresenter:true, presenterOwner:window, presenterWindow, onClose:() => { options.onClose?.(); onClose(); } };
         if (work.study?.nativeDeck || work.study?.nativeDeckEnc) return presentNativeWork(work.id, settings, async (item, presentation) => {
           const ids = [work.id, ...presentation.document.slides.flatMap(slide => slide.scene.elements.map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
           const disconnect = connectSectionAccess(audience, ids);
@@ -7420,7 +7420,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.24";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.25";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();

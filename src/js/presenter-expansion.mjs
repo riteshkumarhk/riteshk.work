@@ -103,7 +103,7 @@ export function installSlideExpansion(frame) {
             button.type = "button"; button.className = "pjb__fs"; button.dataset.slideExpand = "";
             button.setAttribute("aria-label","Expand media in slide"); button.title = "Expand media in slide";
             button.innerHTML = presenterIcon("fullscreen");
-            button.style.cssText = "position:absolute;right:10px;top:10px;z-index:3;width:34px;height:34px;padding:7px;cursor:pointer";
+            button.style.cssText = "position:absolute;right:10px;top:10px;z-index:3;width:34px;height:34px;padding:7px;cursor:pointer;opacity:1;transform:none";
             button.addEventListener("click",event => { event.preventDefault(); event.stopPropagation(); expand(media); });
             parent.append(button); buttons.push(button);
           }

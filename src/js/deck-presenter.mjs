@@ -7,6 +7,7 @@ import { presenterPanelMarkup, presenterPanelStyles, installPresenterPanel } fro
 var pjpStage = null;
 export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, thumbnailData, disposePresenter, dispose }) {
   opts = opts || {};
+  var separatePresenter = !!(opts.presenterWindow || opts.floatingPresenter);
   if (!w || pjpStage) return;
   var st = w.study || {};
   var slides = (opts.slides && opts.slides.length) ? opts.slides : pjDeckSlides(w, st);
@@ -31,7 +32,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     '<div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div>' +
     '<div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-thumb" data-pjp-nextthumb></div><div class="pjp__pnext-body" data-pjp-next></div></div>' +
     '</div>';
-  if (opts.audienceOnly || opts.presenterWindow) stage.querySelectorAll(opts.audienceOnly ? '[data-pjp="notes"],[data-pjp="popout"],[data-pjp-panel]' : '[data-pjp="notes"],[data-pjp-panel]').forEach(element => { element.hidden = true; element.style.display = "none"; });
+  if (opts.audienceOnly || separatePresenter) stage.querySelectorAll(opts.audienceOnly ? '[data-pjp="notes"],[data-pjp="popout"],[data-pjp-panel]' : '[data-pjp="notes"],[data-pjp-panel]').forEach(element => { element.hidden = true; element.style.display = "none"; });
   document.body.appendChild(stage);
   var inactiveSiblings = Array.prototype.filter.call(document.body.children, function (element) { return element !== stage && !element.inert; });
   inactiveSiblings.forEach(function (element) { element.inert = true; });
@@ -62,7 +63,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var revision = ++editRevision;
     saveStatus = "Saving..."; panel?.saved(saveStatus);
     Promise.resolve().then(function () { return opts.onSlideEdit(slides[index], key, value); }).then(function () { if (revision === editRevision) { saveStatus = "Saved to deck"; panel?.saved(saveStatus); syncNative(); } }, function () { if (revision === editRevision) { saveStatus = "Not saved. Edit again to retry."; panel?.saved(saveStatus); syncNative(); } });
-    if (notesEl && !nativeHost && !opts.presenterWindow) notesEl.innerHTML = pjNotesHtml(currentNotes());
+    if (notesEl && !nativeHost && !separatePresenter) notesEl.innerHTML = pjNotesHtml(currentNotes());
     tick(); syncNative();
   }
   async function fullscreen() {
@@ -78,12 +79,17 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   }
   var popButton = stage.querySelector('[data-pjp="popout"]');
   popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
-  if (opts.presenterWindow) {
+  if (separatePresenter) {
     popButton.setAttribute("aria-label", "Toggle DJ pad");
-    popButton.setAttribute("aria-pressed", "true");
+    popButton.setAttribute("aria-pressed", String(!!opts.presenterWindow));
     popButton.title = "Toggle DJ pad (P)";
   }
   function togglePresenter() {
+    if (opts.floatingPresenter) {
+      if (presenterWin && !presenterWin.closed) presenterWin.close();
+      else openPresenter();
+      return;
+    }
     if (!opts.presenterWindow) { openPresenter(); return; }
     var host = opts.presenterWindow.frameElement?.closest("dialog.pjp-tab");
     if (!host) return;
@@ -134,7 +140,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   function updateChrome() {
     var s = slides[idx];
     count.textContent = (idx + 1) + " / " + slides.length;
-    if (notesEl && !nativeHost && !opts.presenterWindow) notesEl.innerHTML = pjNotesHtml(currentNotes());
+    if (notesEl && !nativeHost && !separatePresenter) notesEl.innerHTML = pjNotesHtml(currentNotes());
     if (nextEl) nextEl.textContent = (idx < slides.length - 1) ? pjSlideTitle(slides[idx + 1]) : "End of deck";
     if (nextThumb) {
       if (idx < slides.length - 1) {
@@ -254,6 +260,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterDocument = null; presenterWin = null;
     stage.classList.remove("pjp--popped");
     popButton.classList.remove("is-on");
+    if (opts.floatingPresenter) popButton.setAttribute("aria-pressed", "false");
     if (opts.presenterWindow && !exited) exit();
   }
   async function openPresenter() {
@@ -271,8 +278,9 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
           opened = await window.documentPictureInPicture.requestWindow({ width: 960, height: 720 });
           pinned = true;
         } catch (error) {
-          pipUnavailable = true;
+          pipUnavailable = error.name !== "NotAllowedError";
           popButton.title = "Always-on-top unavailable. Click to open a regular presenter window.";
+          if (opts.floatingPresenter && !pipUnavailable) { popButton.title = "Open floating DJ pad (P)"; return; }
         }
       }
       if (exited) { if (opened) opened.close(); return; }
@@ -289,8 +297,8 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterDoc.head.replaceChildren.apply(presenterDoc.head, Array.from(markup.head.childNodes).map(function (node) { return presenterDoc.importNode(node, true); }));
     presenterDoc.body.className = "pp-body";
     presenterDoc.body.replaceChildren(...Array.from(markup.body.children).map(function (node) { return presenterDoc.importNode(node, true); }));
-    if (opts.presenterWindow) {
-      var ownerRoot = presenterWin.frameElement.ownerDocument.documentElement;
+    if (opts.presenterWindow || opts.presenterOwner) {
+      var ownerRoot = opts.presenterOwner?.document.documentElement || presenterWin.frameElement.ownerDocument.documentElement;
       var ownerType = ownerRoot.ownerDocument.defaultView.getComputedStyle(ownerRoot);
       ["--sans", "--mono", "--serif", "--serif-weight", "--card-weight"].forEach(function (name) { presenterDoc.documentElement.style.setProperty(name, ownerType.getPropertyValue(name)); });
     }
@@ -303,6 +311,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterWin.addEventListener("pagehide", onPresenterClosed);
     stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
     var pb = stage.querySelector('[data-pjp="popout"]'); if (pb) pb.classList.add("is-on");
+    if (opts.floatingPresenter) popButton.setAttribute("aria-pressed", "true");
     presenterRefresh = setTimeout(syncPresenter, 60); syncPresenter();
     if (opts.autoStart && !opts.presenterWindow) webPreview.connect();
   }
@@ -322,7 +331,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
     else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
     else if (e.key === "Escape") { e.preventDefault(); exit(); }
-    else if (e.key === "p" || e.key === "P") { e.preventDefault(); if (opts.presenterWindow) togglePresenter(); else togglePresent(); }
+    else if (e.key === "p" || e.key === "P") { e.preventDefault(); if (separatePresenter) togglePresenter(); else togglePresent(); }
     else if (e.key === "Home") { idx = 0; render(-1); }
     else if (e.key === "End") { idx = slides.length - 1; render(1); }
   }
@@ -343,7 +352,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   render(1);
   if (nativeHost && thumbnailData) slides.forEach(function (slide,index) { Promise.resolve(thumbnailData(slide)).then(function (image) { if (!exited) { nativeThumbnails[index] = image; syncNative(); } }).catch(function () {}); });
   var ready = Promise.resolve();
-  if (opts.presenterWindow && !opts.audienceOnly) {
+  if (separatePresenter && !opts.audienceOnly) {
     window.addEventListener("pagehide", exit);
     ready = openPresenter();
   } else if (!nativeHost && opts.autoStart) {

@@ -340,6 +340,15 @@ test("DJ forwards native gallery, annotation, generated gestures and nested medi
     assert.equal(await section.locator("video").evaluate(video => video.paused), false);
     await popup.getByRole("button", { name: "Pause slide media", exact: true }).click();
     assert.equal(await section.locator("video").evaluate(video => video.paused), true);
+    const videoExpand = section.getByRole('button', {name:'Expand media in slide', exact:true});
+    assert.equal(await videoExpand.evaluate(button=>getComputedStyle(button).opacity), '1');
+    const videoExpandPoint = await position(videoExpand);
+    await popup.mouse.click(videoExpandPoint.x, videoExpandPoint.y);
+    await section.getByRole('dialog', {name:'Expanded slide media', exact:true}).waitFor();
+    assert.equal(await section.locator('video').evaluate(video=>video.ownerDocument.fullscreenElement), null);
+    const videoClosePoint = await position(section.getByRole('button', {name:'Close expanded media', exact:true}));
+    await popup.mouse.click(videoClosePoint.x, videoClosePoint.y);
+    await section.getByRole('dialog', {name:'Expanded slide media', exact:true}).waitFor({state:'detached'});
     for (const controls of [true,false]) {
       await section.locator('video').evaluate((video,controls)=>{video.controls=controls;},controls);
       await section.locator('video').hover();

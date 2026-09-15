@@ -955,8 +955,9 @@ test("Studio protected inserts share recovery-gated access across case and slide
       await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private prototype',{exact:true}).waitFor();
       assert.equal(await audience.frameLocator('.merge-present-stage iframe.lab-section-component').getByText('Private caption',{exact:true}).isHidden(),true);
       await audience.screenshot({path:join(tmpdir(),'rk-protected-audience-'+width+'.png')});
-      await page.frameLocator('dialog.pjp-tab iframe').locator('[data-pp="exit"]').click();
-      await page.locator('dialog.pjp-tab').waitFor({state:'detached'});
+      const audienceClosed = audience.waitForEvent('close');
+      await audience.getByRole('button', {name:'Exit presentation', exact:true}).click();
+      await audienceClosed;
       await page.locator('[data-l2-back]').click();
       const saved = await page.evaluate(async()=>{
         const reference=window.__RKStudio.getDraft().work[0].study.nativeDeck;
@@ -2752,18 +2753,29 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     await toolbarPreview.setViewportSize({width, height:1000});
     await toolbarPreview.waitForURL(/slideshow=1/);
     await toolbarPreview.locator('.pjp').waitFor({ state: 'visible' });
-    const pad = page.frameLocator('[data-presenter-host]');
-    await pad.locator('[data-pp-notes]').waitFor();
-    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
-    assert.equal(context.pages().length, 2);
+    await toolbarPreview.waitForFunction(()=>document.querySelector('.pjp--popped') || document.querySelector('[data-pjp="popout"]')?.title === 'Open floating DJ pad (P)');
+    await context.unrouteAll({behavior:'wait'});
+    assert.equal(await page.locator('.pjp-tab').count(), 0);
+    assert.equal(await page.locator('.merge-shell').isVisible(), true);
     const djToggle = toolbarPreview.getByRole('button',{name:'Toggle DJ pad',exact:true});
-    await page.waitForFunction(()=>document.hasFocus());
+    let pad = context.pages().find(candidate=>candidate !== page && candidate !== toolbarPreview);
+    if (!pad) {
+      assert.equal(await djToggle.getAttribute('aria-pressed'),'false');
+      const floatingOpened = context.waitForEvent('page');
+      await djToggle.click();
+      pad = await floatingOpened;
+    }
+    await pad.locator('[data-pp-notes]').waitFor();
+    assert.equal(await pad.locator('html').getAttribute('data-presenter-window'),'always-on-top');
     assert.equal(await djToggle.getAttribute('aria-pressed'),'true');
+    const floatingClosed = pad.waitForEvent('close');
     await djToggle.click();
-    assert.equal(await page.locator('.pjp-tab').isVisible(),false);
+    await floatingClosed;
     assert.equal(await toolbarPreview.locator('.pjp').isVisible(),true);
+    const floatingReopened = context.waitForEvent('page');
     await djToggle.click();
-    await page.locator('.pjp-tab[open]').waitFor();
+    pad = await floatingReopened;
+    await pad.locator('[data-pp-notes]').waitFor();
     const djBounds = await djToggle.boundingBox(), exitBounds = await toolbarPreview.getByRole('button',{name:'Exit presentation',exact:true}).boundingBox();
     assert.ok(djBounds.x < width/2 && exitBounds.x > width/2);
     assert.equal(await toolbarPreview.evaluate(() => window.opener), null);
@@ -2779,7 +2791,17 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     const padBounds = await pad.locator('.pp').evaluate(element => { const rect = element.getBoundingClientRect(); return {width:rect.width, viewport:innerWidth, overflow:document.documentElement.scrollWidth > innerWidth}; });
     assert.equal(padBounds.overflow, false);
     assert.ok(Math.abs(padBounds.width - padBounds.viewport) < 1);
-    await page.screenshot({path:join(tmpdir(), `rk-original-tab-dj-${width}.png`)});
+    await pad.setViewportSize({width:width === 390 ? 390 : 1060,height:800});
+    await pad.waitForFunction(()=>{
+      const host=document.querySelector('[data-pp-now] .merge-section-thumbnail');
+      const scene=host?.querySelector('.merge-section-thumbnail-scene');
+      return host?.clientWidth > 100 && Math.abs(scene.getBoundingClientRect().width-host.clientWidth) < 2;
+    },null,{timeout:4000}).catch(async error=>{
+      const geometry=await pad.evaluate(()=>Array.from(document.querySelectorAll('[data-pp-now], [data-pp-thumbnail], .merge-present-thumbnail, .merge-section-thumbnail, .merge-section-thumbnail-scene')).map(element=>({name:element.className,bounds:element.getBoundingClientRect().toJSON(),display:getComputedStyle(element).display,transform:getComputedStyle(element).transform,visibility:getComputedStyle(element).visibility})));
+      const styles=await pad.evaluate(()=>Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(link=>({href:link.href,loaded:!!link.sheet,disabled:link.disabled})));
+      throw new Error(JSON.stringify({geometry,styles}),{cause:error});
+    });
+    await pad.screenshot({path:join(tmpdir(), `rk-floating-dj-${width}.png`)});
     assert.ok(await toolbarPreview.locator('.pjp canvas').evaluateAll(canvases => canvases.some(canvas => { const context = canvas.getContext('2d'); return context && canvas.width && canvas.height && context.getImageData(0,0,canvas.width,canvas.height).data.some((value,index) => index % 4 === 3 && value); })));
     const audienceBounds = await toolbarPreview.locator('.merge-present-stage').boundingBox();
     assert.ok(audienceBounds.width > 250 && audienceBounds.x >= 0 && audienceBounds.x + audienceBounds.width <= width + 1);
@@ -2799,7 +2821,7 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     const reopened = context.waitForEvent('page');
     await page.getByRole('button', { name:'Open slideshow in a new tab', exact:true }).click();
     const closingAudience = await reopened;
-    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    await closingAudience.locator('.pjp').waitFor();
     await closingAudience.close();
     await page.locator('.pjp-tab').waitFor({ state:'detached' });
     const state = await page.evaluate(() => ({ study: window.__RKStudio.getDraft().work[0].study, counter: document.querySelector('[data-ai-session-toggle]').getBoundingClientRect().toJSON(), width: innerWidth, overflow: document.documentElement.scrollWidth > innerWidth }));

@@ -61,7 +61,7 @@ test('DJ pad can use the original tab without exposing notes or opening a second
   } finally { await browser.close(); }
 });
 
-test('owner case-study Present keeps the DJ pad in the original tab and handles blocked or closed audiences', { timeout:60000 }, async () => {
+for (const denyAutomatic of [false,true]) test(`owner case-study Present floats the DJ pad and handles blocked or closed audiences (${denyAutomatic ? 'permission retry' : 'automatic'})`, { timeout:60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true, ignoreDefaultArgs:['--disable-popup-blocking'] });
   const context = await browser.newContext({ viewport:{width:1280,height:900}, reducedMotion:'reduce' });
   const published = JSON.parse(readFileSync(new URL('./content.json', import.meta.url), 'utf8'));
@@ -69,6 +69,11 @@ test('owner case-study Present keeps the DJ pad in the original tab and handles 
   await context.route('**/content.json*', route => route.fulfill({contentType:'application/json', body:JSON.stringify(published)}));
   await context.route('**/work/presenter-case', route => route.fulfill({contentType:'text/html', body:readFileSync(new URL('./404.html', import.meta.url), 'utf8')}));
   await context.addInitScript(() => { localStorage.setItem('rk:owner','1'); window.captureRequests = 0; navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException('Unexpected capture','NotAllowedError')); }; });
+  if (denyAutomatic) await context.addInitScript(() => {
+    const request = documentPictureInPicture.requestWindow.bind(documentPictureInPicture);
+    let attempts = 0;
+    documentPictureInPicture.requestWindow = options => ++attempts === 1 ? Promise.reject(new DOMException('Activation required','NotAllowedError')) : request(options);
+  });
   const page = await context.newPage(), errors = [];
   context.on('page', candidate => candidate.on('pageerror', error => errors.push(error.message)));
   page.on('pageerror', error => errors.push(error.message));
@@ -80,30 +85,43 @@ test('owner case-study Present keeps the DJ pad in the original tab and handles 
     const opened = page.waitForEvent('popup');
     await play.click();
     const audience = await opened;
-    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
-    const pad = page.frameLocator('[data-presenter-host]');
-    assert.equal(context.pages().length, 2);
+    await audience.waitForFunction(()=>document.querySelector('.pjp--popped') || document.querySelector('[data-pjp="popout"]')?.title === 'Open floating DJ pad (P)');
+    const toggle = audience.getByRole('button', {name:'Toggle DJ pad', exact:true});
+    let pad = context.pages().find(candidate=>candidate !== page && candidate !== audience);
+    if (denyAutomatic) { assert.equal(pad, undefined); assert.equal(await toggle.getAttribute('aria-pressed'),'false'); }
+    if (!pad) {
+      const floating = context.waitForEvent('page');
+      await toggle.click();
+      pad = await floating;
+    }
+    await pad.locator('[data-pp-notes]').waitFor();
+    assert.equal(await pad.locator('html').getAttribute('data-presenter-window'), 'always-on-top');
+    assert.equal(await page.locator('.pjp-tab').count(), 0);
+    assert.equal(await page.locator('.pj.is-open').isVisible(), true);
+    assert.equal(context.pages().length, 3);
     assert.equal(await audience.evaluate(() => window.opener), null);
     assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE OWNER FIRST');
     assert.equal(await audience.locator('[data-pjp-notes]').textContent(), '');
     assert.doesNotMatch(await audience.locator('body').innerText(), /PRIVATE OWNER/);
     assert.equal(await audience.evaluate(() => window.captureRequests), 0);
-    const typography = await page.evaluate(() => { const frame = document.querySelector('[data-presenter-host]'); return ['--sans','--mono','--serif'].map(name => [getComputedStyle(document.documentElement).getPropertyValue(name).trim(), frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue(name).trim()]); });
-    assert.ok(typography.every(([original, presenter]) => original && presenter === original));
-    const toggle = audience.getByRole('button', {name:'Toggle DJ pad', exact:true});
+    const typography = await page.evaluate(() => ['--sans','--mono','--serif'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim()));
+    assert.deepEqual(await pad.evaluate(() => ['--sans','--mono','--serif'].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim())), typography);
     for (const width of [1280,390]) {
       await audience.setViewportSize({width,height:900});
       const left = await toggle.boundingBox(), right = await audience.getByRole('button', {name:'Exit presentation',exact:true}).boundingBox();
       assert.ok(left.x < width / 2 && right.x > width / 2 && left.y < 40 && right.y < 40);
       assert.equal(await toggle.getAttribute('aria-pressed'),'true');
+      const closed = pad.waitForEvent('close');
       await toggle.click();
-      assert.equal(await page.locator('.pjp-tab').isVisible(),false);
+      await closed;
       assert.equal(await audience.locator('.pjp').isVisible(),true);
       assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+      const reopenedPad = context.waitForEvent('page');
       await toggle.click();
-      await page.locator('.pjp-tab[open]').waitFor();
+      pad = await reopenedPad;
+      await pad.locator('[data-pp-notes]').waitFor();
       assert.equal(await pad.locator('[data-pp-notes]').innerText(),'PRIVATE OWNER FIRST');
-      assert.equal(context.pages().length,2);
+      assert.equal(context.pages().length,3);
     }
     await audience.setViewportSize({width:1280,height:900});
     await audience.screenshot({path:join(tmpdir(),'rk-audience-dj-toggle.png')});
@@ -127,7 +145,7 @@ test('owner case-study Present keeps the DJ pad in the original tab and handles 
     const reopened = page.waitForEvent('popup');
     await play.click();
     const nextAudience = await reopened;
-    await page.locator('.pjp-tab[data-ready="true"]').waitFor();
+    await nextAudience.locator('.pjp').waitFor();
     const leaving = nextAudience.waitForEvent('close');
     await page.reload();
     await leaving;
