@@ -3,25 +3,26 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 const deck = 'slide-studio-deck.test.mjs';
-const authoring = '(?:Prepare |Resume canvas |AI |Draft entire deck )';
+const authoring = '(?:Prepare |Resume canvas |AI |Draft entire deck |fixed cover |empty hosted deck |linked cover )';
 export const browserShards = {
-  authoring: [{ files: [deck], pattern: '^' + authoring }],
-  sections: [{ files: [deck], pattern: '^(?!' + authoring + ')' }],
+  authoring: [{ files: [deck], pattern: '^' + authoring }, { files: ['presenter-web.browser.test.mjs'] }],
+  sections: [{ files: [deck], skipPattern: '^' + authoring }],
   recovery: [{ files: [
     'ai-ribbon.test.mjs',
     'project-recovery.browser.test.mjs', 'slide-presenter-readonly.browser.test.mjs',
     'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs',
     'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs',
-    'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs',
+    'slide-presenter.browser.test.mjs',
     'studio-capture-download.browser.test.mjs'
   ] }]
 };
 
 export function shardCommands(shard) {
   if (!Object.hasOwn(browserShards, shard)) throw new Error('Unknown browser shard: ' + shard);
-  return browserShards[shard].map(({ files, pattern }) => [
+  return browserShards[shard].map(({ files, pattern, skipPattern }) => [
     '--import', './tools/browser-test-guard.mjs', '--test', '--test-concurrency=1',
-    ...(pattern ? ['--test-name-pattern=' + pattern] : []), ...files
+    ...(pattern ? ['--test-name-pattern=' + pattern] : []),
+    ...(skipPattern ? ['--test-skip-pattern=' + skipPattern] : []), ...files
   ]);
 }
 
