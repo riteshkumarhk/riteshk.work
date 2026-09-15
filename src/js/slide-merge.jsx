@@ -217,7 +217,7 @@ function Merger({ integration, controller }) {
   }, [pane]);
   const notesResize = useNotesResize(editor);
   useLayoutEffect(() => {
-    const shell = host.current?.closest(".merge-shell"), rail = shell?.querySelector(".merge-slides");
+    const shell = host.current?.closest(".merge-shell"), rail = shell?.querySelector(".merge-inspector");
     if (!rail) return;
     const measure = () => {
       const bounds = rail.getBoundingClientRect();
@@ -393,7 +393,7 @@ function Merger({ integration, controller }) {
     const width = canvas.clientWidth, height = canvas.clientHeight;
     if (!width || !height) return;
     const viewingInset = innerWidth > 900 ? 48 : 24;
-    const left=live.current.editing?innerWidth>900?280:16:viewingInset,right=live.current.editing?innerWidth>900?32:16:viewingInset;
+    const left=live.current.editing?innerWidth>900?32:16:viewingInset,right=left;
     const controls = host.current.querySelector(innerWidth > 900 ? ".merge-canvas-presenter-controls" : ".merge-mobile-canvas-controls");
     const top = live.current.editing ? innerWidth > 900 ? 90 : 16 : viewingInset;
     const bottom = Math.max(live.current.editing && innerWidth > 900 ? 90 : viewingInset, (controls?.offsetHeight || 36) + 24);
@@ -971,14 +971,14 @@ function Merger({ integration, controller }) {
       <input aria-label="Deck title" value={deck?.title || ""} disabled={busy || !editing} onChange={event => metadata("title", event.target.value, true)} />
       </header>}
     {integration?.toolbar ? createPortal(editorBar, integration.toolbar) : editorBar}
-    <aside className="merge-slides" onKeyDownCapture={deleteSlideKey} aria-label={pane && !mobileUI.mobile ? PANE_LABELS[pane] || "Library" : "Slides"}>
+    <aside className="merge-slides" onKeyDownCapture={deleteSlideKey} aria-label="Slides">
       <div className="merge-resizer" data-prevent-outside-click role="separator" aria-label="Resize slide navigation" aria-orientation="vertical" aria-valuemin={160} aria-valuemax={slidePaneWidth(360, innerWidth)} aria-valuenow={paneWidth} tabIndex={0} title="Resize slide navigation"
         onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); resize.current = { x: event.clientX, width: paneWidth }; setResizing(true); event.currentTarget.setPointerCapture(event.pointerId); }}
-        onPointerMove={event => { if (resize.current) setPaneWidth(slidePaneWidth(resize.current.width + resize.current.x - event.clientX, innerWidth)); }}
+        onPointerMove={event => { if (resize.current) setPaneWidth(slidePaneWidth(resize.current.width + event.clientX - resize.current.x, innerWidth)); }}
         onPointerUp={finishResize} onPointerCancel={event => finishResize(event, true)} onLostPointerCapture={() => { resize.current = null; setResizing(false); }}
-        onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowLeft" ? 16 : -16)); } }} />
-      {pane && !mobileUI.mobile && <div className="merge-section-head merge-insert-head"><h2>{PANE_LABELS[pane] || "Library"}</h2><button className="merge-nav-action" title="Close panel" aria-label="Close panel" onClick={() => openPane(null, false)}><ToolIcon name="close" /></button></div>}
+        onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowRight" ? 16 : -16)); } }} />
       <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={removeSlide} pick={kind => openPane(kind, false)} section={saveSection} /></aside>
+    <div className="merge-inspector"><div className="merge-section-head merge-insert-head"><h2>{pane ? PANE_LABELS[pane] || "Library" : hasSelection ? "Object" : "Slide"}</h2>{pane && <button className="merge-nav-action" title="Close panel" aria-label="Close panel" onClick={() => openPane(null, false)}><ToolIcon name="close" /></button>}</div></div>
     <section className="merge-editor" ref={editor}>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} data-empty={!!deck && !current} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>
         <CanvasToolbar api={api} disabled={busy || present !== null || !!deckDialog} onImage={() => openPane("media")} mediaOpen={pane === "media"} onDiagram={kind => insertContent(kind, null, true)}>

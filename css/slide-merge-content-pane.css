@@ -74,7 +74,11 @@
   .merge-shell .lab-canvas .sidebar { --sidebar-bg-color:var(--merge-bg); background:var(--merge-bg); }
   .merge-shell .lab-canvas .sidebar .merge-section-actions { background:var(--merge-bg); }
   .merge-shell .lab-canvas .sidebar { position:fixed; left:var(--insert-rail-left); top:calc(var(--insert-rail-top) + 54px); right:auto; bottom:auto; width:var(--insert-rail-width); min-width:0; max-width:none; height:calc(var(--insert-rail-height) - 54px); max-height:none; margin:0; border:0; border-radius:0; box-shadow:none; transform:none; }
-  .merge-rail-insert .merge-slides > :not(.merge-resizer):not(.merge-insert-head) { visibility:hidden; }
+  .merge-shell .excalidraw .App-menu__left { position:fixed; left:var(--insert-rail-left); top:calc(var(--insert-rail-top) + 54px); right:auto; bottom:auto; width:var(--insert-rail-width); height:calc(var(--insert-rail-height) - 54px); max-height:none; margin:0; border:0; border-radius:0; box-shadow:none; box-sizing:border-box; overflow:auto; background:var(--merge-bg); }
+  .merge-shell .excalidraw .App-menu__left .Island { width:100%; border:0; border-radius:0; box-shadow:none; background:transparent; }
+  .merge-shell .excalidraw .App-menu__left .panelColumn { width:100%; }
+  .merge-shell .excalidraw .selected-shape-actions .App-menu__left { max-height:none!important; }
+  .merge-shell.merge-rail-insert .excalidraw .App-menu__left { display:none; }
   .merge-shell .merge-insert-head { height:54px; box-sizing:border-box; flex-shrink:0; gap:8px; }
   .merge-shell .merge-insert-head h2 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .merge-shell .merge-insert-head .merge-nav-action { flex-shrink:0; width:34px; height:34px; border-radius:50%; }

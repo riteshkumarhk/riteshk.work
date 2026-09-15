@@ -60,7 +60,7 @@ async function assertCoverPixel(page, position, expected) {
   }, { position, expected });
 }
 
-test("fixed cover edits from the left inspector preserve media, other slides and history", { timeout: 90000 }, async () => {
+test("fixed cover edits from the right panel preserve media, other slides and history", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -73,6 +73,46 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     await page.getByRole('button', { name: 'Add cover', exact: true }).click();
     const title = page.getByLabel('Cover title', { exact: true });
     await title.waitFor();
+    const slides = page.getByRole('complementary', { name: 'Slides', exact: true });
+    const assertPanels = async target => {
+      const rail = await slides.boundingBox(), workspace = await page.locator('.merge-editor').boundingBox(), panel = await target.boundingBox();
+      assert.ok(rail.x < workspace.x && rail.x + rail.width <= workspace.x + 1, 'Slides stay to the left of the canvas');
+      assert.ok(panel.x >= workspace.x + workspace.width - 1 && panel.x + panel.width <= page.viewportSize().width + 1, 'Editing and insert controls stay in the right panel');
+      assert.ok(panel.height > workspace.height - 60, 'Editing controls use a full-height panel, not a floating dock');
+      assert.equal(await page.locator('.merge-slide-list').isVisible(), true, 'Insert tools do not replace slide navigation');
+      assert.ok(await target.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Panel content fits its width');
+    };
+    for (const width of [1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.waitForFunction(() => Math.abs(document.querySelector('.merge-slide-properties').getBoundingClientRect().right - innerWidth) < 1);
+      await assertPanels(page.getByRole('complementary', { name: 'Slide properties', exact: true }));
+      await page.evaluate(() => window.__slideMerge.api.setActiveTool({ type: 'rectangle' }));
+      await page.locator('.selected-shape-actions .App-menu__left').waitFor({ state: 'visible' });
+      await assertPanels(page.locator('.selected-shape-actions .App-menu__left'));
+      await page.screenshot({ path: join(tmpdir(), `rk-right-object-panel-${width}.png`) });
+      await page.evaluate(() => window.__slideMerge.api.setActiveTool({ type: 'selection' }));
+    }
+    for (const label of ['Icons', 'Text', 'Badges', 'Sections', 'Open library']) {
+      await page.locator('.merge-canvas-tools').getByRole('button', { name: label, exact: true }).click();
+      await page.locator('.sidebar').waitFor({ state: 'visible' });
+      await assertPanels(page.locator('.sidebar'));
+      assert.equal(await title.isVisible(), false, 'Insert views replace properties only');
+      await page.locator('.merge-inspector').getByRole('button', { name: 'Close panel', exact: true }).click();
+      await title.waitFor({ state: 'visible' });
+    }
+    for (const tab of ['media', 'layout', 'source', 'layers', 'draft']) {
+      await page.evaluate(tab => window.__slideMerge.api.updateScene({ appState: { openSidebar: { name: 'insert', tab } } }), tab);
+      await page.locator('.sidebar').waitFor({ state: 'visible' });
+      await assertPanels(page.locator('.sidebar'));
+      await page.locator('.merge-inspector').getByRole('button', { name: 'Close panel', exact: true }).click();
+      await title.waitFor({ state: 'visible' });
+    }
+    const resizer = page.getByRole('separator', { name: 'Resize slide navigation', exact: true });
+    const initialWidth = Number(await resizer.getAttribute('aria-valuenow'));
+    await resizer.press('ArrowRight');
+    assert.equal(Number(await resizer.getAttribute('aria-valuenow')), initialWidth + 16);
+    await resizer.press('ArrowLeft');
+    assert.equal(Number(await resizer.getAttribute('aria-valuenow')), initialWidth);
     const initialPalette = await assertCoverSitePalette(page);
     await assertCoverPixel(page, [400, 660], [242, 238, 230]);
     await title.fill('Reinventing Edge Onboarding Journey');
@@ -143,7 +183,7 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     assert.equal(published.slides[0].scene.files[publicImages.find(element => element.crop).fileId].dataURL, imageData);
     assert.equal(published.slides[0].scene.files[publicImages.find(element => !element.crop).fileId].dataURL, logoData);
     assert.equal(await title.evaluate(element => getComputedStyle(element).whiteSpace), 'pre-wrap');
-    assert.ok(await title.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Long title wraps inside the left panel');
+    assert.ok(await title.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Long title wraps inside the right panel');
     await page.waitForFunction(() => {
       const api = window.__slideMerge.api, state = api.getAppState(), image = api.getSceneElements().find(element => element.customData?.slideCover === 'image');
       const canvas = document.querySelector('.excalidraw__canvas.static'), box = canvas.getBoundingClientRect();
@@ -155,7 +195,7 @@ test("fixed cover edits from the left inspector preserve media, other slides and
     const inspector = page.getByRole('complementary', { name: 'Slide properties', exact: true });
     await inspector.evaluate(element => { element.scrollTop = 0; });
     const panelBox = await inspector.boundingBox();
-    assert.ok(panelBox.x < 300 && panelBox.width <= 216, 'Cover uses the existing left inspector');
+    assert.ok(panelBox.x >= 1200 && panelBox.width <= 240, 'Cover uses the full-height right panel');
     await page.screenshot({ path: join(tmpdir(), 'rk-fixed-cover-1440.png') });
     await page.getByRole('button', { name: 'Remove brand logo', exact: true }).click();
     assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().some(element => element.customData?.slideCover === 'logo')), false);
@@ -231,6 +271,12 @@ test("fixed cover fields persist in hosted Studio without changing case content"
       await page.locator('[data-l2tab="slides"]').click();
       await page.getByRole('button', { name: 'Add cover', exact: true }).click();
       const title = page.getByLabel('Cover title', { exact: true });
+      if (width === 1440) {
+        const rail = await page.locator('.merge-slides').boundingBox(), editor = await page.locator('.merge-editor').boundingBox(), panel = await page.locator('.merge-slide-properties').boundingBox();
+        assert.ok(rail.x + rail.width <= editor.x + 1 && panel.x >= editor.x + editor.width - 1, 'Hosted Studio uses left slides and right editing panel');
+        assert.ok(panel.height > editor.height - 60, 'Hosted properties fill the right column');
+        await page.screenshot({ path: join(tmpdir(), 'rk-hosted-right-panel-1440.png') });
+      }
       await page.locator('.merge-cover-overrides > summary').click();
       assert.equal(await title.inputValue(), 'Integrated project');
       assert.equal(await page.getByLabel('Cover status', { exact: true }).inputValue(), 'Launched');

@@ -7,7 +7,7 @@
 .adm.is-native-slides .adm__slidestage { display:block!important;position:relative;width:100%;height:100%;min-height:0; }
 .studio-native-slide-root { width:100%;height:100%;min-height:0; }
 .adm.is-native-slides .merge-shell[data-hosted] { height:100%;min-height:0;grid-template-rows:minmax(0,1fr); }
-.adm.is-native-slides .merge-shell[data-hosted] > :is(.merge-editor,.merge-slides,.merge-all-slides) { grid-row:1; }
+.adm.is-native-slides .merge-shell[data-hosted] > :is(.merge-editor,.merge-slides,.merge-inspector,.merge-all-slides) { grid-row:1; }
 .adm.is-native-slides .adm__workbar > :is(.adm__hist,.adm__prevgroup) { display:none!important; }
 [data-native-slide-toolbar],[data-native-slide-status] { width:100%;min-width:0;--merge-bg:var(--bg);--merge-text:var(--text);--merge-muted:var(--text-dim);--merge-line:var(--line);--merge-accent:var(--accent); }
 [data-native-slide-toolbar]:not([hidden]),[data-native-slide-toolbar] > .merge-editor-bar { display:contents; }
