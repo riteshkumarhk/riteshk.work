@@ -192,7 +192,7 @@ test("DJ input reaches native section controls while ordinary section content ke
       const embedded = document.createElement("iframe"); embedded.dataset.section = "compare";
       embedded.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0";
       embedded.onload = () => embedded.contentWindow.postMessage({ type: "rk-section-component", block, appearance: "dark" }, location.origin);
-      embedded.src = "/studio/slide-lab/native.html?fixture=component";
+      embedded.src = "/studio/slide-runtime/component.html";
       document.querySelector("[data-pjp-frame]").replaceChildren(embedded);
     });
     const section = page.frameLocator('iframe[data-section="compare"]');
@@ -238,7 +238,7 @@ test("DJ forwards native gallery, annotation, generated gestures and nested medi
     await page.evaluate(() => {
       const embedded = document.createElement("iframe"); embedded.id = "section-controls";
       embedded.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0";
-      embedded.src = "/studio/slide-lab/native.html?fixture=component";
+      embedded.src = "/studio/slide-runtime/component.html";
       document.querySelector("[data-pjp-frame]").replaceChildren(embedded);
       const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360;
       const context = canvas.getContext("2d"); context.fillStyle = "#25bba0"; context.fillRect(0, 0, 640, 360);
@@ -261,28 +261,56 @@ test("DJ forwards native gallery, annotation, generated gestures and nested medi
     await popup.locator("[data-pp-live]").click(); await popup.locator("[data-pp-now] canvas").waitFor();
     await section.locator(".pjb__gallery img").first().evaluate(image => image.decode());
     await section.locator(".pjb__gallery img").first().click({ trial: true });
+    const originalStyle = await page.locator('#section-controls').evaluate(frame=>{frame.style.cssText='position:absolute;left:12%;top:15%;width:65%;height:65%;border:0';return frame.getAttribute('style');});
     await click(section.locator(".pjb__gallery img").first());
     await section.locator(".pjx.is-open").waitFor();
-    await page.waitForFunction(() => !!document.fullscreenElement);
+    assert.equal(await page.evaluate(() => document.fullscreenElement),null);
+    const slideBounds = await page.locator('[data-pjp-frame]').boundingBox(), viewerBounds = await section.locator('.pjx.is-open').boundingBox();
+    assert.ok(Math.abs(slideBounds.width-viewerBounds.width)<2 && Math.abs(slideBounds.height-viewerBounds.height)<2,'Image expansion must fill the slide, not the browser window');
     const lightboxPoint = await position(section.locator('[data-lz="in"]')), lightboxPreview = await popup.locator("[data-pp-now]").boundingBox();
     assert.ok(lightboxPoint.x >= lightboxPreview.x && lightboxPoint.x <= lightboxPreview.x + lightboxPreview.width && lightboxPoint.y >= lightboxPreview.y && lightboxPoint.y <= lightboxPreview.y + lightboxPreview.height, JSON.stringify({ point: lightboxPoint, preview: lightboxPreview, audience: await page.evaluate(() => ({ fullscreen: document.fullscreenElement?.tagName, frame: document.querySelector("[data-pjp-frame]").getBoundingClientRect().toJSON() })) }));
     await click(section.locator('[data-lz="in"]'));
+    assert.ok(await section.locator('.pjx__img').evaluate(image=>Math.abs(new DOMMatrix(image.style.transform).a-1.4)<0.00001));
+    const imagePoint = await position(section.locator('.pjx__img'));
+    await popup.mouse.move(imagePoint.x,imagePoint.y); await popup.mouse.down(); await popup.mouse.move(imagePoint.x+30,imagePoint.y+15,{steps:5}); await popup.mouse.up();
+    assert.ok(await section.locator('.pjx__img').evaluate(image=>{const matrix=new DOMMatrix(image.style.transform);return Math.hypot(matrix.e,matrix.f)>10;}));
     await popup.keyboard.press("Escape");
     assert.equal(await section.locator(".pjx.is-open").count(), 0, "Escape must close the section lightbox without ending the deck");
     await section.locator(".pjx").waitFor({ state: "hidden" });
     await page.waitForFunction(() => !document.fullscreenElement);
     assert.equal(await page.locator(".pjp").count(), 1);
+    assert.equal(await page.locator('#section-controls').getAttribute('style'),originalStyle);
+    await page.locator('#section-controls').evaluate(frame=>{frame.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:0';});
     await click(section.locator(".pjb__gallery-nav--next"));
     await page.waitForFunction(() => document.querySelector("#section-controls").contentDocument.querySelector("[data-gallery]").scrollLeft > 10, null, { timeout: 4000 });
     assert.ok(await section.locator("[data-gallery]").evaluate(gallery => gallery.scrollLeft) > 10);
     await render({ type: "focus", heading: "Annotation content", src: "$image", sticky: true, annotations: [{ x: 50, y: 50, title: "Actual annotation", body: "The audience's note" }] });
     await click(section.locator('[data-focus-mark="0"]'));
     assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), true);
+    await section.locator('[data-focus-close]').click({trial:true});
     await click(section.locator("[data-focus-close]"));
     assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), false);
     await click(section.locator('[data-focus-note="0"]'));
     await popup.keyboard.press("Enter");
     assert.equal(await section.locator('[data-focus-card="0"]').isVisible(), false, "Native keyboard handlers must receive their own events without duplicate activation");
+    await page.route('https://www.figma.com/**',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><body style="background:#248c79;color:white">Embedded design fixture</body>'}));
+    await render({type:'media',heading:'Embedded design',items:[{kind:'figma',src:'https://www.figma.com/proto/fixture/Design'}]});
+    await section.locator('.pjb__frame iframe').waitFor();
+    await section.locator('.pjb__frame iframe').evaluate(embedded=>{window.originalEmbeddedWindow=embedded.contentWindow;window.originalEmbedStyle=embedded.getAttribute('style');});
+    await click(section.getByRole('button',{name:'Expand media in slide',exact:true}));
+    await section.getByRole('dialog',{name:'Expanded slide media',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.fullscreenElement),null);
+    await click(section.getByRole('button',{name:'Zoom in',exact:true}));
+    const panPoint = await position(section.locator('[data-expand-pan]'));
+    await popup.mouse.move(panPoint.x,panPoint.y); await popup.mouse.down(); await popup.mouse.move(panPoint.x+35,panPoint.y+20,{steps:5}); await popup.mouse.up();
+    assert.match(await section.locator('.pjb__frame iframe').getAttribute('style'),/scale\(1\.4\)/);
+    assert.ok(await section.locator('.pjb__frame iframe').evaluate(embedded=>{const matrix=new DOMMatrix(embedded.style.transform);return Math.hypot(matrix.e,matrix.f)>10;}));
+    await click(section.getByRole('button',{name:'Reset zoom',exact:true}));
+    assert.match(await section.locator('.pjb__frame iframe').getAttribute('style'),/scale\(1\)/);
+    await page.screenshot({path:join(tmpdir(),'rk-slide-contained-embed.png')});
+    await popup.keyboard.press('Escape');
+    await section.locator('.pjp__expanded').waitFor({state:'detached'});
+    assert.equal(await section.locator('.pjb__frame iframe').evaluate(embedded=>embedded.contentWindow===window.originalEmbeddedWindow && embedded.getAttribute('style')===window.originalEmbedStyle),true,'Closing expansion must retain the iframe and restore its authored bounds');
     await render({ type: "faq", heading: "Static questions", items: [{ q: "A static question", a: "A static answer" }] });
     const question = await position(section.locator(".pjb__q")); await popup.mouse.move(question.x, question.y);
     assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser");
@@ -312,6 +340,33 @@ test("DJ forwards native gallery, annotation, generated gestures and nested medi
     assert.equal(await section.locator("video").evaluate(video => video.paused), false);
     await popup.getByRole("button", { name: "Pause slide media", exact: true }).click();
     assert.equal(await section.locator("video").evaluate(video => video.paused), true);
+    for (const controls of [true,false]) {
+      await section.locator('video').evaluate((video,controls)=>{video.controls=controls;},controls);
+      await section.locator('video').hover();
+      assert.equal(await page.locator('.pjp').getAttribute('data-pointer'),'control');
+      assert.notEqual(await section.locator('video').evaluate(video=>getComputedStyle(video).cursor),'none');
+    }
+    await render({type:'workflow',heading:'Scaled workflow',graph:{version:1,nodes:[{id:'start',position:{x:0,y:0},data:{title:'Start',note:'A tall node with multiple lines to measure and connect correctly.'}},{id:'review',position:{x:280,y:130},data:{title:'Review'}},{id:'ship',position:{x:560,y:0},data:{title:'Ship'}}],edges:[{id:'forward',source:'start',sourceHandle:'r',target:'review',targetHandle:'l',data:{kind:'main',route:'elbow'}},{id:'branch',source:'review',sourceHandle:'t',target:'ship',targetHandle:'b',data:{kind:'alternative',route:'curved'}},{id:'return',source:'ship',sourceHandle:'b',target:'start',targetHandle:'t',data:{kind:'return',route:'curved'}}]}});
+    await section.locator('.react-flow__edge-path').first().waitFor();
+    const assertPorts = async () => {
+      const gaps = await section.locator('rk-workflow').evaluate(root=>{
+        const graph={edges:[{id:'forward',source:'start',sourceHandle:'r',target:'review',targetHandle:'l'},{id:'branch',source:'review',sourceHandle:'t',target:'ship',targetHandle:'b'},{id:'return',source:'ship',sourceHandle:'b',target:'start',targetHandle:'t'}]};
+        return graph.edges.flatMap(edge=>{
+          const path=root.querySelector(`[data-id="${edge.id}"] .react-flow__edge-path`);
+          return ['source','target'].map(end=>{
+            const point=path.getPointAtLength(end==='source'?0:path.getTotalLength()).matrixTransform(path.getScreenCTM());
+            const port=root.querySelector(`[data-id="${edge[end]}"] [data-handleid="${edge[end+'Handle']}"]`).getBoundingClientRect();
+            return Math.hypot(point.x-port.x-port.width/2,point.y-port.y-port.height/2);
+          });
+        });
+      });
+      assert.ok(gaps.every(gap=>gap<2),`Connectors must meet their rendered ports: ${gaps}`);
+    };
+    await assertPorts();
+    await page.setViewportSize({width:1024,height:768});
+    await section.locator('rk-workflow').evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    await assertPorts();
+    await page.screenshot({path:join(tmpdir(),'rk-presenter-workflow-connectors.png')});
     assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
   } finally { await browser.close(); }
 });

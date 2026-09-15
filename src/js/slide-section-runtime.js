@@ -31,6 +31,7 @@ export function mountSectionRuntime(stage) {
   window.RK.mediaUrl = source => runtimeMedia[source] || sectionMediaUrl(source) || "";
   const stopTypography = watchStudioTypography(window, document);
   const fit = () => {
+    if (document.querySelector(".pjp__expanded")) return;
     const height = Math.max(1, stage.scrollHeight, stage.offsetHeight);
     const scale = Math.min(innerWidth / 1120, innerHeight / height);
     stage.style.transform = `scale(${scale})`;
@@ -43,22 +44,12 @@ export function mountSectionRuntime(stage) {
   document.documentElement.style.background = "transparent";
   const observer = new ResizeObserver(fit); observer.observe(stage);
   window.addEventListener("resize", fit);
-  let rendered = "", zoomOpened = false, zoomFullscreen = false;
-  const lightboxObserver = new MutationObserver(() => {
-    const open = !!document.querySelector(".pjx.is-open");
-    if (zoomOpened && !open && zoomFullscreen && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    zoomOpened = open;
-  });
-  lightboxObserver.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-  stage.addEventListener("click", event => {
-    if (!event.target.closest("[data-zoom],[data-cmp-zoom],figure.rt__fig img,.pjb__prose img,.pjb__iso-layer")) return;
-    if (!document.fullscreenElement && document.fullscreenEnabled) document.documentElement.requestFullscreen().then(() => { zoomFullscreen = true; }).catch(() => {});
-  }, true);
+  let rendered = "";
   stage.addEventListener("click", event => {
     const fullscreen = event.target.closest("[data-fs]");
     if (fullscreen) {
       const media = fullscreen.closest(".pjb__frame")?.querySelector("iframe,video,img");
-      if (media) { event.preventDefault(); media.requestFullscreen?.().catch(() => {}); }
+      if (media) { event.preventDefault(); if (!window.RK.expandSlideMedia?.(media)) media.requestFullscreen?.().catch(() => {}); }
       return;
     }
     const image = event.target.closest("img[data-zoom],figure.rt__fig img,.pjb__prose img");
@@ -102,7 +93,7 @@ export function mountSectionRuntime(stage) {
     render(event.data);
   };
   window.addEventListener("message", receive);
-  window.addEventListener("pagehide", () => { observer.disconnect(); lightboxObserver.disconnect(); stopTypography?.(); window.removeEventListener("resize", fit); window.removeEventListener("message", receive); }, { once: true });
+  window.addEventListener("pagehide", () => { observer.disconnect(); stopTypography?.(); window.removeEventListener("resize", fit); window.removeEventListener("message", receive); }, { once: true });
 }
 
 const stage = document.querySelector("[data-section-runtime]");

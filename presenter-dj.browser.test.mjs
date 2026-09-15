@@ -90,6 +90,23 @@ test('owner case-study Present keeps the DJ pad in the original tab and handles 
     assert.equal(await audience.evaluate(() => window.captureRequests), 0);
     const typography = await page.evaluate(() => { const frame = document.querySelector('[data-presenter-host]'); return ['--sans','--mono','--serif'].map(name => [getComputedStyle(document.documentElement).getPropertyValue(name).trim(), frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue(name).trim()]); });
     assert.ok(typography.every(([original, presenter]) => original && presenter === original));
+    const toggle = audience.getByRole('button', {name:'Toggle DJ pad', exact:true});
+    for (const width of [1280,390]) {
+      await audience.setViewportSize({width,height:900});
+      const left = await toggle.boundingBox(), right = await audience.getByRole('button', {name:'Exit presentation',exact:true}).boundingBox();
+      assert.ok(left.x < width / 2 && right.x > width / 2 && left.y < 40 && right.y < 40);
+      assert.equal(await toggle.getAttribute('aria-pressed'),'true');
+      await toggle.click();
+      assert.equal(await page.locator('.pjp-tab').isVisible(),false);
+      assert.equal(await audience.locator('.pjp').isVisible(),true);
+      assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+      await toggle.click();
+      await page.locator('.pjp-tab[open]').waitFor();
+      assert.equal(await pad.locator('[data-pp-notes]').innerText(),'PRIVATE OWNER FIRST');
+      assert.equal(context.pages().length,2);
+    }
+    await audience.setViewportSize({width:1280,height:900});
+    await audience.screenshot({path:join(tmpdir(),'rk-audience-dj-toggle.png')});
     await pad.getByRole('button', {name:'Next slide', exact:true}).click();
     assert.equal(await audience.locator('[data-pjp-count]').textContent(), '2 / 2');
     assert.equal(await pad.locator('[data-pp-notes]').innerText(), 'PRIVATE OWNER SECOND');

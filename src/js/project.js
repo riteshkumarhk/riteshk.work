@@ -1339,7 +1339,7 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
   }
 
   /* ---------- media lightbox (image zoom / pan) + fullscreen ---------- */
-  function reqFs(el) { var fn = el && (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen); if (fn) { try { fn.call(el); } catch (e) {} } }
+  function reqFs(el) { if (window.RK.expandSlideMedia?.(el)) return; var fn = el && (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen); if (fn) { try { fn.call(el); } catch (e) {} } }
   function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
   function exitFs() { var fn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen; if (fn) { try { fn.call(document); } catch (e) {} } }
   function toggleElFs(el) { if (fsEl() === el) exitFs(); else reqFs(el); }

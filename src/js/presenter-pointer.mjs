@@ -143,7 +143,7 @@ export function installPresenterPointer(stage, frame, remoteInput = false) {
   function point(x, y, remote = false) {
     const hit = presentationHit(frame, x, y);
     if (!hit) { hide(); return null; }
-    const control = !!hit.control;
+    const control = !!hit.control || hit.blocked;
     const layer = pointerLayer(), position = presentationPoint(frame, layer.document, x, y);
     if (layer.laser !== laser) laser.hide(); else fullscreenLaser?.hide();
     if (control && !remote || !position) layer.laser.hide(); else layer.laser.point(position.x, position.y, control);
@@ -161,7 +161,7 @@ export function installPresenterPointer(stage, frame, remoteInput = false) {
     if (child === doc) return;
     documents.add(child);
     const style = child.createElement("style");
-    style.textContent = 'html[data-rk-presenter-pointer="laser"],html[data-rk-presenter-pointer="laser"] *{cursor:none!important}';
+    style.textContent = 'html[data-rk-presenter-pointer="laser"],html[data-rk-presenter-pointer="laser"] *{cursor:none!important}html[data-rk-presenter-pointer="control"],html[data-rk-presenter-pointer="control"] *{cursor:auto!important}';
     child.head.appendChild(style);
     child.addEventListener("pointermove", move, true);
     return () => { child.removeEventListener("pointermove", move, true); child.documentElement?.removeAttribute("data-rk-presenter-pointer"); style.remove(); documents.delete(child); if (fullscreenHost?.ownerDocument === child) fullscreenChanged(); };

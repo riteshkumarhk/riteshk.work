@@ -4,7 +4,7 @@ export function loadWorkflow() {
   if (pending) return pending;
   pending = Promise.all([
     ['link','/js/workflow.css?v=1.3'],
-    ['script','/js/workflow.js?v=1.3']
+    ['script','/js/workflow.js?v=1.4']
   ].map(([tag,url])=>new Promise((resolve,reject)=>{
     const element=document.createElement(tag);
     if(tag==='link'){element.rel='stylesheet';element.href=url;}else element.src=url;

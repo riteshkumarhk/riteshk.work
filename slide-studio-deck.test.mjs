@@ -2756,6 +2756,16 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     await pad.locator('[data-pp-notes]').waitFor();
     await page.locator('.pjp-tab[data-ready="true"]').waitFor();
     assert.equal(context.pages().length, 2);
+    const djToggle = toolbarPreview.getByRole('button',{name:'Toggle DJ pad',exact:true});
+    await page.waitForFunction(()=>document.hasFocus());
+    assert.equal(await djToggle.getAttribute('aria-pressed'),'true');
+    await djToggle.click();
+    assert.equal(await page.locator('.pjp-tab').isVisible(),false);
+    assert.equal(await toolbarPreview.locator('.pjp').isVisible(),true);
+    await djToggle.click();
+    await page.locator('.pjp-tab[open]').waitFor();
+    const djBounds = await djToggle.boundingBox(), exitBounds = await toolbarPreview.getByRole('button',{name:'Exit presentation',exact:true}).boundingBox();
+    assert.ok(djBounds.x < width/2 && exitBounds.x > width/2);
     assert.equal(await toolbarPreview.evaluate(() => window.opener), null);
     assert.equal(await toolbarPreview.locator('[data-pjp-notes]').textContent(), '');
     assert.doesNotMatch(await toolbarPreview.locator('body').innerText(), /PRIVATE VISITOR NOTES/);

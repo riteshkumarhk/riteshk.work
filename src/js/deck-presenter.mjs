@@ -2,6 +2,7 @@ import { installPresenterPointer } from "./presenter-pointer.mjs";
 import { isPresenterInput, presentationSurface } from "./presenter-interaction.mjs";
 import { installWebPresenterPreview, requestPresenterCapture } from "./presenter-web-preview.mjs";
 import { createPresenterClock } from "./presenter-clock.mjs";
+import { installSlideExpansion } from "./presenter-expansion.mjs";
 import { presenterPanelMarkup, presenterPanelStyles, installPresenterPanel } from "./presenter-panel.mjs";
 var pjpStage = null;
 export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, thumbnailData, disposePresenter, dispose }) {
@@ -30,7 +31,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     '<div class="pjp__pnotes"><span class="pjp__plabel">Notes</span><div class="pjp__pnotes-body" data-pjp-notes></div></div>' +
     '<div class="pjp__pnext"><span class="pjp__plabel">Up next</span><div class="pjp__pnext-thumb" data-pjp-nextthumb></div><div class="pjp__pnext-body" data-pjp-next></div></div>' +
     '</div>';
-  if (opts.audienceOnly || opts.presenterWindow) stage.querySelectorAll('[data-pjp="notes"],[data-pjp="popout"],[data-pjp-panel]').forEach(element => { element.hidden = true; element.style.display = "none"; });
+  if (opts.audienceOnly || opts.presenterWindow) stage.querySelectorAll(opts.audienceOnly ? '[data-pjp="notes"],[data-pjp="popout"],[data-pjp-panel]' : '[data-pjp="notes"],[data-pjp-panel]').forEach(element => { element.hidden = true; element.style.display = "none"; });
   document.body.appendChild(stage);
   var inactiveSiblings = Array.prototype.filter.call(document.body.children, function (element) { return element !== stage && !element.inert; });
   inactiveSiblings.forEach(function (element) { element.inert = true; });
@@ -38,6 +39,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   var frame = stage.querySelector("[data-pjp-frame]"), prog = stage.querySelector("[data-pjp-progress]"), count = stage.querySelector("[data-pjp-count]");
   var nativeHost = !opts.audienceOnly && !opts.presenterWindow && window.__RK_NATIVE_PRESENTER === true && !!window.chrome?.webview;
   var pointer = installPresenterPointer(stage, frame, nativeHost);
+  var expansion = installSlideExpansion(frame);
   stage.classList.toggle("pjp--native", nativeHost);
   var notesEl = stage.querySelector("[data-pjp-notes]"), nextEl = stage.querySelector("[data-pjp-next]"), presenting = false;
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
@@ -76,6 +78,20 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   }
   var popButton = stage.querySelector('[data-pjp="popout"]');
   popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
+  if (opts.presenterWindow) {
+    popButton.setAttribute("aria-label", "Toggle DJ pad");
+    popButton.setAttribute("aria-pressed", "true");
+    popButton.title = "Toggle DJ pad (P)";
+  }
+  function togglePresenter() {
+    if (!opts.presenterWindow) { openPresenter(); return; }
+    var host = opts.presenterWindow.frameElement?.closest("dialog.pjp-tab");
+    if (!host) return;
+    if (host.open) { host.close(); window.focus(); }
+    else { host.showModal(); host.ownerDocument.defaultView.focus(); opts.presenterWindow.focus(); }
+    popButton.setAttribute("aria-pressed", String(host.open));
+    popButton.classList.toggle("is-on", host.open);
+  }
   function preview(container, slide) {
     var content = container.querySelector(":scope > [data-pp-thumbnail]");
     if (!content) {
@@ -151,6 +167,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     transTimer = setTimeout(function () { if (oldEl.parentNode) oldEl.remove(); moved.forEach(function (m) { m.el.style.transition = ""; m.el.style.transformOrigin = ""; }); [].forEach.call(newEl.querySelectorAll(".pjps--in-fade"), function (el) { el.classList.remove("pjps--in-fade", "is-live"); }); }, 560);
   }
   function render(dir) {
+    expansion.reset();
     if (idx !== lastTimedIndex) { clock.nextSlide(); lastTimedIndex = idx; }
     pointer.hide();
     webPreview?.resetPointer();
@@ -289,7 +306,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     presenterRefresh = setTimeout(syncPresenter, 60); syncPresenter();
     if (opts.autoStart && !opts.presenterWindow) webPreview.connect();
   }
-    function exit() { if (exited) return; exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed && !opts.presenterWindow) { try { closing.close(); } catch (e) {} } window.removeEventListener("pagehide", exit); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
+    function exit() { if (exited) return; expansion.dispose(); exited = true; launchCapture?.cancel(); launchCapture = null; var closing = presenterWin; onPresenterClosed(); if (ownsFullscreen && document.fullscreenElement === stage) document.exitFullscreen().catch(function () {}); pointer.dispose(); if (nativeHost) { window.chrome.webview.removeEventListener("message", onNative); window.removeEventListener("resize", syncNative); window.chrome.webview.postMessage({ channel: "rk-presenter", type: "end" }); } clearInterval(clockTimer); clearTimeout(transTimer); if (closing && !closing.closed && !opts.presenterWindow) { try { closing.close(); } catch (e) {} } window.removeEventListener("pagehide", exit); document.removeEventListener("keydown", onKey); document.documentElement.classList.remove("pjp-on"); stage.classList.add("pjp--out"); setTimeout(function () { if (dispose) dispose(); stage.remove(); pjpStage = null; inactiveSiblings.forEach(function (element) { element.inert = false; }); if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); if (opts.onClose) opts.onClose(); }, 240); }
   function onKey(e) {
     if (isPresenterInput(e)) return;
     if (e.key === "Tab" && e.currentTarget === document) {
@@ -305,7 +322,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
     else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
     else if (e.key === "Escape") { e.preventDefault(); exit(); }
-    else if (e.key === "p" || e.key === "P") { e.preventDefault(); togglePresent(); }
+    else if (e.key === "p" || e.key === "P") { e.preventDefault(); if (opts.presenterWindow) togglePresenter(); else togglePresent(); }
     else if (e.key === "Home") { idx = 0; render(-1); }
     else if (e.key === "End") { idx = slides.length - 1; render(1); }
   }
@@ -320,7 +337,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var d = e.target.closest("[data-pjp-dot]"); if (d) { var _to = +d.getAttribute("data-pjp-dot"); var _dd = _to > idx ? 1 : -1; idx = _to; render(_dd); return; }
     var b = e.target.closest("[data-pjp]"); if (!b) return;
     var k = b.getAttribute("data-pjp");
-    if (k === "notes") togglePresent(); else if (k === "popout") openPresenter(); else command(k);
+    if (k === "notes") togglePresent(); else if (k === "popout") togglePresenter(); else command(k);
   });
   document.addEventListener("keydown", onKey);
   render(1);

@@ -64,6 +64,7 @@ export function openPresenterTab({ url, prepare = () => {}, present, onError }) 
       host.dataset.ready = "true";
       host.querySelector(".pjp-tab__loading").remove();
       host.querySelector(":scope > button").remove();
+      window.focus();
       frame.contentWindow.focus();
     } catch (error) { finish(error); }
   }

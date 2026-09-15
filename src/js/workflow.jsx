@@ -23,10 +23,16 @@ function StepNode({data}){
 }
 function Connection(props){
   const flow=useReactFlow(),zoom=useStore(state=>state.transform[2]),drag=useRef(null);
-  const endpoints={source:{x:props.sourceX,y:props.sourceY},target:{x:props.targetX,y:props.targetY}};
+  const endpoint=(id,port,fallback)=>{
+    const node=flow.getInternalNode(id);
+    if(!node?.measured?.height)return fallback;
+    const position=node.internals.positionAbsolute,width=node.measured.width||FLOW_NODE_WIDTH,height=node.measured.height;
+    return {x:position.x+(port==='l'?0:port==='r'?width:width/2),y:position.y+(port==='t'?0:port==='b'?height:height/2)};
+  };
+  const endpoints={source:endpoint(props.source,props.sourceHandleId,{x:props.sourceX,y:props.sourceY}),target:endpoint(props.target,props.targetHandleId,{x:props.targetX,y:props.targetY})};
   const curve=flowCurve(endpoints.source,endpoints.target,props.sourceHandleId,props.targetHandleId,props.data.curve,props.source===props.target);
   const automaticLoop=props.source===props.target&&!props.data.curve;
-  const [path,labelX,labelY]=props.data.route==='curved'||props.source===props.target?[curve.path,curve.middle.x,automaticLoop?Math.max(props.sourceY,props.targetY)+85:curve.middle.y]:getSmoothStepPath({...props,borderRadius:22,offset:30});
+  const [path,labelX,labelY]=props.data.route==='curved'||props.source===props.target?[curve.path,curve.middle.x,automaticLoop?Math.max(endpoints.source.y,endpoints.target.y)+85:curve.middle.y]:getSmoothStepPath({...props,sourceX:endpoints.source.x,sourceY:endpoints.source.y,targetX:endpoints.target.x,targetY:endpoints.target.y,borderRadius:22,offset:30});
   const offsets=()=>Object.fromEntries(['source','target'].map(end=>[end,{x:curve.controls[end].x-endpoints[end].x,y:curve.controls[end].y-endpoints[end].y}]));
   const finish=(event,cancel=false)=>{const current=drag.current;if(!current)return;drag.current=null;if(cancel)props.data.setCurve(props.id,current.original);if(event.currentTarget.hasPointerCapture(current.pointerId))event.currentTarget.releasePointerCapture(current.pointerId);};
   const handles=props.selected&&props.data.editable&&props.data.route==='curved';

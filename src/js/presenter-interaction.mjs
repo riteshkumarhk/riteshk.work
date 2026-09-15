@@ -1,5 +1,5 @@
 const forwardedEvents = new WeakSet();
-const controls = 'a[href],button,input,textarea,select,summary,video[controls],audio[controls],[role="button"],[role="slider"],[role="tab"],[role="checkbox"],[role="switch"],[role="link"],[role="menuitem"],[role="radio"],[role="combobox"],[contenteditable="true"],[data-pjhref],[data-pjjump],[data-zoom],[data-cmp],.pjb__cmp,.pjb__iso-layer,[data-focus-open],figure.rt__fig img,.pjb__prose img,.pjx__img,[data-rk-fx="orbit"],[data-rk-fx="spin"]';
+const controls = 'a[href],button,input,textarea,select,summary,video,audio,[data-expand-pan],[role="button"],[role="slider"],[role="tab"],[role="checkbox"],[role="switch"],[role="link"],[role="menuitem"],[role="radio"],[role="combobox"],[contenteditable="true"],[data-pjhref],[data-pjjump],[data-zoom],[data-cmp],.pjb__cmp,.pjb__iso-layer,[data-focus-open],figure.rt__fig img,.pjb__prose img,.pjx__img,[data-rk-fx="orbit"],[data-rk-fx="spin"]';
 
 function frameDocument(element) {
   try { return element.contentDocument?.documentElement ? element.contentDocument : null; } catch { return null; }

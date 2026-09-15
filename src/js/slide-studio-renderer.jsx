@@ -53,7 +53,7 @@ export function SectionComponent({ block, icons, reference, textVisibility, prev
   };
   useEffect(send, [signature, appearance]);
   if (!visible?.block) return <div className="merge-section-locked" aria-label="Protected section"><Lock size={24} strokeWidth={1.75} /><span>{source && runtime?.error ? 'Protected media unavailable' : 'Protected section'}</span>{!preview && source && runtime?.error ? <button type="button" onClick={() => refresh(value => value + 1)}>Retry</button> : !preview && !source && reference && window.__RKStudio?.sectionAccess?.(reference.caseStudyId)?.active && <button type="button" onClick={() => window.__RKStudio.unlockSections(reference.caseStudyId)}>Unlock section</button>}</div>;
-  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-runtime/component.html?v=1.1" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
+  return <iframe ref={frame} className="lab-embed lab-section-component" title="Case-study section" src="/studio/slide-runtime/component.html?v=1.2" allow="fullscreen; autoplay" allowFullScreen onLoad={send} />;
 }
 
 export function Embed({ element, preview = false }) {
