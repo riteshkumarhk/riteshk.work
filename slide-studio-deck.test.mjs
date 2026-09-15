@@ -521,6 +521,7 @@ test("slide eyedropper samples screen results over inserted sections and outside
     await section.waitFor();
     const original = await page.evaluate(() => JSON.stringify(window.__slideMerge.api.getSceneElements().find(element => element.customData?.sectionComponent)));
     await section.evaluate(element => { element.style.background = '#237b70'; });
+    await page.locator('.merge-inspector').getByRole('button', { name: 'Close panel', exact: true }).click();
     await page.evaluate(() => {
       const api = window.__slideMerge.api;
       const shape = api.getSceneElements().find(element => element.type === 'rectangle' && !element.locked);
