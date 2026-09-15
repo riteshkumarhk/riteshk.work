@@ -311,6 +311,7 @@ test('Workflow visitor keeps complete graphs inline on phones and preserves the 
       await expanded.getByRole('button',{name:'Fit diagram',exact:true}).click();
       await page.keyboard.press('Escape');
       await expanded.waitFor({state:'detached'});
+      await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Expand diagram');
       assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Expand diagram');
     }
     await page.getByText('Flow outline',{exact:true}).click();
