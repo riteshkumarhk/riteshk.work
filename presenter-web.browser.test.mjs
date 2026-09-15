@@ -35,6 +35,8 @@ test("floating DJ forwards hover and controls before connecting capture", { time
   try {
     const { page, popup } = await openFixture(browser, { floating: true });
     assert.equal(await popup.locator("html").getAttribute("data-presenter-window"), "always-on-top");
+    assert.equal(await popup.locator("[data-pp-status]").textContent(), "Thumbnail preview");
+    assert.equal(await popup.getByRole("button", {name:"Connect live preview",exact:true}).isEnabled(), true);
     await page.evaluate(() => {
       window.captureRequests = 0;
       navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException("Denied", "NotAllowedError")); };

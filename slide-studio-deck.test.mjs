@@ -352,7 +352,7 @@ test("cover byte fetches recover from a cached image response without CORS heade
   }
 });
 
-test("empty hosted deck adds a cover when project media fails and retries without losing edits", { timeout: 60000 }, async () => {
+test("empty hosted deck adds a cover when project media fails and retries without losing edits", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
@@ -368,7 +368,32 @@ test("empty hosted deck adds a cover when project media fails and retries withou
     assert.match(await page.locator('.merge-cover-error').textContent(), /image.*could not be loaded/i);
     await page.locator('.merge-cover-overrides > summary').click();
     await page.getByLabel('Cover title', { exact: true }).fill('Retain this cover edit');
+    await page.locator('[data-l2-back]').click();
+    await page.locator('.merge-shell').waitFor({state:'detached'});
+    const failedDraft = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0]));
+    const failedAudienceOpened = page.waitForEvent('popup');
+    await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').click();
+    const failedAudience = await failedAudienceOpened;
+    if (!failedAudience.isClosed()) await failedAudience.waitForEvent('close');
+    await page.getByText('The linked cover image could not be loaded. Check the connection and retry the presentation.', {exact:true}).waitFor();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work[0])), failedDraft);
     available = true;
+    const unloadedAudienceOpened = page.waitForEvent('popup');
+    await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').click();
+    const unloadedAudience = await unloadedAudienceOpened;
+    await unloadedAudience.locator('.pjp .excalidraw__canvas.static').waitFor();
+    await unloadedAudience.waitForFunction(() => {
+      const canvas = document.querySelector('.pjp .excalidraw__canvas.static');
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let offset = 0; offset < pixels.length; offset += 4) if (pixels[offset] === 22 && pixels[offset + 1] === 120 && pixels[offset + 2] === 160) count++;
+      return count > 10000;
+    }, null, {timeout:10000});
+    await unloadedAudience.screenshot({path:join(tmpdir(), 'rk-presenter-cover-unloaded-1440.png')});
+    await unloadedAudience.close();
+    await page.waitForFunction(() => document.activeElement?.matches('[data-act="study-slideshow-preview"]'));
+    await openProjectSlides(page);
+    await page.locator('.merge-cover-overrides > summary').click();
     await page.getByRole('button', { name: 'Refresh linked cover', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.merge-cover-error'));
     assert.equal(await page.locator('.merge-cover-error').count(), 0);
@@ -395,6 +420,23 @@ test("empty hosted deck adds a cover when project media fails and retries withou
       const database=await new Promise(resolve=>{const request=indexedDB.open('rk-studio-slide-decks-v1');request.onsuccess=()=>resolve(request.result);});
       try{return await new Promise((resolve,reject)=>{const transaction=database.transaction('documents','readwrite'),store=transaction.objectStore('documents'),request=store.get([reference.id,reference.revision]);let cover;request.onsuccess=()=>{const record=request.result,scene=record.document.slides[0].scene;cover=scene.elements.find(element=>element.id==='lab-slide').customData.slideSettings.cover;delete scene.files[cover.image.fileId];store.put(record,[reference.id,reference.revision]);};transaction.oncomplete=()=>resolve(cover);transaction.onerror=()=>reject(transaction.error);});}finally{database.close();}
     });
+    const coverAudienceOpened = page.waitForEvent('popup');
+    await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').click();
+    const coverAudience = await coverAudienceOpened;
+    await coverAudience.locator('.pjp .excalidraw__canvas.static').waitFor();
+    await coverAudience.waitForFunction(() => {
+      const canvas = document.querySelector('.pjp .excalidraw__canvas.static');
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let count = 0;
+      for (let offset = 0; offset < pixels.length; offset += 4) if (pixels[offset] === 22 && pixels[offset + 1] === 120 && pixels[offset + 2] === 160) count++;
+      return count > 10000;
+    }, null, {timeout:10000});
+    await coverAudience.screenshot({path:join(tmpdir(), 'rk-presenter-cover-recovered-1440.png')});
+    await coverAudience.setViewportSize({width:390,height:844});
+    await coverAudience.screenshot({path:join(tmpdir(), 'rk-presenter-cover-recovered-390.png')});
+    await coverAudience.close();
+    await page.waitForFunction(() => document.activeElement?.matches('[data-act="study-slideshow-preview"]'));
+    assert.equal((await readSaved()).files[savedCover.image.fileId], undefined, 'Presentation recovery must not rewrite the saved deck');
     await openProjectSlides(page);
     await page.locator('.merge-cover-overrides > summary').click();
     assert.equal(await page.getByLabel('Cover title', { exact: true }).inputValue(), 'Retain this cover edit');
@@ -2724,6 +2766,7 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     await page.evaluate(() => window.__rkDevEdit('work.0.study.blocks.0.heading', 'Current private draft heading'));
     await page.locator('[data-l2-back]').click();
     assert.equal(await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').count(), 1);
+    assert.equal(await page.locator('[data-act="study-slideshow-preview"][data-index="0"]').evaluate(element => element.tagName), 'BUTTON');
     const previewOpened = context.waitForEvent('page');
     await page.locator('[data-act="study-preview"][data-index="0"]').click();
     const preview = await previewOpened;
@@ -2740,10 +2783,23 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     await slideshow.locator('.pjp').waitFor({ state: 'visible' });
     assert.equal(await slideshow.locator('.merge-shell,.adm.is-open').count(), 0);
     assert.doesNotMatch(await slideshow.locator('.pjp').textContent(), /PRIVATE VISITOR NOTES/);
-    assert.equal(await slideshow.getByRole('button', { name: 'Open presenter window', exact: true }).count(), 0);
-    await slideshow.keyboard.press('p');
-    assert.equal(await slideshow.locator('.pjp--presenting').count(), 0);
-    await slideshow.close();
+    await slideshow.waitForFunction(() => document.querySelector('.pjp--popped') || document.querySelector('[data-pjp="popout"]')?.title === 'Open floating DJ pad (P)');
+    assert.match(slideshow.url(), /presenter=tab/);
+    const cardToggle = slideshow.getByRole('button', {name:'Toggle DJ pad', exact:true});
+    let cardPad = context.pages().find(candidate => candidate !== page && candidate !== slideshow);
+    if (!cardPad) {
+      const cardFloating = context.waitForEvent('page');
+      await cardToggle.click();
+      cardPad = await cardFloating;
+    }
+    await cardPad.locator('[data-pp-notes]').waitFor();
+    assert.equal(await cardPad.locator('[data-pp-notes]').innerText(), 'PRIVATE VISITOR NOTES');
+    assert.equal(await cardPad.locator('html').getAttribute('data-presenter-window'), 'always-on-top');
+    assert.equal(await slideshow.evaluate(() => window.opener), null);
+    const cardEnded = slideshow.waitForEvent('close');
+    await cardPad.getByRole('button', {name:'End presentation', exact:true}).click();
+    await cardEnded;
+    await page.waitForFunction(() => document.activeElement?.matches('[data-act="study-slideshow-preview"]'));
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
     await page.locator('.merge-shell').waitFor();
     assert.equal(await page.locator('[data-l2tab="slides"]').getAttribute('aria-selected'), 'true');

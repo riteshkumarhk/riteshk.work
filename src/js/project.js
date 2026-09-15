@@ -2994,7 +2994,10 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
     }
     function pjNotesHtml(n) { return (n && String(n).trim()) ? pjBodyHtml(n) : '<span class="pjp__pnote-empty">\u2014 No notes for this slide \u2014</span>'; }
     function presentDeck(w, opts) {
-      if (hasNativeDeck(w)) return presentStudioDeck(w, { ...opts, draft: !!(opts?.draft && window.RK?.draftPreview) || PREVIEW || pjIsOwner() || !!window.__RKStudio?.getDraft?.() }).catch(error => { presentationFailure(error); return null; });
+      if (hasNativeDeck(w)) return presentStudioDeck(w, { ...opts, draft: !!(opts?.draft && window.RK?.draftPreview) || PREVIEW || pjIsOwner() || !!window.__RKStudio?.getDraft?.() }).catch(error => {
+        if (opts?.floatingPresenter) throw error;
+        presentationFailure(error); return null;
+      });
       if (opts?.audienceOnly && opts.draft && !w?.study?.slides?.length && w?.study?.slidesEnc) {
         return Promise.resolve(window.RK?.requestOwnerPresentation?.()).then(unlocked => {
           if (!unlocked) return null;

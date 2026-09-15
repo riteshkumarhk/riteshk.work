@@ -13,6 +13,46 @@ export const COVER_SOURCE_FIELDS = ["title", "client", "status", "duration", "te
 export function fetchCoverMedia(url, timeout = 15000) {
   return fetch(url, { cache: "reload", credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(timeout) });
 }
+export async function restorePresentationCover(slide, work, loadImage, createElements) {
+  const scene = slide.scene, frame = scene.elements.find(element => element.id === "lab-slide");
+  const saved = frame?.customData?.slideSettings?.cover;
+  if (!saved?.source || saved.source.caseStudyId !== work.id) return;
+  const cover = coverValues(saved), project = projectCoverData(work);
+  for (const key of ["image", "logo"]) {
+    if (cover.hidden.includes(key)) continue;
+    const element = scene.elements.find(item => !item.isDeleted && item.customData?.slideCover === key);
+    if (!element && scene.elements.some(item => item.isDeleted && item.customData?.slideCover === key)) continue;
+    if (element?.customData?.labLayerHidden) continue;
+    const fileId = element?.fileId || cover[key]?.fileId;
+    if (fileId && scene.files[fileId]?.dataURL) continue;
+    if (cover.source.overrides.includes(key)) {
+      if (element) throw new Error(`The saved cover ${key} is missing. Open the slide in Studio and restore its original file.`);
+      continue;
+    }
+    const source = cover[key]?.source || project[key];
+    if (!source) {
+      if (element) throw new Error(`The saved cover ${key} is unavailable. Open the slide in Studio to restore it.`);
+      continue;
+    }
+    const image = await loadImage(source);
+    if (fileId && image.id !== fileId) throw new Error(`The linked cover ${key} has changed. Refresh the linked cover in Studio before presenting.`);
+    scene.files[image.id] = image;
+    if (element) continue;
+    cover[key] = { fileId: image.id, width: image.width, height: image.height };
+    const skeleton = coverSkeleton(cover, cover.fontFamily || 2, `${slide.id}-presenter-cover`).find(item => item.customData.slideCover === key);
+    if (!skeleton) continue;
+    if (key === "image") {
+      const panel = scene.elements.find(item => !item.isDeleted && item.customData?.slideCover === "media-panel");
+      if (!panel || panel.customData?.labLayerHidden) continue;
+      const width = panel.width - 48, height = panel.height - 48;
+      if (width <= 0 || height <= 0) continue;
+      const scale = Math.max(width / image.width, height / image.height);
+      Object.assign(skeleton, { x: panel.x + 48, y: panel.y + 48, width, height, angle: panel.angle || 0, frameId: panel.frameId,
+        crop: { x: (image.width - width / scale) * cover.crop.x / 100, y: (image.height - height / scale) * cover.crop.y / 100, width: width / scale, height: height / scale, naturalWidth: image.width, naturalHeight: image.height } });
+      scene.elements.splice(scene.elements.indexOf(panel) + 1, 0, ...createElements([skeleton]));
+    } else scene.elements.push(...createElements([skeleton]));
+  }
+}
 export function projectCoverData(work) {
   const study = work.study || {};
   return {

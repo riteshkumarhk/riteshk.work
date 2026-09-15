@@ -118,7 +118,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       status.textContent = "Embedded player: use its controls directly in the audience window.";
       return hit;
     }
-    if (status.textContent.startsWith("Embedded player:")) status.textContent = stream ? "Live preview" : "Controls connected";
+    if (status.textContent.startsWith("Embedded player:")) status.textContent = liveFrame ? "Live preview" : "Thumbnail preview";
     return hit;
   }
   function leavePreview() { if (!pressed) release(); }
@@ -297,8 +297,8 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   }
   button.addEventListener("click", connect);
   presenterWindow.addEventListener("keydown", key, true);
-  status.textContent = "Controls connected";
-  if (!supported) { button.disabled = true; status.textContent = "Controls connected. Live video preview is unavailable in this browser."; }
+  status.textContent = "Thumbnail preview";
+  if (!supported) { button.disabled = true; status.textContent = "Thumbnail preview. Live capture is unavailable in this browser."; }
   return {
     connect,
     resetPointer() { release(); focused = null; },

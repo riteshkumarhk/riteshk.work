@@ -2,7 +2,53 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PROPERTY_LAYOUTS, layoutPlan, slideOwnsFocus, transitionMatch, isEmptyPlaceholder } from "./src/js/slide-merge-properties.mjs";
 import { guidePosition, guideSnap } from "./src/js/slide-merge-guide-core.mjs";
-import { COVER_FIELDS, COVER_DEFAULTS, coverPalette, coverSkeleton, coverValues, projectCoverData, linkedCoverValues } from "./src/js/slide-merge-cover.mjs";
+import { COVER_FIELDS, COVER_DEFAULTS, coverPalette, coverSkeleton, coverValues, projectCoverData, linkedCoverValues, restorePresentationCover } from "./src/js/slide-merge-cover.mjs";
+test("presentation restores linked cover originals without replacing authored geometry or saved data", async () => {
+  const work = {id:"project", image:"original.png"};
+  const cover = coverValues({title:"Keep this title", source:{caseStudyId:work.id}, crop:{x:100,y:0}, image:{fileId:"original",width:1600,height:900,source:"saved-original.png"}});
+  const saved = {id:"first", scene:{elements:[...coverSkeleton(cover, 2), {id:"lab-slide",customData:{slideSettings:{cover}}}],files:{}}};
+  const runtime = structuredClone(saved), sources = [];
+  const file = {id:"original",width:1600,height:900,dataURL:"data:image/png;base64,b3JpZ2luYWw="};
+  await restorePresentationCover(runtime, work, async source => {sources.push(source);return file;}, elements => elements);
+  assert.deepEqual(sources, ["saved-original.png"]);
+  assert.deepEqual(runtime.scene.elements, saved.scene.elements);
+  assert.deepEqual(saved.scene.files, {});
+  assert.equal(runtime.scene.files.original.dataURL, file.dataURL);
+  await restorePresentationCover(runtime, work, () => assert.fail("Existing originals must not be fetched again"), elements => elements);
+  await assert.rejects(restorePresentationCover(structuredClone(saved), work, async () => ({...file,id:"changed"}), elements => elements), /has changed/);
+  await assert.rejects(restorePresentationCover(structuredClone(saved), work, async () => {throw new Error("Offline");}, elements => elements), /Offline/);
+});
+test("presentation fills an unloaded linked cover only inside its saved panel", async () => {
+  const work = {id:"project",image:"original.png"};
+  const cover = coverValues({title:"Unchanged",source:{caseStudyId:work.id},crop:{x:100,y:0}});
+  const elements = [...coverSkeleton(cover, 2), {id:"lab-slide",customData:{slideSettings:{cover}}}];
+  const panel = elements.find(element => element.customData?.slideCover === "media-panel");
+  panel.y += 44; panel.height -= 44;
+  const before = structuredClone(elements), slide = {id:"cover-slide",scene:{elements,files:{}}};
+  await restorePresentationCover(slide, work, async () => ({id:"original",width:1600,height:900,dataURL:"original-bytes"}), items => items);
+  const image = elements.find(element => element.customData?.slideCover === "image");
+  assert.deepEqual(elements.filter(element => element !== image), before);
+  assert.equal(image.x, panel.x + 48); assert.equal(image.y, panel.y + 48);
+  assert.equal(image.width, panel.width - 48); assert.equal(image.height, panel.height - 48);
+  assert.equal(image.crop.y, 0); assert.equal(image.fileId, "original");
+  assert.equal(slide.scene.files.original.dataURL, "original-bytes");
+});
+test("presentation cover recovery respects visibility, overrides and source ownership", async () => {
+  for (const variant of ["hidden", "layer", "deleted", "custom", "public", "other-project"]) {
+    const cover = coverValues({source:{caseStudyId:"project"},image:{fileId:"original",width:1600,height:900}});
+    if (variant === "hidden") cover.hidden = ["image"];
+    if (variant === "custom") {cover.source.overrides = ["image"];delete cover.image;}
+    if (variant === "public") delete cover.source;
+    if (variant === "other-project") cover.source.caseStudyId = "other";
+    const elements = [...coverSkeleton(cover, 2), {id:"lab-slide",customData:{slideSettings:{cover}}}];
+    const image = elements.find(element => element.customData?.slideCover === "image");
+    if (variant === "layer") image.customData.labLayerHidden = true;
+    if (variant === "deleted") image.isDeleted = true;
+    const slide = {id:"cover",scene:{elements,files:{}}}, before = structuredClone(slide);
+    await restorePresentationCover(slide, {id:"project",image:"must-not-fetch.png"}, () => assert.fail(variant), items => items);
+    assert.deepEqual(slide, before);
+  }
+});
 test("linked cover sources use period, explicit status and scope without inferring or migrating dates", () => {
   const work = { id: "project", title: "Title", client: "Client", period: "2025 - Present", image: "original.png", brandLogo: "logo.png", study: { timeline: "2023 - 2024", team: "Design, Engineering", role: "Lead", scope: "Activation" } };
   const before = structuredClone(work), source = projectCoverData(work);

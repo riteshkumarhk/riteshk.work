@@ -7420,7 +7420,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.27";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.28";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -8999,7 +8999,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       return '<div class="study__toggle is-open"><button class="btn study__editbtn is-open" data-act="study-toggle" data-index="' + i + '">' + IC.chevD + ' Close case-study editor</button></div>';
     }
     var preview = n ? '<a class="btn btn--ghost study__previewbtn" href="' + escHtml(studyVisitorUrl(w)) + '" target="_blank" rel="noopener" data-act="study-preview" data-index="' + i + '" title="Open the current case-study draft in a new tab">Preview ' + IC.ext + '</a>' : "";
-    var slidesBtn = studyHasSlides(w) ? '<a class="btn btn--ghost study__slidesbtn is-built" href="' + escHtml(studyVisitorUrl(w, true)) + '" target="_blank" rel="noopener" data-act="study-slideshow-preview" data-index="' + i + '" title="Open the current slideshow draft in a new tab">' + IC.board + ' Slideshow</a>' : "";
+    var slidesBtn = studyHasSlides(w) ? '<button type="button" class="btn btn--ghost study__slidesbtn is-built" data-act="study-slideshow-preview" data-index="' + i + '" title="Present the current slideshow in a new tab">' + IC.board + ' Slideshow</button>' : "";
     return '<div class="study__toggle">' +
       '<button class="btn btn--primary study__editbtn" data-act="study-toggle" data-index="' + i + '" title="Edit project canvas">' + IC.edit + ' Edit</button>' +
       preview +
@@ -12400,7 +12400,8 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       return;
     }
     if (act === "study-toggle") { openL2(i); return; }
-    if (act === "study-preview" || act === "study-slideshow-preview") { e.preventDefault(); openStudyVisitor(i, act === "study-slideshow-preview"); return; }
+    if (act === "study-preview") { e.preventDefault(); openStudyVisitor(i); return; }
+    if (act === "study-slideshow-preview") { e.preventDefault(); openStudyPresentation(i); return; }
     if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
