@@ -199,8 +199,10 @@ export async function reviseResumeWithAI(document, options = {}) {
   const { review, findingIndex, sources = [], provider, model } = options;
   const { snapshot, signature, packet, guard, invoke } = reviewSession(document, options);
   if (!canReviseReview(snapshot, review)) throw new Error('Resume or target changed. Stale review discarded.');
-  validateRequirements({ segments: review.manifest.segments, requirements: review.manifest.requirements }, packet);
-  if (review.manifest.target !== targetKey(packet) || review.version !== REVIEW_VERSION) fail('stale review manifest');
+  if (review.kind !== 'ats') {
+    validateRequirements({ segments: review.manifest.segments, requirements: review.manifest.requirements }, packet);
+    if (review.manifest.target !== targetKey(packet) || review.version !== REVIEW_VERSION) fail('stale review manifest');
+  } else if (review.version !== 2 || JSON.stringify(review.target) !== JSON.stringify(snapshot.target)) fail('stale ATS target');
   const finding = review.findings[findingIndex];
   if (!Number.isInteger(findingIndex) || !finding) fail('unknown finding');
   const criterion = review.breakdown.find(part => part.id === finding.criterionId);
@@ -212,7 +214,7 @@ export async function reviseResumeWithAI(document, options = {}) {
       evidence.push({ id: 'source-' + sourceIndex++, sourceId: source.id, label: source.name, text: excerpt });
     }
   }
-  const requirement = review.manifest.requirements.find(item => item.id === finding.criterionId) || null;
+  const requirement = review.manifest?.requirements.find(item => item.id === finding.criterionId) || null;
   const data = { target: packet.target, requirement, criterion, finding, fields: packet.excerpts, evidence };
   if (JSON.stringify(data).length > 60000 || evidence.length > 600) throw new Error('Complete-input revision budget exceeded. No evidence was silently truncated.');
   const system = POLICY + `

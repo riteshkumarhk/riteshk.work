@@ -1,6 +1,7 @@
 import { resumeFields, resumeSignature } from '../src/js/resume-workspace.mjs';
 import { renderResumeHtml, RESUME_FONTS, RESUME_RENDER_VERSION } from '../src/js/resume-render.mjs';
 import { verifyResumePdf } from '../src/js/resume-pdf.mjs';
+import { atsMigrationIdentity, atsMigrationSnapshot, migrateAtsResume } from '../src/js/resume-ats.mjs';
 
 const fault = (message, status = 400) => Object.assign(new Error(message), { status });
 const identity = value => {
@@ -10,7 +11,16 @@ const identity = value => {
 const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
 const metadata = { httpMetadata: { contentType: 'application/json' } };
 
-export function createHostedResumeStore(bucket) {
+export async function legacyAtsDestination(bucket, entry) {
+  if (!bucket || entry.tool !== 'ats' || !['workspace', 'review'].includes(entry.kind)) return null;
+  const identity = await atsMigrationIdentity(entry);
+  const link = await bucket.get('legacy-links/' + entry.id + '.json');
+  if (link) return link.json();
+  const existing = await bucket.get('documents/' + identity.id + '.json');
+  return existing ? { resumeId: identity.id, fingerprint: (await existing.json()).document.ats?.fingerprint } : null;
+}
+
+export function createHostedResumeStore(bucket, legacyBucket = null) {
   if (!bucket) throw fault('Resume storage is not configured.', 503);
   const documentKey = id => 'documents/' + identity(id) + '.json';
   async function read(id) {
@@ -55,6 +65,108 @@ export function createHostedResumeStore(bucket) {
     return found;
   }
   return {
+    async migrate(entry, review = null, attempt = 0) {
+      if (!legacyBucket) throw fault('ATS migration storage is not available.', 503);
+      const identity = await atsMigrationIdentity(entry);
+      if (entry.kind === 'workspace' && entry.payload?.reviewId && !review) {
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(entry.payload.reviewId)) throw fault('Invalid ATS review identity.');
+        const original = await legacyBucket.get('prep/ats/' + entry.payload.reviewId + '.json');
+        if (original) review = await original.json();
+      }
+      const verify = async snapshot => {
+        if (!snapshot) return null;
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(snapshot.id)) throw fault('Invalid ATS identity.');
+        const stored = await legacyBucket.get('prep/ats/' + snapshot.id + '.json');
+        const remote = stored ? await stored.json() : null;
+        if (remote && (await atsMigrationIdentity(remote)).fingerprint !== (await atsMigrationIdentity(snapshot)).fingerprint) {
+          if (!await bucket.head(documentKey(identity.id))) {
+            if (attempt >= 2) throw fault('The ATS record is still changing. Close the older editor and retry; no copy was replaced.', 409);
+            await this.migrate(snapshot.id === entry.id ? remote : entry, snapshot.id === review?.id ? remote : review, attempt + 1);
+          }
+          throw Object.assign(fault('The saved ATS record changed. Recover both copies before continuing.', 409), { code: 'legacy-conflict', resumeId: identity.id });
+        }
+        return remote;
+      };
+      await verify(entry);
+      const original = entry.kind === 'review' ? entry : review;
+      const remoteOriginal = await verify(original);
+      const finish = async record => {
+        for (const snapshot of [entry, review].filter(Boolean)) {
+          const fingerprint = (await atsMigrationIdentity(snapshot)).fingerprint;
+          const retained = [record.document.ats?.legacy?.entry, record.document.ats?.legacy?.review].find(value => value?.id === snapshot.id);
+          if (!retained || fingerprint !== (record.document.ats?.legacyObserved?.[snapshot.id] || (await atsMigrationIdentity(retained)).fingerprint)) throw Object.assign(fault('This legacy record changed after migration. Recover both copies before continuing.', 409), { code: 'legacy-conflict', resumeId: identity.id });
+        }
+        await verify(entry); await verify(original);
+        for (const snapshot of [entry, review].filter(Boolean)) await bucket.put('legacy-links/' + snapshot.id + '.json', JSON.stringify({ resumeId: identity.id, fingerprint: (await atsMigrationIdentity(snapshot)).fingerprint }), metadata);
+        return record;
+      };
+      const existing = await bucket.get(documentKey(identity.id));
+      if (existing) {
+        const record = await existing.json();
+        if (record.document.ats?.fingerprint !== identity.fingerprint && record.document.ats?.legacyObserved?.[entry.id] !== identity.fingerprint) throw Object.assign(fault('This legacy workspace changed after migration. Both copies are retained; compare them before continuing.', 409), { code: 'legacy-conflict', resumeId: identity.id });
+        return finish(record);
+      }
+      const saved = remoteOriginal?.payload?.resumeDocument || original?.payload?.resumeDocument;
+      const sourceIds = [];
+      if (saved?.data) {
+        const bytes = Uint8Array.from(atob(saved.data), character => character.charCodeAt(0));
+        if (await hash(bytes) !== saved.sha256 || bytes.length !== saved.size) throw fault('The original file failed its integrity check. Nothing was migrated.', 422);
+        const source = await this.source({ name: saved.name, type: saved.type, text: original.payload.source?.text || original.payload.text || '' }, bytes);
+        sourceIds.push(source.id);
+      } else if (saved?.sha256 && await bucket.head('sources/meta/' + saved.sha256 + '.json')) sourceIds.push(saved.sha256);
+      const document = await migrateAtsResume(entry, review, sourceIds);
+      const record = await this.create(document).catch(async error => {
+        if (error.status !== 409) throw error;
+        const current = await this.get(identity.id);
+        if (current.document.ats?.fingerprint !== identity.fingerprint) throw error;
+        return current;
+      });
+      return finish(record);
+    },
+    async recoverLegacy(id, expected, input = {}) {
+      if (!legacyBucket) throw fault('ATS migration storage is not available.', 503);
+      const record = await this.get(id);
+      if (record.version !== Number(expected) || !record.document.ats?.legacy) throw fault('Reopen the current resume before recovering legacy edits.', 409);
+      const snapshots = record.document.ats.legacy;
+      const readLegacy = async snapshot => {
+        if (!snapshot) return null;
+        const object = await legacyBucket.get('prep/ats/' + snapshot.id + '.json');
+        return object ? await object.json() : snapshot;
+      };
+      const entry = await readLegacy(snapshots.entry), review = await readLegacy(snapshots.review);
+      const candidates = [{ entry, review }];
+      if (input.entry) {
+        if (input.entry.id !== snapshots.entry.id || input.review && input.review.id !== snapshots.review?.id) throw fault('Recovery data belongs to another ATS record.');
+        candidates.push({ entry: input.entry, review: input.review || review });
+      }
+      const recovered = [];
+      for (const candidate of candidates) {
+        const fingerprint = await hash(new TextEncoder().encode(JSON.stringify({ entry: atsMigrationSnapshot(candidate.entry), review: candidate.review ? atsMigrationSnapshot(candidate.review) : null })));
+        const recoveryId = 'ats-recovered-' + fingerprint;
+        let saved = await bucket.get(documentKey(recoveryId));
+        if (!saved) {
+          const original = (candidate.entry.kind === 'review' ? candidate.entry : candidate.review)?.payload;
+          const sourceIds = [...record.document.sourceIds];
+          if (original?.resumeDocument?.data) {
+            const source = original.resumeDocument, bytes = Uint8Array.from(atob(source.data), character => character.charCodeAt(0));
+            if (await hash(bytes) !== source.sha256 || bytes.length !== source.size) throw fault('The recovered original failed its integrity check.', 422);
+            sourceIds.push((await this.source({ name: source.name, type: source.type, text: original.source?.text || original.text || '' }, bytes)).id);
+          }
+          const document = await migrateAtsResume(candidate.entry, candidate.review, [...new Set(sourceIds)]);
+          document.id = recoveryId; document.name += ' - Recovered legacy copy';
+          document.ats.recoveredFrom = id; document.ats.legacyObserved = {};
+          for (const snapshot of [entry, review].filter(Boolean)) document.ats.legacyObserved[snapshot.id] = (await atsMigrationIdentity(snapshot)).fingerprint;
+          document.aiReview.documentId = recoveryId;
+          await this.create(document).catch(error => { if (error.status !== 409) throw error; });
+          saved = await bucket.get(documentKey(recoveryId));
+        }
+        recovered.push((await saved.json()).document.id);
+      }
+      const next = structuredClone(record.document); next.ats.legacyObserved = {};
+      for (const snapshot of [entry, review].filter(Boolean)) next.ats.legacyObserved[snapshot.id] = (await atsMigrationIdentity(snapshot)).fingerprint;
+      next.ats.recoveredIds = [...new Set([...(next.ats.recoveredIds || []), ...recovered])];
+      return this.save(id, next, expected, 'Recovered conflicting ATS copies', true);
+    },
     async list() {
       const documents = [], sources = [];
       for (const object of await objects('documents/')) {
@@ -71,13 +183,23 @@ export function createHostedResumeStore(bucket) {
       const snapshot = structuredClone(document), at = Date.now();
       return put({ document: snapshot, version: 1, versions: [{ number: 1, at, label: 'Created resume', document: snapshot }], exports: [] });
     },
-    async save(id, document, expected, label = 'Edited resume') {
+    async save(id, document, expected, label = 'Edited resume', recovering = false) {
       validate(document);
       if (id !== document.id || !Number.isInteger(Number(expected)) || Number(expected) < 1) throw fault('Document identity or version is invalid.');
       const { record, etag } = await read(id);
       if (record.version !== Number(expected)) throw fault('A newer version was saved. Your edits are kept locally.', 409);
+      if (record.document.ats?.legacy && legacyBucket) {
+        for (const snapshot of [record.document.ats.legacy.entry, record.document.ats.legacy.review].filter(Boolean)) {
+          const current = await legacyBucket.get('prep/ats/' + snapshot.id + '.json');
+          const observed = recovering ? document.ats?.legacyObserved : record.document.ats.legacyObserved;
+          const expectedFingerprint = observed?.[snapshot.id] || (await atsMigrationIdentity(snapshot)).fingerprint;
+          if (current && (await atsMigrationIdentity(await current.json())).fingerprint !== expectedFingerprint) throw Object.assign(fault('An older ATS tab saved different content. Both copies are retained; recover the legacy copies first.', 409), { code: 'legacy-conflict', resumeId: id });
+        }
+      }
+      if (record.document.ats?.legacy && JSON.stringify(document.ats?.legacy) !== JSON.stringify(record.document.ats.legacy)) throw fault('The migration recovery snapshot cannot be replaced.', 409);
       for (const sourceId of document.sourceIds) if (!await bucket.head('sources/meta/' + sourceId + '.json')) throw fault('A source is missing.');
       const snapshot = structuredClone(document); snapshot.updatedAt = Date.now();
+      if (record.document.ats?.legacy && !recovering) snapshot.ats = { ...structuredClone(record.document.ats), layoutAccepted: document.ats.layoutAccepted === true };
       record.version++; record.document = snapshot;
       record.versions.push({ number: record.version, at: Date.now(), label: String(label).slice(0, 120), document: snapshot });
       return put(record, etag);
@@ -121,10 +243,10 @@ export function createHostedResumeStore(bucket) {
   };
 }
 
-export async function resumeWorkspaceRoute(request, bucket, headers, browser = null, fetchAsset = fetch) {
+export async function resumeWorkspaceRoute(request, bucket, headers, browser = null, fetchAsset = fetch, legacyBucket = null) {
   const reply = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...headers, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
   try {
-    const store = createHostedResumeStore(bucket), url = new URL(request.url);
+    const store = createHostedResumeStore(bucket, legacyBucket), url = new URL(request.url);
     const parts = url.pathname.slice('/admin/resume/'.length).split('/'), expected = request.headers.get('If-Match');
     const body = async () => {
       if (Number(request.headers.get('Content-Length')) > 30 * 1024 * 1024) throw fault('Upload is too large.', 413);
@@ -140,6 +262,7 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
       try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw fault('Invalid JSON.'); }
     };
     if (request.method === 'GET' && parts.join('/') === 'library') return reply(await store.list());
+    if (request.method === 'POST' && parts.join('/') === 'migrate') { const input = await body(); return reply(await store.migrate(input.entry, input.review)); }
     if (request.method === 'POST' && parts.join('/') === 'resumes') return reply(await store.create((await body()).document));
     if (request.method === 'POST' && parts.join('/') === 'sources') {
       const input = await body();
@@ -155,6 +278,7 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
       if (request.method === 'PUT') { const input = await body(); return reply(await store.save(parts[1], input.document, expected, input.label)); }
     }
     if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'restore' && parts.length === 3) return reply(await store.restore(parts[1], (await body()).number, expected));
+    if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'recover-legacy' && parts.length === 3) return reply(await store.recoverLegacy(parts[1], expected, await body()));
     if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'export' && parts.length === 3) {
       const record = await store.get(parts[1]), document = record.document, signature = resumeSignature(document);
       if (record.version !== Number(expected)) throw fault('Save the current version before exporting.', 409);
@@ -214,5 +338,5 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
       return new Response(bytes, { headers: { ...headers, 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="' + entry.name.replace(/[^a-z0-9 ._-]/gi, '') + '"', 'Cache-Control': 'no-store' } });
     }
     throw fault('Resume route not found.', 404);
-  } catch (error) { return reply({ error: error.status ? error.message : 'Resume storage is unavailable. Your local copy has not been replaced.' }, error.status || 503); }
+  } catch (error) { return reply({ error: error.status ? error.message : 'Resume storage is unavailable. Your local copy has not been replaced.', ...(error.code ? { code: error.code, resumeId: error.resumeId } : {}) }, error.status || 503); }
 }

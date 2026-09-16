@@ -73,6 +73,7 @@ import {
 } from "./slide-merge-typography.mjs";
 import "../../css/resume-preview.css";
 import { createHostedResumeClient } from "./resume-hosted.mjs";
+import { atsEditorReview } from "./resume-ats.mjs";
 
 const hosted = new URLSearchParams(location.search).has("hosted");
 const studioHost = (() => {
@@ -303,6 +304,7 @@ function App() {
     [availableWidth, setAvailableWidth] = useState(900);
   const [historyTick, setHistoryTick] = useState(0),
     [conflict, setConflict] = useState(null);
+  const [legacyConflict, setLegacyConflict] = useState(false);
   const [rail, setRail] = useState("documents");
   const [libraryView, setLibraryView] = useState(false);
   const [canvasMode, setCanvasMode] = useState(() => {
@@ -404,6 +406,7 @@ function App() {
     setSaveState("saved");
     setError("");
     setConflict(null);
+    setLegacyConflict(false);
     setProposals(document.proposals || []);
     setAiConsent(false);
     setRequirementsConsent(false);
@@ -490,6 +493,7 @@ function App() {
           setSaveState(failure.status === 409 ? "conflict" : "error");
           setError(failure.message);
           if (failure.status === 409) {
+            setLegacyConflict(failure.code === 'legacy-conflict');
             live.current.conflict = true;
             const remote = await api("resumes/" + snapshot.id).catch(
               () => null,
@@ -538,12 +542,13 @@ function App() {
     update(next);
     change(next, label);
   };
-  const load = async (id) => {
+  const load = async (id, initialContext = null) => {
     const generation = ++navigation.current;
     try {
       await persist();
       task.current?.cancel();
       setBusy(null);
+      const context = initialContext || (hosted ? await studioBridge.initialize(window, id) : {});
       const record = await api("resumes/" + id);
       if (generation !== navigation.current) return;
       install(record);
@@ -563,22 +568,32 @@ function App() {
           );
         } else setMessage("Recovered unsaved edits from this browser.");
       }
+      if (context.legacyConflict) {
+        clearTimeout(saveTimer.current); live.current.conflict = true;
+        setLegacyConflict(true); setConflict(record); setSaveState('conflict'); setDialog('conflict');
+        setError('Legacy ATS copies differ. Recover them as separate variants before saving.');
+      }
+      return record;
     } catch (failure) {
       setError(failure.message);
     }
   };
   useEffect(() => {
-    refreshLibrary()
-      .then((data) => {
+    Promise.resolve(studioBridge?.initialize?.(window) || {})
+      .then(async context => ({ context, data: await refreshLibrary() }))
+      .then(async ({ context, data }) => {
         let saved;
         try {
           saved = localStorage.getItem(localKey("selected"));
         } catch {}
         const selected =
           data.documents.find(
-            (row) => row.document.id === saved && !row.document.archived,
+            (row) => row.document.id === (context.resumeId || saved) && !row.document.archived,
           ) || data.documents.find((row) => !row.document.archived);
-        if (selected) load(selected.document.id);
+        if (context.resumeId && !data.documents.some(row => row.document.id === context.resumeId)) throw new Error('The selected ATS resume is unavailable. No other document was opened.');
+        if (selected) {
+          await load(selected.document.id, context.resumeId ? context : null);
+        }
         else setSaveState("saved");
       })
       .catch((failure) => {
@@ -643,6 +658,24 @@ function App() {
   const closeHosted = async () => {
     task.current?.cancel(); setBusy(null);
     try { await persist(); studioBridge.close(window); } catch (failure) { setError(failure.message); }
+  };
+  const recoverLegacyCopies = async () => {
+    if (busy || !live.current) return;
+    const id = live.current.document.id;
+    setBusy('legacy-recovery'); setError('');
+    try {
+      const record = await studioBridge.recoverLegacy(id, live.current.version, window);
+      if (live.current?.document.id !== id) return;
+      live.current.version = record.version; live.current.conflict = false;
+      const next = structuredClone(live.current.document);
+      next.ats.legacyObserved = record.document.ats.legacyObserved;
+      next.ats.recoveredIds = record.document.ats.recoveredIds;
+      setConflict(null); setLegacyConflict(false); setDialog(null);
+      change(next, 'Retained current edits after legacy recovery');
+      await persist(); await refreshLibrary();
+      setMessage('Legacy copies are retained as separate recovered resumes. Current edits are saved.');
+    } catch (failure) { if (live.current?.document.id === id) setError(failure.message); }
+    finally { if (live.current?.document.id === id) setBusy(null); }
   };
   const signature = doc ? resumeSignature(doc) : "";
   const applyCanvasMode = () => frame.current?.contentDocument?.documentElement?.style.setProperty("--resume-page-shadow", canvasMode === "light" ? "0 0 0 1px rgba(17,24,39,.04),0 1px 3px rgba(17,24,39,.05),0 18px 30px -18px rgba(17,24,39,.3)" : "0 1px 2px rgba(0,0,0,.2),0 24px 44px -20px rgba(0,0,0,.55)");
@@ -849,11 +882,12 @@ function App() {
   }, [pane, mode, proposalVisit, doc?.id]);
   const reviewProposals = () => setProposals(sampleProposals(live.current.document, sources).map(proposal => ({ ...proposal, impact: projectResumeProposal(live.current.document, proposal, sources) })));
   const openAiReview = async (findingIndex = null) => {
+    if (hosted && !Number.isInteger(findingIndex)) { await openAtsCheck(); return; }
     setError(""); setAiConsent(false); setRequirementsConsent(false);
     setRevisionFinding(Number.isInteger(findingIndex) ? findingIndex : null);
     setAiPacket(null); setAiConfiguration(null);
     setDialog("ai-review");
-    try { setAiPacket(reviewPacket(live.current.document)); const configuration = await api("ai/config"); setAiConfiguration(configuration); setAiModel(configuration.models?.find(model => Number.isFinite(model.pricing?.input) && Number.isFinite(model.pricing?.output))?.id || ""); }
+    try { setAiPacket(reviewPacket(live.current.document)); const configuration = hosted ? await studioBridge.configuration(window) : await api("ai/config"); setAiConfiguration(configuration); setAiModel(configuration.models?.find(model => Number.isFinite(model.pricing?.input) && Number.isFinite(model.pricing?.output))?.id || ""); }
     catch (failure) { setError(failure.message); }
   };
   const cancelAiReview = () => {
@@ -874,7 +908,8 @@ function App() {
         signal: currentTask.signal,
         complete: async request => {
           const { signal, ...input } = request;
-          const result = await api("ai/complete", { method: "POST", body: JSON.stringify({ ...input, provider: aiConfiguration.provider, model: aiConfiguration.model }), signal });
+          const payload = { ...input, provider: aiConfiguration.provider, model: aiConfiguration.model };
+          const result = hosted ? await studioBridge.complete(payload, window, signal) : await api("ai/complete", { method: "POST", body: JSON.stringify(payload), signal });
           return result.text;
         },
       };
@@ -983,7 +1018,35 @@ function App() {
     } catch (failure) { setError(failure.message); }
     finally { setBusy(null); }
   };
+  const openAtsCheck = async () => {
+    setAiConsent(false); setError(''); setAiConfiguration(null); setDialog('ats-check');
+    try { setAiConfiguration(await studioBridge.configuration(window)); }
+    catch (failure) { setError(failure.message); }
+  };
+  const runHostedAssessment = async () => {
+    if (busy || !aiConsent || !aiConfiguration?.available) return;
+    const currentTask = createResumeTask(live.current.document);
+    task.current?.cancel(); task.current = currentTask;
+    setBusy('ats-check'); setError('');
+    try {
+      await persist();
+      if (task.current !== currentTask || !currentTask.accept(live.current.document, {})) return;
+      const artifact = await api('resumes/' + currentTask.snapshot.id + '/export', { method: 'POST', headers: { 'If-Match': String(live.current.version) }, body: '{}', signal: currentTask.signal });
+      if (!currentTask.accept(live.current.document, artifact)) return;
+      setExported(artifact);
+      const result = await studioBridge.assess(currentTask.snapshot, artifact.id, window, currentTask.signal);
+      if (!currentTask.accept(live.current.document, result)) return;
+      const assessment = assessResume(currentTask.snapshot, { pages: artifact.pages, complete: true, fields: artifact.verification.fields, extractedText: artifact.extractedText, layout: artifact.layout, renderVersion: artifact.renderVersion });
+      const aiReview = { ...atsEditorReview(currentTask.snapshot, result), provider: result.provider, model: result.model };
+      change({ ...live.current.document, assessment, aiReview, aiQuestion: null, aiResolution: null }, 'ATS checked current PDF', false);
+      await persist();
+      if (task.current !== currentTask || currentTask.signal.aborted) return;
+      setDialog(null); setPane('review'); setSheetOpen(true); setMessage('ATS check saved for this resume and target.');
+    } catch (failure) { if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message); }
+    finally { if (task.current === currentTask) { task.current = null; setBusy(null); } }
+  };
   const runAssessment = async () => {
+    if (hosted) { await openAtsCheck(); return; }
     const currentTask = createResumeTask(live.current.document);
     task.current?.cancel();
     task.current = currentTask;
@@ -1056,7 +1119,8 @@ function App() {
         "Verified PDF and text layer",
         false,
       );
-      if (download) {
+      if (download && live.current.document.ats && !live.current.document.ats.layoutAccepted) setDialog('migration-layout');
+      else if (download) {
         const anchor = document.createElement("a");
         const path = "resumes/" + currentTask.snapshot.id + "/exports/" + result.id;
         const temporary = hosted ? URL.createObjectURL(await hostedClient.file(path, "application/pdf")) : null;
@@ -1433,11 +1497,12 @@ function App() {
   </article>;
   const renderFinding = ({ finding, index, decision }) => {
     const criterion = doc.aiReview.breakdown.find(part => part.id === finding.criterionId);
-    const requirement = doc.aiReview.manifest.requirements.find(item => item.id === finding.criterionId);
+    const requirement = doc.aiReview.manifest?.requirements.find(item => item.id === finding.criterionId);
     const resolution = doc.aiResolution?.reviewAt === doc.aiReview.at && doc.aiResolution.findingIndex === index ? doc.aiResolution : null;
     return <section className="rws-review-finding" key={index} data-review-finding={index}>
       <h4 tabIndex={-1}>{criterion.label}</h4><small>{decision ? "Set aside / " + REVIEW_DECISION_REASONS[decision.reason] : finding.priority + " priority / " + (criterion.status === "absent" ? "not evidenced" : criterion.status)}</small>
       <p className="rws-finding-action">{finding.action}</p>
+      {doc.aiReview.kind === 'ats' && <>{finding.fieldIds.length === 1 ? <button className="rws-text-button" onClick={event => visitProposal({ id: 'finding-' + index, findingIndex: index, signature, fieldId: finding.fieldIds[0] }, 'field', event.currentTarget)}><Pencil size={13} />Edit affected field</button> : <p className="rws-inline-warning">No unique field match. Choose the relevant field before editing.</p>}{finding.replacement && <details><summary>Earlier suggested wording / not applied</summary><p>{finding.replacement}</p></details>}</>}
       <details className="rws-finding-context">
         <summary>Rationale and evidence</summary>
         {requirement && <div className="rws-review-passage"><small>Job requirement</small><blockquote>{requirement.quote}</blockquote></div>}
@@ -1654,6 +1719,7 @@ function App() {
   );
 
   const backToResumes = async () => {
+    if (hosted) { await closeHosted(); return; }
     const request = ++navigation.current;
     try {
       await persist();
@@ -1695,7 +1761,7 @@ function App() {
       <div className="adm__workbar rws-workbar">
         <IconButton
           icon={ArrowLeft}
-          label="Back to resumes"
+          label={hosted ? "Back to ATS check" : "Back to resumes"}
           onClick={backToResumes}
         />
         <div className="rws-history-controls">
@@ -1919,13 +1985,13 @@ function App() {
                     {exported.pages} pages / {fileSize(exported.bytes)} /{" "}
                     {exported.verification.fields} fields verified
                   </span>
-                  <a
+                  {doc.ats && !doc.ats.layoutAccepted ? <button className="rws-text-button" onClick={() => setDialog('migration-layout')}><FileCheck2 size={15} />Review migrated layout</button> : <a
                     href={fileHref("resumes/" + doc.id + "/exports/" + exported.id, true)}
                     download
                   >
                     <Download size={15} />
                     Download this PDF
-                  </a>
+                  </a>}
                 </div>
                 <ResumePdfViewer label="Verified exported PDF" url={fileHref("resumes/" + doc.id + "/exports/" + exported.id)} />
                 <details className="rws-reading-order">
@@ -2321,7 +2387,7 @@ function App() {
               <>
                 <div className="rws-panel-heading">
                   <h2>Document review</h2>
-                  <IconButton icon={BookOpen} label="AI review rubric" onClick={() => setDialog("rubric")} />
+                  {!hosted && <IconButton icon={BookOpen} label="AI review rubric" onClick={() => setDialog("rubric")} />}
                 </div>
                 <button
                   className="rws-target"
@@ -2355,28 +2421,30 @@ function App() {
                       "Not yet assessed"
                     )}
                   </span>
-                  <button className="rws-text-button" onClick={runAssessment}>
+                  <button className="rws-text-button" disabled={!!busy} onClick={runAssessment}>
                     <RefreshCw size={13} />
-                    Run checks
+                    {hosted ? 'Re-check ATS' : 'Run checks'}
                   </button>
                 </div>
+                {doc.ats && <details className="rws-inline-warning" data-ats-migration><summary>Migration and original record</summary>{doc.ats.warnings.map(warning => <p key={warning}>{warning}</p>)}<p>Saved ATS record: {doc.ats.entryId}. Original score: {doc.ats.historicalReview.result?.score ?? 'Not assessed'}.</p>{doc.sourceIds.length ? <button className="rws-text-button" onClick={() => { setMode('source'); setSourceId(doc.sourceIds[0]); setSheetOpen(false); }}>Compare original file</button> : <button className="rws-text-button" onClick={() => fileInput.current.click()}>Attach source file</button>}<button className="rws-text-button" onClick={() => setPane('design')}>Review layout</button></details>}
                 <section className="rws-assessment-section rws-ai-review">
-                  <div className="rws-panel-heading"><h3><BookOpen size={17} />Role evidence review</h3><button className="rws-text-button" disabled={!!busy} onClick={openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review with AI"}</button></div>
+                  <div className="rws-panel-heading"><h3><BookOpen size={17} />{hosted ? 'ATS assessment' : 'Role evidence review'}</h3>{!hosted && <button className="rws-text-button" disabled={!!busy} onClick={openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review with AI"}</button>}</div>
                   {busy?.startsWith("ai-") && <div className="rws-inline-actions"><span role="status">Review in progress</span><button className="rws-text-button" onClick={cancelAiReview}>Cancel</button></div>}
                   {doc.aiReview ? <>
-                    <p className="rws-review-meta">{doc.aiReview.provider} / {doc.aiReview.model}</p>
+                    <p className="rws-review-meta">{doc.aiReview.method}{doc.aiReview.provider ? ' / ' + doc.aiReview.provider + ' / ' + doc.aiReview.model : ''}</p>
+                    {doc.aiReview.kind === 'ats' && <><div className="rws-score"><strong>{doc.aiReview.score}<small>/100</small></strong><span>{doc.aiReview.band}</span></div><p>{doc.aiReview.summary}</p></>}
                     {doc.aiReview.signature !== signature && <p role="status" className="rws-inline-warning">Document or evidence changed. This review is historical.</p>}
                     {doc.aiReview.findings.length ? <><p className="rws-review-meta">{reviewFindings.filter(item => !item.decision).length} active / {reviewFindings.filter(item => item.decision).length} set aside</p>{reviewFindings.filter(item => !item.decision).map(renderFinding)}{reviewFindings.some(item => item.decision) && <details className="rws-set-aside"><summary>Set aside ({reviewFindings.filter(item => item.decision).length})</summary>{reviewFindings.filter(item => item.decision).map(renderFinding)}</details>}</> : <p>No consequential revisions identified in this review.</p>}
                     {doc.aiQuestion && <section className="rws-review-finding"><h4>Evidence needed</h4><p>{doc.aiQuestion.question}</p><p>{doc.aiQuestion.reason}</p><TextField label="Your supporting evidence" multiline value={evidenceAnswer} onChange={setEvidenceAnswer} /><button className="rws-secondary" disabled={!!busy || !evidenceAnswer.trim() || doc.aiQuestion.signature !== signature} onClick={saveEvidenceAnswer}><Plus size={13} />Save evidence</button></section>}
-                    <details><summary>Criteria and uncertainty</summary>{doc.aiReview.breakdown.map(part => <section className="rws-review-finding" key={part.id}><h4>{part.label}</h4><p>{part.rating === null ? "Unknown" : part.rating + "/4"} / {part.status}</p><p>{part.reason}</p></section>)}<p>{doc.aiReview.score === null ? "Overall not assessed" : "Rubric total: " + doc.aiReview.score + "/100"} / assessed weight {doc.aiReview.coverage}%</p><p>{doc.aiReview.method}</p></details>
+                    {doc.aiReview.kind === 'ats' ? <details><summary>ATS signals and limits</summary>{(doc.aiReview.result?._breakdown || []).map(part => <p key={part.key}>{part.label}: {part.value}</p>)}<p>{doc.aiReview.signals?.semMode || 'Historical semantic mode not recorded'}. Heuristic assessment, not an employer ATS result or hiring probability.</p></details> : <details><summary>Historical rubric / not comparable to ATS</summary>{doc.aiReview.breakdown.map(part => <section className="rws-review-finding" key={part.id}><h4>{part.label}</h4><p>{part.rating === null ? "Unknown" : part.rating + "/4"} / {part.status}</p><p>{part.reason}</p></section>)}<p>{doc.aiReview.score === null ? "Overall not assessed" : "Rubric total: " + doc.aiReview.score + "/100"} / assessed weight {doc.aiReview.coverage}%</p><p>{doc.aiReview.method}</p></details>}
                   </> : <p>Not yet evaluated against the target job.</p>}
                 </section>
                 <section className="rws-assessment-section">
-                  <h3><ScanText size={17} />Measured readiness</h3>
+                  <h3><ScanText size={17} />{hosted ? 'Measured diagnostics' : 'Measured readiness'}</h3>
                   {fresh && assessment.measured ? <details><summary>Local diagnostic breakdown</summary>
-                    <div className="rws-score"><strong>{assessment.measured.score}<small>/100</small></strong><span>{assessment.targetBasis}<small>Provisional local score</small></span></div>
+                    {!hosted && <div className="rws-score"><strong>{assessment.measured.score}<small>/100</small></strong><span>{assessment.targetBasis}<small>Provisional local score</small></span></div>}
                     <dl className="rws-score-parts">{assessment.measured.breakdown.map(part => <div key={part.key}><dt>{part.key === "semantic" ? "Lexical context" : part.key === "parse" ? "PDF layout heuristic" : part.label}</dt><dd>{part.value}<small>{Math.round(part.weight / assessment.measured.breakdown.reduce((sum, item) => sum + item.weight, 0) * 100)}% weight</small></dd></div>)}</dl>
-                    <p>This local diagnostic excludes AI judgment. Role evidence is reviewed separately above. Unavailable signals are excluded and weights renormalized. This is not a hiring probability or an ATS vendor score.</p>
+                    <p>{hosted ? 'Deterministic diagnostics for this version. The ATS assessment above includes AI judgment; missing signals are not assumed to pass.' : 'This local diagnostic excludes AI judgment. Role evidence is reviewed separately above. Unavailable signals are excluded and weights renormalized. This is not a hiring probability or an ATS vendor score.'}</p>
                   </details> : <p>Run checks for the current document and target.</p>}
                 </section>
                 <section className="rws-assessment-section">
@@ -2883,6 +2951,24 @@ function App() {
           <section className="rws-assessment-section"><h3>Validation limits</h3><p>The model evaluates evidence; code validates citations, ratings, completeness and arithmetic. These checks do not prove semantic truth, impartiality or real-world calibration. No automatic rewrite, fixed score ceiling or guaranteed improvement.</p></section>
         </Dialog>
       )}
+      {dialog === 'migration-layout' && <Dialog wide title="Confirm migrated layout" onClose={() => setDialog(null)} actions={<><button className="btn btn--ghost" onClick={() => setDialog(null)}>Keep reviewing</button><button className="btn btn--primary" disabled={!!busy || exported?.signature !== resumeSignature(doc)} onClick={async () => {
+        setBusy('migration-layout'); setError('');
+        try { mutate(next => { next.ats.layoutAccepted = true; }, 'Accepted migrated PDF layout'); await persist(); setDialog(null); }
+        catch (failure) { setError(failure.message); }
+        finally { setBusy(null); }
+      }}>Accept reviewed layout</button></>}>
+        {doc.ats.warnings.map(warning => <p key={warning}>{warning}</p>)}
+        <p>The current PDF has been checked for authored text and page bounds. Original files and legacy settings remain unchanged in history.</p>
+        {doc.sourceIds.length > 0 && <button className="rws-text-button" onClick={() => { setDialog(null); setMode('source'); setSourceId(doc.sourceIds[0]); }}>Compare original file</button>}
+        {error && <p role="alert">{error}</p>}
+      </Dialog>}
+      {dialog === 'ats-check' && <Dialog wide title="Re-check ATS" onClose={cancelAiReview} actions={<><button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button><button className="btn btn--primary" disabled={!!busy || !aiConsent || !aiConfiguration?.available} onClick={runHostedAssessment}>Run ATS check</button></>}>
+        <p className="pass__sub">{aiConfiguration?.available ? aiConfiguration.provider + ' / ' + aiConfiguration.model : 'Configure AI in Studio before running a check.'}</p>
+        <p>The current saved resume will be rendered to PDF and checked against this target. Earlier reviews remain in history. This is a paid AI request using your Studio configuration.</p>
+        <details><summary>Resume and target sent for assessment</summary><pre>{resumeText(doc)}</pre><pre>{doc.target.jd || doc.target.level}</pre></details>
+        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume and target to be sent for an ATS check.</label>
+        {busy && <p role="status">Checking current PDF...</p>}{error && <p role="alert" className="rws-inline-warning">{error}</p>}
+      </Dialog>}
       {dialog === "ai-review" && <Dialog wide title={revisionFinding === null ? "Review target requirements" : "Prepare evidence-backed revision"} onClose={cancelAiReview} actions={<>
         <button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button>
         {revisionFinding !== null ? <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !aiConsent || !aiPacket || !canReviseReview(doc, doc.aiReview)} onClick={() => runAiReview("revision", revisionFinding)}>Approve revision request</button> : <>
@@ -2890,7 +2976,7 @@ function App() {
           {doc.reviewManifest && <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !requirementsConsent || !aiConsent || !aiPacket} onClick={() => runAiReview("assessment")}>Approve and review</button>}
         </>}
       </>}>
-        <p className="pass__sub">{aiConfiguration?.available ? `${aiConfiguration.provider} / ${aiConfiguration.model}. Remaining reserved budget: $${Number(aiConfiguration.remaining ?? 0).toFixed(2)}.` : "No AI transport is connected. Existing Studio credentials are required; no keys are stored by this preview."}</p>
+        <p className="pass__sub">{aiConfiguration?.available ? `${aiConfiguration.provider} / ${aiConfiguration.model}. ${hosted ? 'Paid revision request using your Studio configuration.' : 'Remaining reserved budget: $' + Number(aiConfiguration.remaining ?? 0).toFixed(2) + '.'}` : "Configure AI in Studio before requesting a revision."}</p>
         {hosted && !aiConfiguration?.available && aiConfiguration?.models && <div className="rws-form-grid"><label className="rws-field"><span>Review model</span><select aria-label="Review model" value={aiModel} onChange={event => setAiModel(event.target.value)}>{aiConfiguration.models.filter(model => Number.isFinite(model.pricing?.input) && Number.isFinite(model.pricing?.output)).map(model => <option key={model.id} value={model.id}>{model.id} / ${model.pricing.input} input, ${model.pricing.output} output per million tokens</option>)}</select></label><button className="btn btn--ghost" disabled={!aiModel || !!busy} onClick={async () => { try { setAiConfiguration(await api("ai/connect", { method: "POST", body: JSON.stringify({ model: aiModel, approved: true }) })); } catch (failure) { setError(failure.message); } }}>Authorize $1 review budget</button></div>}
         <details className="rws-reading-order"><summary>Data sent for this review</summary><h3>Target job</h3><pre>{doc.target.jd}</pre><h3>Resume evidence</h3><pre>{aiPacket?.excerpts.map(excerpt => excerpt.text).join("\n")}</pre><h3>Supporting sources for revisions</h3>{linkedSources.map(source => <details key={source.id}><summary>{source.name}</summary><pre>{source.text}</pre></details>)}</details>
         <label className="chk"><input type="checkbox" checked={aiConsent} onChange={event => setAiConsent(event.target.checked)} />Allow these job, resume and selected source texts to be sent to this provider. Contact fields are excluded; other text may still contain personal information.</label>
@@ -2994,8 +3080,10 @@ function App() {
               <button className="btn" onClick={() => setDialog(null)}>
                 Keep editing locally
               </button>
+              {legacyConflict && <button className="btn btn--primary" disabled={!!busy} onClick={recoverLegacyCopies}>Recover legacy copies</button>}
               <button
                 className="btn"
+                disabled={legacyConflict || !!busy}
                 onClick={() => {
                   try {
                     localStorage.removeItem(outboxKey(doc.id));
@@ -3015,6 +3103,7 @@ function App() {
             </>
           }
         >
+          {legacyConflict && <p className="rws-inline-warning">Older ATS copies changed. Recovery creates separate variants and retains this document, its history and your unsaved edits.</p>}
           <div className="rws-conflict-columns">
             <section>
               <h3>This tab / unsaved</h3>

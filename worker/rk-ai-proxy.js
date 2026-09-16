@@ -29,7 +29,8 @@
 import { libraryRoute } from "./slide-library.mjs";
 import { releaseChecksRoute } from "./release-checks.mjs";
 import { readOperationalState, updateOperationalState } from "./operational-state.mjs";
-import { resumeWorkspaceRoute } from "./resume-workspace.mjs";
+import { resumeWorkspaceRoute, legacyAtsDestination } from "./resume-workspace.mjs";
+import { atsMigrationIdentity } from "../src/js/resume-ats.mjs";
 
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
@@ -149,7 +150,7 @@ export default {
       const headers = Object.assign({}, cors, { "Cache-Control": "no-store" });
       if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return json({ error: "Origin not allowed" }, 403, headers);
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, headers);
-      return resumeWorkspaceRoute(request, env.RESUMES, headers, env.BROWSER);
+      return resumeWorkspaceRoute(request, env.RESUMES, headers, env.BROWSER, fetch, env.VAULT);
     }
     if (url.pathname === "/admin/slide-library") {
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, { ...cors, "Cache-Control": "no-store" });
@@ -916,6 +917,11 @@ export default {
         if (!tool || !id) return json({ error: "Bad entry" }, 400, cors);
         const at = String((+(b && b.at)) || Date.now());
         try {
+          const migrated = await legacyAtsDestination(env.RESUMES, b);
+          if (migrated) {
+            if ((await atsMigrationIdentity(b)).fingerprint === migrated.fingerprint) return json({ ok: true, id }, 200, cors);
+            return json({ error: 'This resume now uses the ATS editor. Reopen ATS history to recover these old-tab edits; no cloud data was replaced.', code: 'legacy-conflict', resumeId: migrated.resumeId }, 409, cors);
+          }
           await env.VAULT.put("prep/" + tool + "/" + id + ".json", JSON.stringify(b), {
             httpMetadata: { contentType: "application/json; charset=utf-8" },
             customMetadata: { id: id, kind: String((b && b.kind) || "").slice(0, 24), title: String((b && b.title) || "").slice(0, 160), at: at, meta: JSON.stringify((b && b.meta) || {}).slice(0, 400) }
@@ -927,6 +933,7 @@ export default {
         let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad body" }, 400, cors); }
         const tool = pSafeTool(b && b.tool), id = pSafeId(b && b.id);
         if (!tool || !id) return json({ error: "Bad args" }, 400, cors);
+        if (tool === 'ats' && env.RESUMES && await env.RESUMES.head('legacy-links/' + id + '.json')) return json({ error: 'This ATS record is retained for migration recovery. Archive its resume in ATS history instead.' }, 409, cors);
         try { await env.VAULT.delete("prep/" + tool + "/" + id + ".json"); } catch (e) { return json({ error: "Delete failed" }, 500, cors); }
         return json({ ok: true }, 200, cors);
       }

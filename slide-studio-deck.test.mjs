@@ -2060,7 +2060,7 @@ test('Prepare ATS retains the original before AI and preserves history on docume
   } finally { await browser.close(); }
 });
 
-test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspace across reload and devices', {timeout:90000}, async () => {
+test('Prepare ATS recovers its original PDF, exact source bytes and retains linked snapshots across reload and devices', {timeout:90000}, async () => {
   const text = 'Original designer resume with research, strategy and measurable product outcomes.';
   const pdf = preparePdfFixture(text);
   const review = {id:'source-review',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'Saved target role'},text,level:'staff',res:{score:72,fixes:[{point:'Keep this evidence',priority:'low',anchor:{type:'quote',quote:'Original designer'}}]},source:{version:1,text,jd:'Saved target role',projects:[],brief:null}}};
@@ -2133,61 +2133,8 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
     await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
     await page.evaluate(()=>document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
     await showReview(page);await page.locator('.atsv__pin').waitFor();
-    await page.locator('[data-atsv-continue]').click();
-    await page.locator('[data-rbz-doc]').waitFor();
-    assert.match(await page.locator('[data-rbz-doc]').innerText(),/Preserved edited summary/);
     const reopened = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
     assert.deepEqual(reopened.rb,workspace.payload.rb);assert.deepEqual(reopened.design,workspace.payload.design);
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
-    const pdfRequests = [];
-    await page.route('**/admin/render-pdf',route=>{
-      pdfRequests.push(route.request().postDataJSON());
-      return route.fulfill({contentType:'application/pdf',body:Buffer.from(preparePdfFixture('Synthetic export '+pdfRequests.length))});
-    });
-    const downloadPdf = async()=>{
-      const downloading=page.waitForEvent('download');
-      await page.locator('[data-rbz-dl]').click();
-      const download=await downloading;
-      assert.equal(await download.failure(),null);
-      return readFileSync(await download.path(),'utf8');
-    };
-    const normalPdf=await downloadPdf();
-    assert.equal(await downloadPdf(),normalPdf);
-    assert.equal(pdfRequests.length,1,'An unchanged export may use its confirmed cache');
-    await page.locator('[data-margin="narrow"]').click();
-    const narrowPdf=await downloadPdf();
-    assert.equal(pdfRequests.length,2,'Changed margins must request a fresh PDF');
-    assert.notEqual(pdfRequests[0].html,pdfRequests[1].html);
-    assert.match(normalPdf,/Synthetic export 1/);
-    assert.match(narrowPdf,/Synthetic export 2/);
-    await page.locator('[data-margin="normal"]').click();
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
-    await page.evaluate(()=>{
-      const write=Storage.prototype.setItem;
-      Storage.prototype.setItem=function(key,value){if(['rk:prep:hist','rk:prep:draft','rk:prep:sync'].includes(key))throw new DOMException('Storage full','QuotaExceededError');return write.call(this,key,value);};
-    });
-    failWorkspaceSave = true;
-    await page.locator('[data-rbz-doc] [data-k="summary"]').evaluate(element=>{element.textContent='Edited canvas survives a draft crash.';element.dispatchEvent(new InputEvent('input',{bubbles:true}));});
-    await page.locator('[data-density="compact"]').click();
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent.includes('Not saved to Cloudflare'));
-    assert.equal(remote.get(workspace.id).payload.rb.summary,workspace.payload.rb.summary);
-    assert.equal(remote.get(workspace.id).payload.design.density,workspace.payload.design.density);
-    const blocked = await page.evaluate(()=>{const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);return event.defaultPrevented;});
-    assert.equal(blocked,true);
-    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-failed-desktop.png')});
-    failWorkspaceSave = false;
-    await page.locator('.rbz [data-prep-retry]').click();
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare. Local copy unavailable.');
-    await page.locator('[data-margin="narrow"]').click();
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare. Local copy unavailable.');
-    const cloudWorkspace=structuredClone(remote.get(workspace.id));
-    assert.equal(cloudWorkspace.payload.rb.summary,'Edited canvas survives a draft crash.');
-    assert.equal(cloudWorkspace.payload.design.density,'compact');
-    assert.equal(cloudWorkspace.payload.design.margin,'narrow');
-    assert.equal(cloudWorkspace.payload.design.accent,workspace.payload.design.accent);
-    assert.equal(cloudWorkspace.payload.reviewId,review.id);
-    assert.equal(Buffer.from(remote.get(review.id).payload.resumeDocument.data,'base64').toString(),pdf);
-    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-saved-desktop.png')});
     await context.close();
     context=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'});page=await context.newPage();
     await open(page);await showReview(page);await page.locator('.atsv__pin').waitFor();
@@ -2205,20 +2152,8 @@ test('Prepare ATS recovers its PDF canvas, exact source bytes and linked workspa
       const left=controls[first],right=controls[second];assert.ok(left.right<=right.left||right.right<=left.left||left.bottom<=right.top||right.bottom<=left.top);
     }
     await page.screenshot({path:join(tmpdir(),'rk-ats-restored-mobile.png')});
-    await page.locator('[data-atsv-continue]').click();
-    await page.locator('[data-rbz-doc]').waitFor();
-    await page.waitForFunction(()=>document.querySelector('.rbz [data-prep-storage] span')?.textContent==='Saved to Cloudflare.');
-    assert.match(await page.locator('[data-rbz-doc]').innerText(),/Edited canvas survives a draft crash/);
     const recoveredWorkspace=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-workspace').payload);
-    assert.deepEqual(recoveredWorkspace.rb,cloudWorkspace.payload.rb);assert.deepEqual(recoveredWorkspace.design,cloudWorkspace.payload.design);
-    const storageBox=await page.locator('.rbz > [data-prep-storage]').boundingBox();
-    assert.ok(storageBox.width>0&&storageBox.x>=0&&storageBox.x+storageBox.width<=390&&storageBox.y+storageBox.height<=844);
-    const toolbar=await page.locator('.rbz__bar button').evaluateAll(buttons=>buttons.filter(button=>button.getClientRects().length).map(button=>{const box=button.getBoundingClientRect();return {left:box.left,right:box.right,top:box.top,bottom:box.bottom};}));
-    assert.ok(toolbar.every(box=>box.left>=0&&box.right<=390));
-    for(let first=0;first<toolbar.length;first++)for(let second=first+1;second<toolbar.length;second++){
-      const left=toolbar[first],right=toolbar[second];assert.ok(left.right<=right.left||right.right<=left.left||left.bottom<=right.top||right.bottom<=left.top);
-    }
-    await page.screenshot({path:join(tmpdir(),'rk-ats-cloud-restored-mobile.png')});
+    assert.deepEqual(recoveredWorkspace.rb,workspace.payload.rb);assert.deepEqual(recoveredWorkspace.design,workspace.payload.design);
     await context.close();
   } finally { await browser.close(); }
 });
@@ -2257,49 +2192,6 @@ test("Prepare saved ATS reviews retain their resume and role and cancel closed r
     assert.equal(await page.locator('.prep-dialog').isVisible(),true);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
-});
-
-test("Resume canvas reassessment cannot overwrite an edited or closed workspace on desktop", {timeout:90000}, async () => {
-  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
-  try {
-    for (const scenario of ['edit','close']) {
-      const width = 1440;
-      const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'}), page = await context.newPage();
-      await installPrepareReplies(page); await openIntegratedFixture(page);
-      await page.evaluate(()=>{
-        const text='Synthetic designer with original research and product outcomes.', res={score:60,summary:'Original assessment',checks:[],fixes:[]};
-        const review={id:'safety-review',tool:'ats',kind:'review',at:1,payload:{state:{mode:'job',jd:'Original target role'},text,level:'staff',res,source:{version:1,text,jd:'Original target role',projects:[],brief:null}}};
-        const workspace={id:'safety-workspace',tool:'ats',kind:'workspace',at:2,payload:{reviewId:review.id,text,jd:'Original target role',level:'staff',res,rb:{name:'Synthetic Designer',title:'Product Designer',contact:{email:'synthetic@example.test',links:[]},summary:'Original workspace summary.',sections:[{heading:'Experience',kind:'experience',items:[{role:'Designer',org:'Synthetic Org',bullets:['Original achievement.']}]}]},design:{tpl:'classic',size:'a4',font:'inter',density:'normal',layout:'single',canvas:'light',keepWhole:true,margin:'normal'}}};
-        localStorage.setItem('rk:prep:hist',JSON.stringify({ats:[review,workspace]}));
-      });
-      await page.locator('.adm__tab[data-tab="ai"]').click();
-      await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
-      await page.locator('[data-act="ats-hist-open"][data-id="safety-review"]').click();
-      await page.locator('[data-atsv-continue]').click();
-      await page.locator('[data-rbz-doc]').waitFor();
-      await page.evaluate(()=>{window.deferAtsReply=true;});
-      await page.locator('[data-rbz-recheck]').click();
-      await page.waitForFunction(()=>typeof window.releaseAtsReply==='function');
-      if (scenario==='edit') {
-        await page.locator('[data-rbz-doc] [data-k="summary"]').fill('Newer summary while assessment is pending.');
-        await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='safety-workspace').payload.rb.summary==='Newer summary while assessment is pending.');
-      } else {
-        await page.locator('[data-rbz-close]').click();
-        await page.locator('.rbz').waitFor({state:'detached'});
-      }
-      const before = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
-      await page.evaluate(()=>window.releaseAtsReply());
-      await page.waitForFunction(()=>window.atsReplyReturned && window.__rkAiSession.state().active===0);
-      assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),before,scenario+' at '+width);
-      if (scenario==='edit') {
-        await page.waitForFunction(()=>!document.querySelector('[data-rbz-recheck]').disabled);
-        assert.equal(await page.locator('[data-rbz-doc] [data-k="summary"]').innerText(),'Newer summary while assessment is pending.');
-        assert.match(await page.locator('.adm__statusbar').innerText(),/resume changed|previous assessment is kept/i);
-      } else assert.equal(await page.locator('.rbz').count(),0);
-      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='safety-review').payload.res.summary),'Original assessment');
-      await context.close();
-    }
-  } finally {await browser.close();}
 });
 
 test("Prepare restored letters regenerate from their saved resume and evidence", {timeout:45000}, async () => {

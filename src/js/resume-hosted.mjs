@@ -7,7 +7,7 @@ export function createHostedResumeClient({ request, ai, storage = localStorage }
     const response = await request(path, options);
     if (!response.ok) {
       const failure = await response.json().catch(() => ({}));
-      throw Object.assign(new Error(failure.error || 'Private resume storage is unavailable.'), { status: response.status });
+      throw Object.assign(new Error(failure.error || 'Private resume storage is unavailable.'), { status: response.status, code: failure.code, resumeId: failure.resumeId });
     }
     return response;
   }

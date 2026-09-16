@@ -10,6 +10,59 @@ import { reviewPacket, validateRequirements, validateReview, reviewResumeWithAI,
 import { verifyResumePdf } from './src/js/resume-pdf.mjs';
 import { createHostedResumeClient } from './src/js/resume-hosted.mjs';
 import { extractResumePdfText, structureResumeText } from './src/js/resume-workspace.mjs';
+import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorReview } from './src/js/resume-ats.mjs';
+
+test('Unified ATS assessment uses current PDF inputs and preserves citation-checked selective revisions', async () => {
+  const document = fixture(), calls = [], controller = new AbortController();
+  const field = resumeFields(document.model).find(field => field.label === 'Achievement');
+  field.owner[field.key] = field.value = 'Designed a unique accessible approval workflow for this fixture.';
+  const text = resumeText(document), jd = 'Accessible interaction design';
+  const adapters = { readPages: async () => { calls.push('pages'); return null; }, semantic: async () => ({ off: true }), complete: async input => { calls.push(input); return { score: 75, fixes: [{ point: 'Clarify impact', how: 'Retain the existing evidence', anchor: { quote: field.value }, priority: 'high' }], checks: [] }; } };
+  const first = await assessAtsResume({ text, jd, signal: controller.signal }, adapters);
+  const second = await assessAtsResume({ text, jd, signal: controller.signal }, adapters);
+  assert.deepEqual(first.res, second.res);
+  assert.equal(calls[1].text, text); assert.equal(calls[1].jd, jd);
+  const review = atsEditorReview(document, first);
+  assert.deepEqual(review.findings[0].fieldIds, [field.id]);
+  const result = await reviseResumeWithAI(document, { review, findingIndex: 0, getCurrent: () => document, provider: 'mock', model: 'mock', complete: async () => JSON.stringify({ kind: 'question', question: 'What outcome was measured?', reason: 'No new metric is supported.' }) });
+  assert.equal(result.kind, 'question');
+  assert.equal(atsEditorReview(document, first, { historical: true }).signature, '');
+  const ambiguous = structuredClone(first); ambiguous.res.fixes[0].anchor.quote = 'missing passage';
+  assert.deepEqual(atsEditorReview(document, ambiguous).findings[0].fieldIds, []);
+  controller.abort();
+  await assert.rejects(assessAtsResume({ text, jd, signal: controller.signal }, adapters), /abort/i);
+  assert.equal(calls.length, 4);
+});
+
+test('ATS migration preserves edited structure and original snapshots with repeat-safe identities', async () => {
+  const original = { id: 'review-1', tool: 'ats', kind: 'review', at: 10, payload: { text: 'Original wording', state: { jd: 'Original job', url: 'https://example.test/job' }, res: { score: 72 }, resumeDocument: { sha256: 'a'.repeat(64) } } };
+  const workspace = { id: 'workspace-1', tool: 'ats', kind: 'workspace', at: 20, payload: { reviewId: original.id, rb: { ...fixture().model, notes: 'Retained rebuild notes' }, jd: 'Workspace job', company: 'Example', design: { font: 'serif', layout: 'sidebar', size: 'letter', accent: '#123456', keepWhole: false }, res: { score: 81 } } };
+  const before = structuredClone(workspace), sourceIds = ['a'.repeat(64)];
+  const document = await migrateAtsResume(workspace, original, sourceIds);
+  assert.deepEqual(await migrateAtsResume(workspace, original, sourceIds), document);
+  assert.deepEqual(workspace, before);
+  assert.deepEqual(document.ats.legacy.entry, workspace);
+  assert.deepEqual(document.ats.legacy.review, original);
+  assert.equal(document.target.jd, 'Workspace job');
+  assert.equal(document.target.url, 'https://example.test/job');
+  assert.equal(document.design.font, 'gelasio');
+  assert.equal(document.design.keepWhole, false);
+  assert.equal(document.model.notes, 'Retained rebuild notes');
+  assert.deepEqual(resumeFields(document.model).map(field => field.value), resumeFields(workspace.payload.rb).map(field => field.value));
+  assert.deepEqual(document.sourceIds, sourceIds);
+  assert.equal(document.assessment, null);
+  assert.equal(document.ats.historicalReview.result.score, 81);
+  workspace.payload.rb.summary = 'Newer unsynced wording';
+  const changed = await atsMigrationIdentity(workspace);
+  assert.equal(changed.id, document.id);
+  assert.notEqual(changed.fingerprint, document.ats.fingerprint);
+  await assert.rejects(migrateAtsResume(workspace, { ...original, id: 'wrong-review' }), /does not belong/);
+  await assert.rejects(migrateAtsResume({ ...workspace, payload: {} }), /missing/);
+  const imported = await migrateAtsResume(original);
+  assert.ok(resumeText(imported).includes('Original wording'));
+  assert.ok(imported.ats.warnings.some(warning => warning.includes('original file')));
+  assert.deepEqual(imported.ats.legacy.entry.payload.resumeDocument, original.payload.resumeDocument);
+});
 
 test('Structured import preserves clear roles, dates, bullets and uncertain source text without inference', () => {
   const text = 'Alex Example\nalex@example.test\n\nExperience\nProduct Designer\nExample Studio\n2020 - Present\n- Designed accessible\nworkflows.\n- Led research.\n\nUX Designer\nPrevious Studio\n2018 - 2020\n- Built prototypes.\n\nSkills\nDesign: Figma, Research\n\nEducation\nExample University\nB.Des\n2014 - 2018\n\nUnrecognized personal note.';
@@ -506,21 +559,34 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(requests, []); assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
-  test('Hosted Studio bridge saves private resumes, verifies PDFs and keeps failed-close edits', { timeout: 90000 }, async () => {
+  test('Hosted Studio bridge saves private resumes, verifies PDFs and keeps failed-close edits', { timeout: 120000 }, async () => {
     const { Miniflare } = await import('miniflare');
     const { resumeWorkspaceRoute, createHostedResumeStore } = await import('./worker/resume-workspace.mjs');
-    const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES'] });
+    const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES', 'VAULT'] });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
     let failedSave = false, expireFirstRender = true, rendered = 0, calls = 0;
+    let holdSave = false, saveStarted, releaseSave;
     try {
-      const bucket = await runtime.getR2Bucket('RESUMES'), store = createHostedResumeStore(bucket);
+      const bucket = await runtime.getR2Bucket('RESUMES'), legacy = await runtime.getR2Bucket('VAULT'), store = createHostedResumeStore(bucket, legacy);
       const { build } = await import('esbuild');
       const studioBundle = await build({ entryPoints: ['src/js/admin-studio.js'], bundle: true, write: false, format: 'iife' });
       const ownerContent = JSON.parse(readFileSync(new URL('./content.json', import.meta.url), 'utf8'));
       ownerContent.work = []; ownerContent.specialViews = [];
-      await context.route('**/*', async route => {
+      const fixtureRoute = async route => {
         const url = route.request().url();
+        if (url.startsWith('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/')) return route.continue();
+        if (new URL(url).pathname.startsWith('/admin/prep/')) {
+          const parsed = new URL(url), action = parsed.pathname.split('/').at(-1);
+          if (action === 'list') {
+            const objects = await legacy.list({ prefix: 'prep/' + parsed.searchParams.get('tool') + '/' });
+            const entries = await Promise.all(objects.objects.map(async object => (await legacy.get(object.key)).json()));
+            return route.fulfill({ json: { items: entries.map(({ id, at, kind, title, meta }) => ({ id, at, kind, title, meta })) } });
+          }
+          if (action === 'get') { const entry = await legacy.get('prep/' + parsed.searchParams.get('tool') + '/' + parsed.searchParams.get('id') + '.json'); return route.fulfill({ status: entry ? 200 : 404, json: entry ? await entry.json() : {} }); }
+          if (action === 'put') { const entry = route.request().postDataJSON(); await legacy.put('prep/' + entry.tool + '/' + entry.id + '.json', JSON.stringify(entry)); return route.fulfill({ json: { ok: true } }); }
+          return route.fulfill({ status: 400, json: { error: 'Unexpected fixture request' } });
+        }
         if (new URL(url).pathname === '/content.json') return route.fulfill({ json: ownerContent });
         if (url.startsWith(preview.origin + '/js/admin-studio.js')) return route.fulfill({ contentType: 'text/javascript', body: studioBundle.outputFiles[0].text });
         if (url.startsWith(preview.origin + '/')) {
@@ -531,6 +597,7 @@ describe('Resume browser acceptance', () => {
         if (new URL(url).pathname.startsWith('/admin/resume/')) {
           const incoming = route.request();
           assert.equal(incoming.headers().authorization, 'Bearer synthetic-owner');
+          if (holdSave && incoming.method() === 'PUT') { holdSave = false; saveStarted(); await new Promise(resolve => { releaseSave = resolve; }); }
           if (failedSave && incoming.method() === 'PUT') return route.fulfill({ status: 503, json: { error: 'Synthetic failed save' } });
           if (new URL(url).pathname.endsWith('/finalize') && expireFirstRender) {
             const input = incoming.postDataJSON(), key = 'pending/' + input.id + '.json';
@@ -547,12 +614,13 @@ describe('Resume browser acceptance', () => {
               return new Response(await renderPage.pdf(options.pdfOptions), { headers: { 'Content-Type': 'application/pdf' } });
             } finally { await renderPage.close(); }
           } };
-          const result = await resumeWorkspaceRoute(new Request(url.replace('/_worker', ''), { method: incoming.method(), headers: incoming.headers(), body: incoming.postData() }), bucket, {}, remoteBrowser, url => fetch(url.replace('https://riteshk.work', preview.origin)));
+          const result = await resumeWorkspaceRoute(new Request(url.replace('/_worker', ''), { method: incoming.method(), headers: incoming.headers(), body: incoming.postData() }), bucket, {}, remoteBrowser, url => fetch(url.replace('https://riteshk.work', preview.origin)), legacy);
           return route.fulfill({ status: result.status, headers: Object.fromEntries(result.headers), body: Buffer.from(await result.arrayBuffer()) });
         }
         if (url.startsWith(preview.origin + '/') || /^https:\/\/media\.riteshk\.work\/[a-f0-9]+\.woff2$/.test(url)) return route.continue();
         return route.abort();
-      });
+      };
+      await context.route('**/*', fixtureRoute);
       await page.goto(preview.origin + '/studio/?devstub=1');
       await page.waitForFunction(() => typeof window.__rkDevStudio === 'function');
       const ownerDraft = await page.evaluate(async ownerContent => {
@@ -567,7 +635,10 @@ describe('Resume browser acceptance', () => {
       await page.evaluate(() => {
         window.__RKStudio.resumeAI = { models: async () => ({ provider: 'anthropic', checkedAt: Date.now(), models: [{ id: 'synthetic-model', pricing: { input: 2, output: 10 } }] }), connect: async () => { throw new Error('No paid calls in this test'); } };
       });
-      await page.locator('.adm__tab[data-tab="resume"]').click();
+      assert.equal(await page.locator('.adm__tab[data-tab="resume"]').count(), 0);
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+      await page.getByRole('button', { name: 'Saved resumes', exact: true }).click();
       const editor = page.frameLocator('.adm__resume-host');
       await editor.getByText('No active resumes', { exact: true }).waitFor();
       assert.equal((await store.list()).documents.length, 0);
@@ -599,16 +670,14 @@ describe('Resume browser acceptance', () => {
       await hostedText.waitFor();
       assert.ok((await hostedText.textContent()).replace(/\s/g, '').includes('Atruthfulfictionalproduct-designsummary.'));
       assert.equal(await editor.getByRole('button', { name: 'Back to Studio', exact: true }).isVisible(), true);
-      await editor.getByRole('button', { name: 'Back to resumes', exact: true }).click();
-      await editor.locator('.rws[data-view="library"]').waitFor();
-      await editor.getByRole('button', { name: 'Back to Studio', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
-      await page.getByRole('button', { name: 'Open Resume Studio', exact: true }).click();
+      await page.getByRole('button', { name: 'Saved resumes', exact: true }).click();
       await editor.locator('.rws-status.is-saved').waitFor();
       await editor.getByRole('tab', { name: 'Review', exact: true }).click();
-      await editor.getByRole('button', { name: 'Review with AI', exact: true }).click();
-      await editor.getByLabel('Review model', { exact: true }).waitFor();
-      assert.equal(await editor.getByRole('button', { name: 'Build requirements', exact: true }).isEnabled(), false);
+      assert.equal(await editor.getByRole('button', { name: 'Review with AI', exact: true }).count(), 0);
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      assert.equal(await editor.getByRole('button', { name: 'Run ATS check', exact: true }).isEnabled(), false);
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: width < 760 ? 844 : 1000 });
@@ -627,12 +696,218 @@ describe('Resume browser acceptance', () => {
       await editor.getByRole('button', { name: 'Back to Studio', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       assert.equal((await store.get(id)).document.model.summary, 'Retain this edit when cloud saving fails.');
-      await page.getByRole('button', { name: 'Open Resume Studio', exact: true }).click();
+      await page.getByRole('button', { name: 'Saved resumes', exact: true }).click();
       await editor.locator('.rws-status.is-saved').waitFor();
       assert.equal(await editor.locator('.rws-status').textContent().then(text => text.includes('Saved to Cloudflare')), true);
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), ownerDraft);
       await assert.rejects(page.evaluate(() => window.__RKStudio.resume.request('library', {}, window)), /owner session expired/);
       assert.equal(calls, 0); assert.deepEqual(errors, []);
+      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      const review = { id: 'migration-review', tool: 'ats', kind: 'review', at: 10, payload: { text: 'Original immutable resume before edits.', state: { mode: 'job', jd: 'Design accessible enterprise workflows', company: 'SyntheticCo' }, res: { score: 62, summary: 'Original assessment', checks: [], fixes: [{ point: 'Clarify summary', priority: 'high', anchor: { quote: 'Preserved edited summary.' } }] }, resumeDocument: { version: 1, sha256: row.document.sourceIds[0], name: 'original.txt', size: bytes.length, type: 'text/plain', lastModified: 0 } } };
+      const workspace = { id: 'migration-workspace', tool: 'ats', kind: 'workspace', at: 20, payload: { reviewId: review.id, company: 'SyntheticCo', level: 'staff', jd: 'Design accessible enterprise workflows', res: review.payload.res, text: review.payload.text, rb: { name: 'Synthetic Designer', title: 'Product Designer', summary: 'Preserved edited summary.', contact: { email: 'synthetic@example.test', links: [{ label: 'Portfolio', url: 'https://example.test' }] }, sections: [{ kind: 'experience', heading: 'Experience', items: [{ role: 'Designer', org: 'Example', dates: '2020 - Present', location: '', bullets: ['Designed accessible enterprise workflows with research evidence.'] }] }] }, design: { font: 'inter', size: 'a4', density: 'normal', margin: 'normal', accent: '#167d83', layout: 'single', keepWhole: true } } };
+      await legacy.put('prep/ats/' + review.id + '.json', JSON.stringify(review));
+      await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
+      await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
+      await page.locator('.prep-dialog [data-prep-close]').click();
+      await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+      await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
+      await page.locator('[data-atsv-continue]').click();
+      await editor.locator('[data-ats-migration]').waitFor();
+      assert.equal(await page.evaluate(() => {
+        const host = document.querySelector('.adm__resume-host'), review = document.querySelector('.atsv');
+        return Number(getComputedStyle(host).zIndex) > Number(getComputedStyle(review).zIndex) && document.elementFromPoint(innerWidth / 2, innerHeight / 2) === host;
+      }), true, 'The editor must be painted above the retained ATS review');
+      const migratedId = (await atsMigrationIdentity(workspace)).id;
+      assert.equal((await store.get(migratedId)).document.model.summary, workspace.payload.rb.summary);
+      assert.equal(await page.locator('[data-rbz-doc]').count(), 0);
+      await editor.getByRole('button', { name: 'Edit affected field', exact: true }).click();
+      assert.equal(await editor.getByLabel('Summary', { exact: true }).inputValue(), workspace.payload.rb.summary);
+      await editor.getByLabel('Summary', { exact: true }).fill('Current edited summary with accessibility and research outcomes.');
+      await editor.locator('.rws-status.is-saved').waitFor();
+      const migrated = await store.get(migratedId);
+      assert.deepEqual(migrated.document.ats.legacy.entry, workspace);
+      assert.deepEqual(new Uint8Array((await store.sourceFile(row.document.sourceIds[0])).bytes), new Uint8Array(bytes));
+      const renderBefore = rendered;
+      await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await editor.locator('.rws[data-view="pdf"]').waitFor();
+      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await editor.locator('.rws[data-view="pdf"]').waitFor();
+      assert.equal(rendered, renderBefore + 1);
+      assert.equal(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 0);
+      await editor.getByRole('button', { name: 'Review migrated layout', exact: true }).click();
+      await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click();
+      assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, false);
+      await editor.getByRole('button', { name: 'Review migrated layout', exact: true }).click();
+      await editor.getByRole('button', { name: 'Accept reviewed layout', exact: true }).click();
+      await editor.getByRole('dialog').waitFor({ state: 'hidden' });
+      assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, true);
+      assert.match(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).getAttribute('href'), /^blob:/);
+      const originalExport = (await store.get(migratedId)).exports.at(-1);
+      const originalExportBytes = Buffer.from((await store.exportFile(migratedId, originalExport.id)).bytes);
+      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      await editor.getByRole('tab', { name: 'Design', exact: true }).click();
+      await editor.getByLabel('Margins', { exact: true }).selectOption('narrow');
+      await editor.locator('.rws-status.is-saved').waitFor();
+      await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await editor.locator('.rws[data-view="pdf"]').waitFor();
+      assert.equal(rendered, renderBefore + 2);
+      assert.notEqual((await store.get(migratedId)).exports.at(-1).signature, originalExport.signature);
+      assert.deepEqual(Buffer.from((await store.exportFile(migratedId, originalExport.id)).bytes), originalExportBytes);
+      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      for (const provider of ['openai', 'anthropic']) {
+        await page.evaluate(provider => {
+          localStorage.setItem('rk:ai:same', '0'); localStorage.setItem('rk:ai:mode', 'local'); localStorage.setItem('rk:ai:txt:provider', provider); localStorage.setItem('rk:ai:txt:key', 'synthetic-only');
+        }, provider);
+        const configuration = await page.evaluate(() => window.__RKStudio.resume.configuration(document.querySelector('.adm__resume-host').contentWindow));
+        assert.equal(configuration.model, 'Studio automatic selection'); assert.equal(configuration.available, true);
+      }
+      await page.evaluate(() => {
+        for (const [key, value] of Object.entries({ 'rk:ai:same': '0', 'rk:ai:mode': 'local', 'rk:ai:txt:provider': 'custom', 'rk:ai:txt:key': 'synthetic-only', 'rk:ai:txt:model': 'fixture-model', 'rk:ai:txt:base': location.origin + '/fake-ai' })) localStorage.setItem(key, value);
+        window.atsMigrationCalls = [];
+        const originalFetch = window.fetch;
+        window.fetch = async (resource, options = {}) => {
+          if (!String(resource).includes('/fake-ai')) return originalFetch(resource, options);
+          const input = JSON.parse(options.body), system = input.messages.find(message => message.role === 'system')?.content || '';
+          const user = input.messages.find(message => message.role === 'user')?.content || '';
+          if (system.startsWith("You are Studio's outcome coordinator.")) {
+            const packet = JSON.parse(user), decision = packet.candidate ? { action: 'finish', summary: 'Validated fixture result' } : { action: 'draft', modelRef: packet.draftModels[0], task: 'analysis', instruction: '', inputs: [], summary: 'Use the current saved resume' };
+            return Response.json({ choices: [{ message: { content: JSON.stringify({ decision }) }, finish_reason: 'stop' }] });
+          }
+          window.atsMigrationCalls.push({ system, user });
+          if (window.deferMigrationCheck) await new Promise(resolve => { window.releaseMigrationCheck = resolve; });
+          const value = system.includes('ONE exact field replacement') ? { kind: 'question', question: 'Which outcome can you substantiate?', reason: 'No new metric was supplied.' } : { score: 79, band: 'Good', summary: 'Checked the current exported resume', checks: [], fixes: [{ point: 'Clarify research impact', priority: 'high', anchor: { quote: 'Current edited summary with accessibility and research outcomes.' } }], keywords: { present: [], missing: [] } };
+          return Response.json({ choices: [{ message: { content: JSON.stringify(value) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
+        };
+      });
+      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('checkbox', { name: 'Allow this resume and target to be sent for an ATS check.' }).check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await Promise.race([editor.getByRole('dialog').waitFor({ state: 'hidden' }), editor.getByRole('dialog').getByRole('alert').waitFor()]);
+      assert.equal(await editor.getByRole('dialog').count(), 0, (await editor.getByRole('dialog').allTextContents()).join(''));
+      const assessed = await store.get(migratedId);
+      assert.equal(assessed.document.aiReview.kind, 'ats');
+      assert.equal(assessed.document.aiReview.signature, resumeSignature(assessed.document));
+      const inputs = await page.evaluate(() => window.atsMigrationCalls);
+      assert.ok(inputs.some(input => input.user.includes('Current edited summary') && input.user.includes('Design accessible enterprise workflows')));
+      assert.ok(inputs.every(input => !input.user.includes('Original immutable resume before edits')));
+      await editor.getByRole('button', { name: 'Prepare revision', exact: true }).click();
+      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Approve revision request', exact: true }).click();
+      await editor.getByText('Which outcome can you substantiate?', { exact: true }).waitFor();
+      assert.equal((await store.get(migratedId)).document.model.summary, assessed.document.model.summary);
+      await page.evaluate(() => { window.deferMigrationCheck = true; });
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
+      await editor.getByLabel('Summary', { exact: true }).fill('Newer wording after cancelled assessment.');
+      await editor.locator('.rws-status.is-saved').waitFor();
+      const cancelled = await store.get(migratedId);
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
+      assert.deepEqual(await store.get(migratedId), cancelled);
+      const pending = new Promise(resolve => { saveStarted = resolve; }); holdSave = true;
+      await editor.getByLabel('Summary', { exact: true }).fill('Cancel before the pending save finishes.');
+      await pending;
+      const callsBeforeEarlyCancel = await page.evaluate(() => window.atsMigrationCalls.length), exportsBeforeEarlyCancel = (await store.get(migratedId)).exports.length;
+      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      releaseSave(); await editor.locator('.rws-status.is-saved').waitFor();
+      assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), callsBeforeEarlyCancel);
+      assert.equal((await store.get(migratedId)).exports.length, exportsBeforeEarlyCancel);
+      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
+      const legacyChanged = structuredClone(workspace); legacyChanged.payload.rb.summary = 'Recovered late legacy edit';
+      await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(legacyChanged));
+      await editor.getByLabel('Summary', { exact: true }).fill('Keep current unsaved wording through recovery.');
+      await editor.locator('.rws-status.is-conflict').waitFor();
+      await editor.getByRole('button', { name: 'Compare versions', exact: true }).click();
+      await editor.getByRole('button', { name: 'Recover legacy copies', exact: true }).click();
+      await editor.locator('.rws-status.is-saved').waitFor();
+      assert.equal((await store.get(migratedId)).document.model.summary, 'Keep current unsaved wording through recovery.');
+      assert.ok((await store.list()).documents.some(row => row.document.model.summary === 'Recovered late legacy edit'));
+      await editor.locator('html').evaluate(() => {
+        const write = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key, value) { if (key.startsWith('rk:resume:')) throw new DOMException('Storage full', 'QuotaExceededError'); return write.call(this, key, value); };
+      });
+      failedSave = true;
+      await editor.getByLabel('Summary', { exact: true }).fill('Cloud save survives unavailable local recovery storage.');
+      await editor.locator('.rws-status.is-error').waitFor();
+      assert.equal(await editor.locator('html').evaluate(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; }), true);
+      assert.equal((await store.get(migratedId)).document.model.summary, 'Keep current unsaved wording through recovery.');
+      failedSave = false;
+      await editor.getByRole('button', { name: 'Retry save', exact: true }).click();
+      await editor.locator('.rws-status.is-saved').waitFor();
+      const cloudDocument = (await store.get(migratedId)).document;
+      assert.equal(cloudDocument.model.summary, 'Cloud save survives unavailable local recovery storage.');
+      assert.equal(cloudDocument.design.margin, 'narrow'); assert.equal(cloudDocument.design.accent, workspace.payload.design.accent);
+      assert.deepEqual(cloudDocument.ats.legacy.entry, workspace);
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        assert.equal(await editor.locator('.rws').evaluate(element => element.scrollWidth <= innerWidth + 1), true);
+        await page.screenshot({ path: join(tmpdir(), 'rk-ats-migration-' + width + '.png') });
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+      await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      const peer = await store.get(migratedId);
+      const peerDocument = editResumeField(peer.document, 'summary', 'Newer wording saved from another device.');
+      const peerSaved = await store.save(migratedId, peerDocument, peer.version);
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
+      await editor.locator('.rws-status.is-conflict').waitFor();
+      assert.deepEqual(await store.get(migratedId), peerSaved);
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('button', { name: 'Compare versions', exact: true }).click();
+      await editor.getByRole('button', { name: 'Use server version', exact: true }).click();
+      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
+      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      const beforeClose = await store.get(migratedId);
+      await editor.getByRole('dialog').press('Escape');
+      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
+      assert.deepEqual(await store.get(migratedId), beforeClose);
+      assert.equal(await page.locator('.atsv').isVisible(), true);
+      assert.equal(await page.locator('.atsv').evaluate(element => element.inert), false);
+      assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), ownerDraft);
+      const otherContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+      try {
+        await otherContext.route('**/*', fixtureRoute);
+        const otherPage = await otherContext.newPage();
+        await otherPage.goto(preview.origin + '/studio/?devstub=1');
+        await otherPage.waitForFunction(() => typeof window.__rkDevStudio === 'function');
+        await otherPage.evaluate(async () => { localStorage.setItem('rk:admin:sess', JSON.stringify({ token: 'synthetic-owner', exp: Date.now() + 3600000 })); await window.__rkDevStudio(); });
+        await otherPage.locator('.adm__tab[data-tab="ai"]').click();
+        await otherPage.locator('[data-act="prep-open"][data-tool="ats"]').click();
+        await otherPage.locator('[data-act="resume-hist-open"][data-id="' + migratedId + '"]').click();
+        const restored = otherPage.frameLocator('.adm__resume-host');
+        await restored.locator('.rws-status.is-saved').waitFor();
+        await restored.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Content', exact: true }).click();
+        assert.equal(await restored.getByLabel('Summary', { exact: true }).inputValue(), peerDocument.model.summary);
+        assert.deepEqual((await store.get(migratedId)).document, peerSaved.document);
+        const controls = await restored.locator('.rws-workbar button').evaluateAll(elements => elements.filter(element => element.getClientRects().length).map(element => { const box = element.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }; }));
+        assert.ok(controls.length > 0); assert.ok(controls.every(box => box.left >= 0 && box.right <= 390));
+        for (const [index, first] of controls.entries()) for (const second of controls.slice(index + 1)) assert.ok(first.right <= second.left || second.right <= first.left || first.bottom <= second.top || second.bottom <= first.top);
+        await otherPage.screenshot({ path: join(tmpdir(), 'rk-ats-migration-restored-mobile.png') });
+      } finally { await otherContext.close(); }
+      assert.deepEqual(errors, []);
     } finally { await context.close(); await runtime.dispose(); }
   });
   test('Compact typography fields step, hold and scrub with one reversible change and fit phone widths', { timeout: 90000 }, async () => {
@@ -1904,4 +2179,50 @@ test('PDF bounds distinguish zero-height synthetic spacing from out-of-page visi
   assert.throws(() => verifyResumePdf(document, positions), /bounds/);
   positions[0].items[1].h = 0; positions[0].items[1].w = Infinity;
   assert.throws(() => verifyResumePdf(document, positions), /bounds/);
+});
+
+test('ATS migration storage verifies originals, retries without duplication and blocks late legacy edits', async () => {
+  const { Miniflare } = await import('miniflare');
+  const { createHostedResumeStore } = await import('./worker/resume-workspace.mjs');
+  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['RESUMES', 'VAULT'] });
+  try {
+    const bucket = await runtime.getR2Bucket('RESUMES'), legacy = await runtime.getR2Bucket('VAULT'), store = createHostedResumeStore(bucket, legacy);
+    const bytes = new TextEncoder().encode('Original immutable resume');
+    const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
+    const review = { id: 'original', tool: 'ats', kind: 'review', payload: { text: 'Original immutable resume', resumeDocument: { sha256, size: bytes.length, name: 'original.txt', type: 'text/plain', data: Buffer.from(bytes).toString('base64') } } };
+    const entry = { id: 'edited', tool: 'ats', kind: 'workspace', payload: { rb: fixture().model, reviewId: review.id } };
+    await legacy.put('prep/ats/original.json', JSON.stringify(review));
+    await legacy.put('prep/ats/edited.json', JSON.stringify(entry));
+    const [first, retry] = await Promise.all([store.migrate(entry, review), store.migrate(entry, review)]);
+    assert.equal(first.document.id, retry.document.id);
+    assert.equal((await store.list()).documents.length, 1);
+    assert.deepEqual(new Uint8Array((await store.sourceFile(sha256)).bytes), bytes);
+    assert.equal(first.document.ats.legacy.review.payload.resumeDocument.data, undefined);
+    const edited = editResumeField(first.document, 'summary', 'Saved in the only editor');
+    await store.save(edited.id, edited, 1);
+    await bucket.delete(['legacy-links/edited.json', 'legacy-links/original.json']);
+    assert.equal((await store.migrate(entry, review)).document.model.summary, edited.model.summary);
+    assert.equal((await (await bucket.get('legacy-links/original.json')).json()).resumeId, edited.id);
+    const changedReview = structuredClone(review); changedReview.payload.text += ' Late review update';
+    await legacy.put('prep/ats/original.json', JSON.stringify(changedReview));
+    await assert.rejects(store.migrate(entry, changedReview), error => error.code === 'legacy-conflict');
+    await legacy.put('prep/ats/original.json', JSON.stringify(review));
+    const stale = structuredClone(entry); stale.payload.rb.summary = 'Different old-tab edit';
+    await legacy.put('prep/ats/edited.json', JSON.stringify(stale));
+    await assert.rejects(store.migrate(entry, review), /changed/);
+    await assert.rejects(store.save(edited.id, edited, 2), /older ATS tab/);
+    assert.equal((await store.get(edited.id)).version, 2);
+    assert.equal((await (await legacy.get('prep/ats/edited.json')).json()).payload.rb.summary, stale.payload.rb.summary);
+    const local = structuredClone(stale); local.payload.rb.summary = 'Newest browser-only edit';
+    const recovered = await store.recoverLegacy(edited.id, 2, { entry: local, review });
+    assert.equal(recovered.document.model.summary, edited.model.summary);
+    assert.equal(recovered.document.ats.recoveredIds.length, 2);
+    const variants = await Promise.all(recovered.document.ats.recoveredIds.map(id => store.get(id)));
+    assert.deepEqual(new Set(variants.map(record => record.document.model.summary)), new Set([stale.payload.rb.summary, local.payload.rb.summary]));
+    assert.deepEqual(recovered.document.ats.legacy, first.document.ats.legacy);
+    await store.save(edited.id, recovered.document, recovered.version);
+    const count = (await store.list()).documents.length;
+    await store.recoverLegacy(edited.id, recovered.version + 1, { entry: local, review });
+    assert.equal((await store.list()).documents.length, count);
+  } finally { await runtime.dispose(); }
 });

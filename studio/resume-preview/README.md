@@ -1,13 +1,23 @@
 # Resume Studio
 
-Resume Studio is integrated through Studio's Resumes tab, with dedicated private storage and an authenticated parent bridge. The separate local preview uses a filesystem store with fictional resumes and no AI transport by default. A configured evaluation uses explicit model consent and a bounded provider transport. Automated hosted tests use synthetic authentication and Miniflare; these do not establish real account or cross-device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
+Studio has one resume workflow: Prepare > Resume ATS Check > review > Edit resume / Continue editing > Re-check ATS > checked PDF. Saved resumes remain in ATS history; there is no separate Resumes tab or legacy editable canvas. The editor uses dedicated private storage and the authenticated parent bridge. The separate local preview uses a filesystem store and its experimental evidence rubric; it is not a second production workflow. Automated hosted tests use synthetic authentication and Miniflare, not real account or device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
+
+## ATS Migration
+
+- Opening an old editable workspace copies its saved structured fields, order, target and compatible design settings without AI rewriting. Review-only records use retained source text and require import/layout review.
+- Deterministic identities make retries repeat-safe. Original bytes are hash/size checked; legacy snapshots and historical scores are retained. Missing originals are identified explicitly, never replaced with today's website PDF.
+- After cutover, edits save only to the new record. Old-editor writes/deletes are rejected. Changed local/cloud legacy copies are recovered as separate variants before editing continues; original migration snapshots remain immutable.
+- PDF preview remains available, but migrated layouts require explicit acceptance before download. Unsupported legacy fonts/template decoration and pagination need comparison; identical styling is not promised.
+- Hosted Re-check ATS uses the current verified PDF and current target through the same assessment function as ATS intake and original-source rechecks. It reuses Studio AI configuration with explicit request consent. Historical ATS and experimental rubric scores are labelled and not presented as comparable measurements.
+- A finding opens an unambiguously matched field. Revision requests reuse citation/number checks and can return a selective proposal or missing-fact question. Only explicit Apply changes authored text and creates a before-change checkpoint.
+- Deploy the Worker migration routes and legacy write guards before the site bundle. No migration runs simply from deployment; it happens when the owner opens a saved record. Rollback can read retained snapshots, but must not re-enable legacy writes over migrated records.
 
 ## Start And Test
 
 - Start: `node tools/resume-preview.mjs`
 - Open: http://127.0.0.1:5530/studio/resume-preview/
 - Tests: `node --test resume-workspace.test.mjs worker-stability.test.mjs`; existing ATS checks: `node --test ats-core.test.mjs`.
-- Release-candidate checkpoint: 80 Resume/Worker tests passed, including 23 Resume browser workflows; 389 site-wide root checks passed. Actual model quality and account/device acceptance are separate from these fixtures.
+- Release evidence is recorded in the private checklist. Actual model quality and account/device acceptance are separate from synthetic fixtures.
 - PDF/browser tests use installed Edge by default. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to another installed Chromium executable when needed.
 - The review store is `%TEMP%/rk-resume-preview-v1`. Keep it to retain sample edits. Tests use a disposable separate store on port 5561.
 
@@ -16,7 +26,7 @@ Resume Studio is integrated through Studio's Resumes tab, with dedicated private
 | Workflow | Expected Outcome |
 | --- | --- |
 | Open a saved resume | Editable current document, not the original assessment. Company, role, version and local save status remain distinct. |
-| Back and toolbar | Back saves pending edits before returning to the resume list; failed saves keep the editor open. Right-hand tools are circular, Preview PDF is a pill, Export PDF is a gold icon-only button with a tooltip. |
+| Back and toolbar | Hosted Back saves pending edits before returning to ATS Check; failed saves keep the editor open. Right-hand tools are circular, Preview PDF is a pill, Export PDF is a gold icon-only button with a tooltip. |
 | Properties panel width | Drag the right panel's left edge, or focus the separator and use Left/Right arrows. Double-click or Home resets; End widens to the available maximum. Escape cancels a drag. Width is remembered locally, bounded to keep the canvas usable, and does not change resume content/history. Phone sheets keep their existing layout. |
 | Click a name or achievement on the page | Matching field opens in the content inspector. Typed spaces, newlines and comma-separated skills survive save and reload. |
 | Sections outline | Navigate, add, reorder and remove sections. Roles, education, skill groups, achievements and links can be edited or removed. Undo restores changes. |
@@ -41,18 +51,18 @@ Resume Studio is integrated through Studio's Resumes tab, with dedicated private
 | Canvas theme | Sun/moon beside zoom changes only the canvas and page shadow. Paper/PDF remains white, document history unchanged; preference survives reload. Transparent iframe gutters show the canvas without an extra white surround in either mode. |
 | PDF preview | PDF.js renders the actual export or original bytes with selectable text, links, page navigation, zoom, fit and retry. Both side panels and mobile panel launchers are hidden for exports. Canvas or Edit resume returns to editing. No browser PDF plugin is required. |
 | Accent and notifications | Actual Slide palette, custom colors, hex, spectrum and RGB picker. Escape restores focus; three-digit channels fit at 320px. Desktop screen picking is abortable; unsupported browsers get a dismissible message. Existing `rk-flash` styling replaces the full-width strip; message areas do not block content clicks. |
-| AI review | Review with AI requires an available transport, explicit budget/model consent and approval of the inventoried requirements. Findings show exact job quotations and authored role context, ordered by priority and criterion weight. This remains separate from local diagnostics. |
+| ATS review | Hosted Re-check ATS requires explicit consent and the existing Studio AI configuration. It checks the current saved PDF and target, retaining earlier results. The separate local evaluation's evidence rubric keeps its own model/budget and requirement-review consent. |
 | Finding decisions | Set aside a finding with a reason. Already evidenced requires a current passage; its exact text is retained with the author decision. Undo, Redo and Reopen work without changing the original AI review or score. |
 | Revision outcomes | An explicit revision request can return a source-backed proposal, a focused question, or a cited no-revision recommendation. No-change results require evidence already in the resume; they do not automatically dismiss findings or rescore them. |
 | Old PDF | Edit after exporting. The earlier artifact is labelled Historical PDF; exporting again verifies the current version. |
 | Failed save | In an isolated test browser, block a save. Local outbox retains it; reload/retry recovers it. No live-site storage keys are used. |
 | Two-tab conflict | Change the same resume in two tabs. Compare both versions; keep local edits as a separate copy or explicitly choose the server version. |
-| Hosted entry and expired PDF | Open through the actual Resumes tab. Standalone or cross-origin frames show a signed-in Studio message without API access. Expired PDF verification removes only that pending pair; Retry renders again without changing the resume. |
+| Hosted entry and expired PDF | Open through ATS Check, using a saved review, workspace or Saved resumes. Standalone or cross-origin frames show a signed-in Studio message without API access. Expired PDF verification removes only that pending pair; Retry renders again without changing the resume. |
 | Phone | At 390px and 320px, open library, sections, inspector and dialogs; controls stay in bounds and the canvas remains accessible after closing panels. |
 
 ## Evidence And Limits
 
-### API Review Contract
+### Local Evaluation API Contract
 
 The provider-neutral `reviewResumeWithAI` adapter in `src/js/resume-review.mjs` accepts the existing provider's completion transport, provider/model identity, cancellation signal and a current-document getter. It does not read keys, call a provider itself, or save/apply content. There are at most two calls: inventory the JD without candidate data, then assess against that inventory. Reuse the returned manifest for subsequent reviews of the same target; do not quietly regenerate easier criteria after an edit. Require user review of the inventory before relying on it. The transport must honor `maxTokens`, cancellation, provider context limits and normal API error handling. There are no automatic repair/retry loops.
 
@@ -72,7 +82,7 @@ The provider-neutral `reviewResumeWithAI` adapter in `src/js/resume-review.mjs` 
 
 ### Existing Plateau Audit
 
-The live formula has no 76-point cap. The old prompt anchors solid/first-draft resumes around 60-75, asks for layout judgments from extracted text and requires a fixed number of fixes. Its returned all-purpose score is blended again with keyword, structure, semantic and parse signals. Quick projections hold the AI component fixed; editor rechecks also assume parse=100. Inputs are silently sliced to 12,000 resume and 8,000 JD characters. These are concrete design weaknesses, not a confirmed explanation of a particular owner's 72-76 result: no saved component trace or actual owner model response was available. Production scoring remains unchanged under the local-review gate.
+The formula has no 76-point cap. The prompt anchors solid/first-draft resumes around 60-75, asks for layout judgments from extracted text and requires a fixed number of fixes. Its returned score is blended with keyword, structure, semantic and parse signals. Quick projections hold the AI component fixed. The retired canvas assumed parse=100; the unified editor now reads the current PDF instead. Existing prompt slicing (12,000 resume / 8,000 JD characters) and scoring calibration are not redesigned by this migration. These are concrete limitations, not a confirmed diagnosis of a particular owner's score.
 
 ### Guidance Sources
 

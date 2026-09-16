@@ -117,6 +117,31 @@ async function signedWorkerFixture() {
   return { env, send, assertion, values };
 }
 
+test('ATS cutover rejects old-editor writes and deletes while retaining unrelated Prepare tools', async () => {
+  const fixture = await signedWorkerFixture();
+  const login = await (await fixture.send('finish', await fixture.assertion())).json();
+  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['RESUMES', 'VAULT'] });
+  try {
+    fixture.env.RESUMES = await runtime.getR2Bucket('RESUMES'); fixture.env.VAULT = await runtime.getR2Bucket('VAULT');
+    const request = (path, body, authorized = true) => worker.fetch(new Request('https://synthetic.test/admin/' + path, { method: 'POST', headers: { Origin: 'https://synthetic.test', Authorization: authorized ? 'Bearer ' + login.token : '', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), fixture.env);
+    const entry = { id: 'legacy-route', tool: 'ats', kind: 'workspace', at: 1, payload: { rb: createResume({ model: { summary: 'Retained legacy text', contact: {}, sections: [] } }).model } };
+    assert.equal((await request('prep/put', entry)).status, 200);
+    assert.equal((await request('resume/migrate', { entry }, false)).status, 401);
+    const migrated = await request('resume/migrate', { entry }); assert.equal(migrated.status, 200);
+    const record = await migrated.json();
+    assert.equal((await request('prep/put', entry)).status, 200);
+    const changed = structuredClone(entry); changed.payload.rb.summary = 'Late old-editor change';
+    const rejected = await request('prep/put', changed);
+    assert.equal(rejected.status, 409); assert.equal((await rejected.json()).resumeId, record.document.id);
+    assert.equal((await request('prep/del', { tool: 'ats', id: entry.id })).status, 409);
+    assert.deepEqual(await (await fixture.env.VAULT.get('prep/ats/' + entry.id + '.json')).json(), entry);
+    assert.equal((await request('prep/put', { id: 'letter-route', tool: 'cl', kind: 'letter', at: 2, payload: { letter: 'Unrelated Prepare content' } })).status, 200);
+    assert.equal((await request('prep/del', { tool: 'cl', id: 'letter-route' })).status, 200);
+    assert.equal((await request('resume/resumes/' + record.document.id + '/recover-legacy', {}, false)).status, 401);
+    assert.equal((await createHostedResumeStore(fixture.env.RESUMES).get(record.document.id)).version, 1);
+  } finally { await runtime.dispose(); }
+});
+
 test("Hosted resume routes require an owner session and allowed origin without touching the vault", async () => {
   const fixture = await signedWorkerFixture();
   const login = await (await fixture.send('finish', await fixture.assertion())).json();

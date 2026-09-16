@@ -52,6 +52,8 @@ import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
 import { loadWorkflow } from "./workflow-loader.mjs";
 import { createRefreshGate } from "./studio-refresh.mjs";
 import { boundedResumeCompletion } from "./resume-review.mjs";
+import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
+import { resumeSignature } from "./resume-workspace.mjs";
 
 (function () {
   "use strict";
@@ -277,7 +279,6 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     ["landing", "Landing"],
     ["type", "Appearance"],
     ["work", "Work"],
-    ["resume", "Resumes"],
     ["aboutpage", "About"],
     ["contact", "Contact"],
     ["special", "Special Views"],
@@ -1597,7 +1598,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       (canCheck ? "" : '<div class="af__hint">' + (srcFile ? "Browse to a text-based PDF / DOCX r\u00e9sum\u00e9 to run the check." : "Add your r\u00e9sum\u00e9 to the site first, or switch to \u201cCheck a different file\u201d.") + '</div>') +
       '<div class="ats__out" data-ats-out>' + atsOutRestore() + '</div>' +
       '</div>' +
-      '<aside class="prep-hist"><div class="prep-hist__h">Resume from history</div><div class="prep-hist__list" data-ats-hist>' + atsHistHtml() + '</div></aside>' +
+      '<aside class="prep-hist"><div class="prep-hist__h">Resume from history</div><button type="button" class="btn btn--ghost" data-act="resume-studio">Saved resumes</button><div class="prep-hist__list" data-ats-hist>' + atsHistHtml() + '</div></aside>' +
       '</div></div>';
   }
   function atsOutRestore() { return ""; } // the last result now lives only in the history rail, not inline
@@ -1612,7 +1613,11 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       '</div>';
   }
   function atsHistHtml() {
-    var list = prepList("ats");
+    const rows = atsResumeSession === adminSession() ? atsResumeRows : [];
+    var linked = new Set(rows.filter(row => !row.document.archived).map(row => row.document.ats?.workspaceId).filter(Boolean));
+    var list = prepList("ats").filter(entry => !linked.has(entry.id));
+    const resumes = rows.filter(row => !row.document.archived).map(row => '<div class="prep-h prep-h--ws" role="button" tabindex="0" data-act="resume-hist-open" data-id="' + escAttr(row.document.id) + '"><span class="prep-h__x"><b>' + escHtml(row.document.name) + '</b><i>' + escHtml(row.document.target.company || 'Resume workspace') + '</i><em>' + escHtml(prepAgo(row.document.updatedAt)) + '</em></span></div>').join('');
+    if (resumes) return resumes + list.map(atsHistCard).join("");
     if (!list.length) return '<div class="prep-hist__empty">Your r\u00e9sum\u00e9 reviews save here automatically \u2014 close the studio and pick up right where you left off.</div>';
     return list.map(atsHistCard).join("");
   }
@@ -2553,6 +2558,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       modal.querySelector('[data-prep-body]').innerHTML = render();
     });
     modal.__prepRender = render;
+    if (tool === 'ats') refreshAtsResumes();
     prepCloudPull(tool, function () { var el = (root || document).querySelector(".prep-dialog [data-" + tool + "-hist]"); if (el) el.innerHTML = (tool === "ats") ? atsHistHtml() : clHistHtml(); });
     function onEsc(e) { if (e.key === "Escape" && !document.querySelector('.atsv')) close(); }
     function close() { document.removeEventListener("keydown", onEsc); lifetime.dispose(); modal.remove(); }
@@ -2721,7 +2727,8 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       var url = (data.contact && data.contact.resume) || "";
       if (!file && !url) throw new Error("Add your résumé above first — upload a PDF or paste its URL.");
       var f = file || await resumeToFile(url);
-      var text = ((await fbExtractFile(f)) || "").replace(/\s+/g, " ").trim();
+      var importText = (await fbExtractFile(f)) || "";
+      var text = importText.replace(/\s+/g, " ").trim();
       signal?.throwIfAborted();
       if (text.length < 40) throw new Error("I couldn\u2019t read text from that r\u00e9sum\u00e9. If it\u2019s an image-only or scanned PDF, that\u2019s itself a major ATS red flag \u2014 export a text-based PDF from your design tool or Word.");
       const resumeDocument = await retainResumeSource(f);
@@ -2738,33 +2745,12 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
           try { jd = await clFetchJd(atsState.url); if (jdEl) jdEl.value = jd; atsState.jd = jd; } catch (e2) {}
         }
       }
-      var _kw = jd ? atsKeywordMatch(text, jd) : null;
-      var _sem = jd ? atsSemanticFit(text, jd) : null, _semMode = "lexical";
-      if (jd) {
-        var _neu = await atsSemNeural(text, jd);
-        if (_neu.ok) { _sem = _neu.score; _semMode = "neural"; }
-        else if (_neu.failed) {   // neural was turned on but unreachable — tell the user + hand them the choice
-          if (!atsNeuralFallbackOk) {
-            var _go = await confirmModal({ title: "Neural model unavailable", sub: "Couldn\u2019t reach the neural semantic model \u2014 " + _neu.reason + ". Continue with the offline lexical estimate, or cancel to fix your AI proxy first?", cta: "Continue with lexical", okClass: "btn--primary", cancel: "Cancel check" });
-            if (!_go) { if (out) out.innerHTML = '<div class="ats__err">Check cancelled \u2014 the neural model wasn\u2019t reachable (' + escHtml(_neu.reason) + '). Fix the proxy in AI settings, or run the check again to continue with the offline estimate.</div>'; status("Check cancelled."); return; }
-            atsNeuralFallbackOk = true;   // remembered for this session so we don’t ask on every run
-          } else { status("Neural model still unavailable \u2014 using the offline lexical estimate.", false); }
-          _semMode = "lexical-fallback";
-        }
-      }
-      var _pages = await atsPdfPages(f);
-      var _layout = _pages ? atsParseLayout(_pages) : null;
-      var _lflags = _layout ? _layout.flags.map(function (x) { return { label: x.label, note: x.note, status: "fail" }; }) : [];
-      signal?.throwIfAborted();
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(atsLevel), atsUser(text, atsLevel, jd, company, atsFactsBlock(_kw, _lflags, _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0, signal }));
-      signal?.throwIfAborted();
-      if (!res) throw new Error("The check came back unreadable \u2014 please try again.");
-      var _blend = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), parse: atsParseScore(_layout), content: +res.score || 0 });
-      if (_blend.score != null) { res.score = _blend.score; res.band = _blend.band; res._breakdown = _blend.breakdown; }
+      const checked = await atsEvaluate(text, f, atsLevel, company, jd, signal);
+      var { res, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout } = checked;
       atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout, source:prepSourceSnapshot(text,jd,[],atsState.preparationBrief), resumeDocument, resumeDocumentOrigin:"original" };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
-      var _snap = { state:clone(atsState), level: atsLevel, res: res, company: company, text: text, source:atsLast.source, resumeDocument, resumeDocumentOrigin:"original" };
+      var _snap = { state:clone(atsState), level: atsLevel, res: res, company: company, text: text, importText, assessmentMethod: checked.method, source:atsLast.source, resumeDocument, resumeDocumentOrigin:"original" };
       prepDraftSet("ats", _snap);
       atsvSessId = prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(atsLevel) + " fit") }, payload: _snap }).id;
       prepDraftSet("ats", {..._snap, reviewId:atsvSessId});
@@ -2779,6 +2765,23 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     } finally {
       btnIdle(btn, was);
     }
+  }
+  async function atsEvaluate(text, file, level, company, jd, signal) {
+    return assessAtsResume({ text, level, company, jd, signal }, {
+      readPages: () => file ? atsPdfPages(file) : Promise.resolve(null),
+      semantic: async () => {
+        const neural = await atsSemNeural(text, jd);
+        signal?.throwIfAborted();
+        if (neural.failed && !atsNeuralFallbackOk) {
+          if (resumeFrame) throw new Error('The configured neural model is unavailable. Return to ATS Check to approve lexical fallback or fix the Studio AI connection.');
+          const accepted = await confirmModal({ title: 'Neural model unavailable', sub: neural.reason + '. Continue with the offline lexical estimate?', cta: 'Continue with lexical', okClass: 'btn--primary', cancel: 'Cancel check' });
+          if (!accepted) throw new Error('Check cancelled. No lexical fallback was used.');
+          atsNeuralFallbackOk = true;
+        }
+        return neural;
+      },
+      complete: async input => csgenParse(await aiText(aiCfg('txt'), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(input.kw, input.flags, input.sem)), { task: 'analysis', json: true, maxTokens: 6000, temperature: 0, signal }))
+    });
   }
   async function atsFetchToPanel(panel) {
     if (!panel) return;
@@ -2807,17 +2810,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     var e = prepGet("ats", id); if (!e) return; var p = e.payload || {}, st = p.state || {};
     const originalFile = atsvSessId === id ? atsLast?.file : null;
     if (e.kind === "workspace" && p.rb) {
-      var d = p.design || {};
-      atsRbTplId = d.tpl || atsRbTplId; atsRbSizeId = d.size || atsRbSizeId; atsRbAccent = (d.accent != null ? d.accent : atsRbAccent); atsRbFont = d.font || atsRbFont; atsRbDensity = d.density || atsRbDensity; atsRbLayout = d.layout || atsRbLayout; atsRbCanvas = d.canvas || atsRbCanvas; atsRbKeepWhole = (d.keepWhole != null ? d.keepWhole : atsRbKeepWhole); atsRbMargin = d.margin || atsRbMargin;
-      atsLevel = p.level || atsLevel;
-      // recover the journey's JD: prefer the workspace payload, else the linked review it was built from (legacy workspaces)
-      var _jd = p.jd;
-      if (_jd == null && p.reviewId) { var _rv = prepGet("ats", p.reviewId); _jd = _rv && _rv.payload && _rv.payload.state && _rv.payload.state.jd; }
-      atsLast = { file: null, res: p.res || null, level: atsLevel, company: p.company || "", text: p.text || "", jd: _jd || "" };
-      atsRbSessId = id;
-      atsRbReviewId = p.reviewId || null;
-      atsvCloseActive();
-      try { var built = await atsRbFit(p.rb); atsRbShow(built, p.rb); } catch (er) { status("Couldn\u2019t reopen the workspace: " + ((er && er.message) || er)); }
+      openResumeStudio({ entryId: id });
       return;
     }
     document.querySelector('.prep-dialog .ats')?.closest('.prep-dialog')?.__prepLifetime.reset();
@@ -3185,31 +3178,9 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
   }
   var atsRbBusyCtx = null;
   async function atsRebuildOpen(ctx) {
-    if (!atsLast || !atsLast.res) { status("Run an ATS check first."); return; }
-    if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsRebuildOpen(ctx); }); return; }
-    atsRbBusyCtx = ctx || atsRbBusyCtx;
-    var btn = atsRbBusyCtx && atsRbBusyCtx.modal ? atsRbBusyCtx.modal.querySelector("[data-atsv-rebuild]") : null;
-    var was = btn ? btnBusy(btn, "Rebuilding\u2026") : null;
-    status("Rebuilding your résumé with the fixes\u2026");
-    try {
-      var text = atsLast.text || "";
-      if (!text) text = ((await fbExtractFile(atsLast.file)) || "").replace(/\s+/g, " ").trim();
-      if (text.length < 40) throw new Error("Couldn\u2019t read enough text from the résumé to rebuild it.");
-      var level = atsLast.level || atsLevel, company = (atsLast.company || atsState.company || ""), jd = (atsLast.jd != null ? atsLast.jd : atsState.jd) || "";
-      var raw = await aiText(aiCfg("txt"), atsRbSystem(level), atsRbUser(text, atsLast.res, jd, company, level), { json: true, maxTokens: 8000, temperature: 0.4 });
-      var rb = atsRbNorm(csgenParse(raw));
-      if (!rb || !rb.sections.length) throw new Error("The rebuild came back unreadable \u2014 please try again.");
-      var built = await atsRbFit(rb);
-      atsRbSessId = null;
-      atsRbReviewId = atsvSessId; // link the new workspace back to the review it was built from
-      atsRbShow(built, rb);
-      atsvCloseActive(); // one screen at a time — the workspace replaces the review overlay
-      status("Résumé rebuilt \u2014 fixes applied.", true);
-    } catch (e) {
-      status("Rebuild failed: " + ((e && e.message) || e));
-    } finally {
-      if (btn) btnIdle(btn, was);
-    }
+    const id = ctx?.sessionId || atsvSessId;
+    if (!id) { status("Open a saved ATS review first."); return; }
+    openResumeStudio({ entryId: id });
   }
   /* ---------- editable résumé workspace: edit the structured model in-place, re-check ATS
      live, then generate the vector PDF from the edited model. One model, three consumers
@@ -4069,20 +4040,16 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
       var level = ctx.level || atsLevel, company = ctx.review.company || "", jd = ctx.review.jd || "";
-      var _kw = jd ? atsKeywordMatch(text, jd) : null, _sem = jd ? atsSemanticFit(text, jd) : null;
-      signal.throwIfAborted();
-      var res = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(_kw, [], _sem)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0, signal }));
-      signal.throwIfAborted();
-      if (!res) throw new Error("The check came back unreadable \u2014 try again.");
-      var _blv = atsBlendScore({ keyword: _kw ? _kw.rate : null, semantic: _sem, structure: atsStructFromChecks(res), content: +res.score || 0 });
-      if (_blv.score != null) { res.score = _blv.score; res.band = _blv.band; res._breakdown = _blv.breakdown; }
+      const checked = await atsEvaluate(text, ctx.file, level, company, jd, signal);
+      var { res, kw: _kw, sem: _sem } = checked;
       ctx.res = res; Object.assign(ctx.review,{res,text,kw:_kw,sem:_sem}); atsLast = ctx.review;
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
       var _bd = res.band || (_sc >= 80 ? "Strong" : _sc >= 65 ? "Good" : _sc >= 45 ? "Needs work" : "At risk");
       const previous = prepGet('ats',ctx.sessionId)?.payload || {};
       var _snap = { ...previous, state: { ...previous.state, jd, company }, level, res, company, text, source:ctx.review.source || prepSourceSnapshot(text,jd,[],previous.state?.preparationBrief), resumeDocument:ctx.review.resumeDocument, resumeDocumentOrigin:ctx.review.resumeDocumentOrigin, reviewId:ctx.sessionId };
       prepDraftSet("ats", _snap);
-      ctx.sessionId = atsvSessId = prepPut("ats", { id: ctx.sessionId, tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(level) + " fit") }, payload: _snap }).id;
+      ctx.sessionId = atsvSessId = prepPut("ats", { tool: "ats", kind: "review", title: "R\u00e9sum\u00e9 reviewed", meta: { score: _sc, band: _bd, fit: (company ? company + " fit" : atsLevelName(level) + " fit") }, payload: { ..._snap, assessmentMethod: checked.method } }).id;
+      prepDraftSet('ats', { ..._snap, reviewId: ctx.sessionId });
       var _hl = (root || document).querySelector("[data-ats-hist]"); if (_hl) _hl.innerHTML = atsHistHtml();
       await atsvBuild(ctx, true);
       status("Regenerated \u2014 fresh fixes.", true);
@@ -4241,8 +4208,9 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     html += prepStorageHtml("ats",ctx.sessionId || "");
     var _ws = atsvSessId ? prepList("ats").filter(function (e2) { return e2.kind === "workspace" && e2.payload && e2.payload.reviewId === atsvSessId; })[0] : null;
     ctx.wsId = _ws ? _ws.id : null;
-    if (_ws) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing your rebuilt r\u00e9sum\u00e9 \u2192</button><button class="atsv__again" type="button" data-atsv-rebuild>Rebuild again from scratch</button></div>';
-    else html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Rebuild my r\u00e9sum\u00e9 with these fixes \u2192</button><span class="atsv__rebuild-note">Same styling \u00b7 vector PDF \u00b7 \u2264 2 pages</span></div>';
+    ctx.resumeId = (atsResumeSession === adminSession() ? atsResumeRows : []).find(row => !row.document.archived && row.document.ats?.reviewId === ctx.sessionId)?.document.id || null;
+    if (_ws || ctx.resumeId) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing resume</button></div>';
+    else html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Edit resume</button></div>';
     html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
     html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
     html += '</div>';
@@ -4331,7 +4299,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
     rail.addEventListener("click", function (e) {
       if (e.target.closest("[data-prep-retry]")) { prepRetryStorage(); return; }
-      if (e.target.closest("[data-atsv-continue]")) { if (ctx.wsId) atsHistRestore(ctx.wsId); return; }
+      if (e.target.closest("[data-atsv-continue]")) { if (ctx.wsId) atsHistRestore(ctx.wsId); else if (ctx.resumeId) openResumeStudio({ resumeId: ctx.resumeId }); return; }
       if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       var cp = e.target.closest("[data-atsv-copy]");
       if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
@@ -9658,7 +9626,6 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
   }
 
   const sections = {
-    resume() { return secHead("Resumes", "") + '<button type="button" class="btn btn--primary" data-act="resume-studio">' + IC.edit + ' Open Resume Studio</button>'; },
     insights() { return insightsSection(); },
     type() { return secHead("Appearance", "Your site\u2019s typography and the hero\u2019s living motion \u2014 pick the font system that drives every headline, label and paragraph, then tune how the statement reacts to the cursor over its ambient backdrop. Everything previews live and publishes with the site.") + group(typographySection()) + group(heroMotionBlock()) + group(caseNavBlock()); },
     landing() {
@@ -11247,7 +11214,6 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     if (hlModal) refreshHlPanel();
     if (aboutSecModal) refreshAboutSecModal();
     if (activeTab === "type") scrollActiveFontIntoView();
-    if (activeTab === "resume") openResumeStudio();
   }
   // Keep the active font card visible inside the height-capped, scrollable card grid
   // (only scrolls the inner grid, never the editor panel, and leaves already-visible cards put).
@@ -12226,6 +12192,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
       return;
     }
     if (act === "resume-studio") { openResumeStudio(); return; }
+    if (act === "resume-hist-open") { openResumeStudio({ resumeId: b.dataset.id }); return; }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
     if (act === "preview-mode") {
@@ -19634,10 +19601,25 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
   }
 
 
-  let resumeFrame = null, resumeTrigger = null;
-  function openResumeStudio() {
+  let resumeFrame = null, resumeTrigger = null, resumeContext = null, resumeSession = null;
+  let atsResumeRows = [], atsResumeSession = null;
+  async function refreshAtsResumes() {
+    const session = adminSession();
+    if (atsResumeSession !== session) { atsResumeRows = []; atsResumeSession = session; }
+    if (!session) return;
+    try {
+      const response = await fetch(ADMIN_WORKER + '/admin/resume/library', { headers: { Authorization: 'Bearer ' + session }, signal: AbortSignal.timeout(20000) });
+      if (!response.ok) throw new Error('Saved resumes could not be loaded. Reopen ATS Check to retry.');
+      const result = await response.json();
+      if (adminSession() !== session) return;
+      atsResumeRows = result.documents;
+      const list = root?.querySelector('[data-ats-hist]'); if (list) list.innerHTML = atsHistHtml();
+    } catch (error) { if (adminSession() === session) status(error.message); }
+  }
+  function openResumeStudio(context = {}) {
     if (!root?.classList.contains("is-open")) return;
     if (resumeFrame) { resumeFrame.focus(); return; }
+    resumeContext = context; resumeSession = adminSession();
     resumeTrigger = document.activeElement;
     resumeFrame = document.createElement("iframe");
     resumeFrame.title = "Resume Studio";
@@ -19645,16 +19627,99 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
     resumeFrame.src = "/studio/resume/?hosted=1";
     document.body.appendChild(resumeFrame);
     root.inert = true;
+    if (atsvActive?.modal) atsvActive.modal.inert = true;
+    document.querySelectorAll('.atsv').forEach(modal => { modal.inert = true; });
     resumeFrame.focus();
+  }
+  async function initializeResumeStudio(caller, resumeId = null) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || adminSession() !== resumeSession) throw new Error('This ATS editor session is closed.');
+    if (resumeId) resumeContext = { resumeId };
+    const context = resumeContext;
+    let retained = null;
+    if (context.resumeId) {
+      const response = await resumeStudioRequest('resumes/' + context.resumeId, {}, caller);
+      if (!response.ok) throw new Error('The selected resume is unavailable. No other document was opened.');
+      const record = await response.json();
+      if (!record.document.ats?.legacy || record.document.ats.recoveredFrom) return { resumeId: context.resumeId };
+      retained = record.document.ats.legacy;
+      context.entryId = retained.entry.id;
+    }
+    if (!context.entryId) return {};
+    const localEntry = prepGet('ats', context.entryId);
+    const entry = clone(localEntry || retained?.entry);
+    if (!entry) throw new Error('This ATS history record is unavailable. Nothing was changed.');
+    const before = await atsMigrationIdentity(entry);
+    const localReview = entry.kind === 'workspace' && entry.payload?.reviewId ? prepGet('ats', entry.payload.reviewId) : null;
+    const review = clone(localReview || retained?.review || null);
+    const reviewBefore = localReview ? (await atsMigrationIdentity(localReview)).fingerprint : null;
+    const original = entry.kind === 'review' ? entry : review;
+    if (original?.payload?.resumeDocument) {
+      try { original.payload.resumeDocument = await resumeSourceForSync(original.payload.resumeDocument); }
+      catch (error) { if (!error.message.includes('not available on this device')) throw error; }
+    }
+    const response = await resumeStudioRequest('migrate', { method: 'POST', body: JSON.stringify({ entry, review }) }, caller);
+    const result = await response.json();
+    if (!response.ok && result.code === 'legacy-conflict' && result.resumeId) { context.recovery = { entry, review }; return { resumeId: result.resumeId, legacyConflict: true }; }
+    if (!response.ok) throw new Error(result.error || 'Migration failed. Existing records are retained.');
+    if (localEntry && (await atsMigrationIdentity(prepGet('ats', context.entryId))).fingerprint !== before.fingerprint || localReview && (await atsMigrationIdentity(prepGet('ats', localReview.id))).fingerprint !== reviewBefore) throw new Error('This ATS record changed while migrating. Reopen it to compare the newer copy.');
+    if (context !== resumeContext) throw new Error('This editor session changed. Reopen ATS history.');
+    return { resumeId: result.document.id };
+  }
+  async function recoverResumeLegacy(id, version, caller) {
+    const context = resumeContext;
+    const recovery = context?.recovery || {};
+    const response = await resumeStudioRequest('resumes/' + id + '/recover-legacy', { method: 'POST', headers: { 'If-Match': String(version) }, body: JSON.stringify(recovery) }, caller);
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Recovery failed. Both copies remain retained.');
+    if (context !== resumeContext) throw new Error('The ATS editor session changed. Reopen history.');
+    for (const snapshot of [recovery.entry, recovery.review].filter(Boolean)) {
+      const current = prepGet('ats', snapshot.id);
+      if (current && (await atsMigrationIdentity(current)).fingerprint === (await atsMigrationIdentity(snapshot)).fingerprint) { delete prepOutbox['ats/' + current.id]; prepCloudErrors.delete('ats/' + current.id); prepWrite(PREP_SYNC_KEY, prepOutbox); }
+    }
+    context.recovery = null;
+    return result;
+  }
+  function resumeStudioConfiguration(caller) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || adminSession() !== resumeSession) throw new Error('This ATS editor session is closed.');
+    const cfg = aiCfg('txt');
+    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection' };
+  }
+  async function resumeStudioAssess(document, exportId, caller, signal) {
+    const config = resumeStudioConfiguration(caller);
+    if (!config.available) throw new Error('Configure AI in Studio before running an ATS check.');
+    const response = await resumeStudioRequest('resumes/' + document.id, { signal }, caller);
+    if (!response.ok) throw new Error('Save the resume before re-checking.');
+    const record = await response.json(), signature = resumeSignature(document);
+    const artifact = record.exports.find(entry => entry.id === exportId && entry.signature === signature);
+    if (!artifact || resumeSignature(record.document) !== signature) throw new Error('The resume or PDF changed. Re-check the current version.');
+    const pdf = await resumeStudioRequest('resumes/' + document.id + '/exports/' + exportId, { signal }, caller);
+    if (!pdf.ok) throw new Error('The verified PDF is unavailable. Export again.');
+    const file = new File([await pdf.blob()], artifact.name, { type: 'application/pdf' });
+    const text = ((await fbExtractFile(file)) || '').replace(/\s+/g, ' ').trim();
+    resumeStudioConfiguration(caller); signal?.throwIfAborted();
+    const result = await atsEvaluate(text, file, document.target.level, document.target.company, document.target.jd, signal);
+    resumeStudioConfiguration(caller); signal?.throwIfAborted();
+    return { ...result, provider: config.provider, model: config.model, exportId, signature };
+  }
+  async function resumeStudioComplete(input, caller, signal) {
+    const config = resumeStudioConfiguration(caller);
+    if (!config.available || input.provider !== config.provider || input.model !== config.model) throw new Error('The Studio AI configuration changed. Reopen the revision request.');
+    if (input.stage !== 'revision' || typeof input.system !== 'string' || typeof input.user !== 'string' || input.user.length > 60000 || input.system.length > 20000) throw new Error('Invalid ATS revision request.');
+    const text = await aiText(aiCfg('txt'), input.system, input.user, { task: 'analysis', json: true, maxTokens: 4000, temperature: 0, signal });
+    resumeStudioConfiguration(caller); signal?.throwIfAborted();
+    return { text };
   }
   function closeResumeStudio(caller) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow) throw new Error("This Resume Studio session is closed.");
     resumeFrame.remove(); resumeFrame = null; root.inert = false;
+    resumeContext = null; resumeSession = null;
+    document.querySelectorAll('.atsv').forEach(modal => { modal.inert = false; });
     if (resumeTrigger?.isConnected) resumeTrigger.focus();
+    refreshAtsResumes();
   }
   async function resumeStudioRequest(path, options = {}, caller) {
-    if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession()) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
-    if (!/^(library|sources(?:\/[a-f0-9]{64})?|resumes(?:\/[a-zA-Z0-9_-]{1,80}(?:\/(?:restore|export|finalize|exports\/[a-zA-Z0-9_-]{1,80}))?)?)$/.test(path) || !["GET", "POST", "PUT"].includes(options.method || "GET")) throw new Error("Invalid Resume Studio request.");
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession() || adminSession() !== resumeSession) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
+    if (!/^(library|migrate|sources(?:\/[a-f0-9]{64})?|resumes(?:\/[a-zA-Z0-9_-]{1,80}(?:\/(?:restore|recover-legacy|export|finalize|exports\/[a-zA-Z0-9_-]{1,80}))?)?)$/.test(path) || !["GET", "POST", "PUT"].includes(options.method || "GET")) throw new Error("Invalid Resume Studio request.");
     const headers = { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" };
     for (const name of ["If-Match", "X-Resume-Pages"]) if (options.headers?.[name]) headers[name] = options.headers[name];
     const timeout = AbortSignal.timeout(path.endsWith("/export") ? 90000 : 30000);
@@ -19682,7 +19747,7 @@ import { boundedResumeCompletion } from "./resume-review.mjs";
   window.__RKStudio.toggleSections = id => toggleStudyContentAccess(data.work.findIndex(work => work.id === id));
   window.__RKStudio.unlockSections = id => decryptStudyForEdit(data.work.findIndex(work => work.id === id));
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
-  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, request: resumeStudioRequest };
+  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, initialize: initializeResumeStudio, request: resumeStudioRequest, recoverLegacy: recoverResumeLegacy, configuration: resumeStudioConfiguration, assess: resumeStudioAssess, complete: resumeStudioComplete };
   async function resumeAiConfiguration() {
     const configured = aiCfg("txt");
     if (configured.key) return configured;
