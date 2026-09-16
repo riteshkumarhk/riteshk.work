@@ -51,6 +51,7 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
 import { loadWorkflow } from "./workflow-loader.mjs";
 import { createRefreshGate } from "./studio-refresh.mjs";
+import { boundedResumeCompletion } from "./resume-review.mjs";
 
 (function () {
   "use strict";
@@ -276,6 +277,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
     ["landing", "Landing"],
     ["type", "Appearance"],
     ["work", "Work"],
+    ["resume", "Resumes"],
     ["aboutpage", "About"],
     ["contact", "Contact"],
     ["special", "Special Views"],
@@ -9656,6 +9658,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
   }
 
   const sections = {
+    resume() { return secHead("Resumes", "") + '<button type="button" class="btn btn--primary" data-act="resume-studio">' + IC.edit + ' Open Resume Studio</button>'; },
     insights() { return insightsSection(); },
     type() { return secHead("Appearance", "Your site\u2019s typography and the hero\u2019s living motion \u2014 pick the font system that drives every headline, label and paragraph, then tune how the statement reacts to the cursor over its ambient backdrop. Everything previews live and publishes with the site.") + group(typographySection()) + group(heroMotionBlock()) + group(caseNavBlock()); },
     landing() {
@@ -11244,6 +11247,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
     if (hlModal) refreshHlPanel();
     if (aboutSecModal) refreshAboutSecModal();
     if (activeTab === "type") scrollActiveFontIntoView();
+    if (activeTab === "resume") openResumeStudio();
   }
   // Keep the active font card visible inside the height-capped, scrollable card grid
   // (only scrolls the inner grid, never the editor panel, and leaves already-visible cards put).
@@ -12221,6 +12225,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
       else flash();
       return;
     }
+    if (act === "resume-studio") { openResumeStudio(); return; }
     if (act === "resume-upload") { pickResume(function (uri) { setPath(data, "contact.resume", uri); apply(true); renderBody(); status("R\u00e9sum\u00e9 embedded \u2014 the dock button is now visible.", true); }); return; }
     if (act === "resume-clear") { setPath(data, "contact.resume", ""); apply(true); renderBody(); status("R\u00e9sum\u00e9 removed."); return; }
     if (act === "preview-mode") {
@@ -15846,7 +15851,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
     for (let attempt = 0; attempt < 2; attempt++) {
       signal?.throwIfAborted();
       const response = await fetch(url, { method: "POST", headers, signal, body: JSON.stringify(body) });
-      if (attempt || ![400, 422].includes(response.status) || !Object.hasOwn(sampling, "temperature")) return response;
+      if (options.singleAttempt || attempt || ![400, 422].includes(response.status) || !Object.hasOwn(sampling, "temperature")) return response;
       const failure = await response.clone().json().catch(() => null);
       const message = failure?.error?.message || "";
       const unsupported = /\btemperature\b/i.test(message) && /deprecat|unsupported|not\s+support|does\s+not\s+support|not\s+(?:allowed|accepted|permitted)|only[^.\n]*(?:default|value[^.\n]*1)|cannot[^.\n]*(?:set|specif)/i.test(message);
@@ -19481,6 +19486,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
   }
 
   function exit() {
+    if (resumeFrame) { status("Close Resume Studio after saving before leaving Studio."); return; }
     if (!saveDraft(true)) { status("Draft not saved. Download a backup or free storage before leaving Studio."); return; }
     disposeNativeSlides();
     aiSessionPanel?.close(false);
@@ -19628,6 +19634,33 @@ import { createRefreshGate } from "./studio-refresh.mjs";
   }
 
 
+  let resumeFrame = null, resumeTrigger = null;
+  function openResumeStudio() {
+    if (!root?.classList.contains("is-open")) return;
+    if (resumeFrame) { resumeFrame.focus(); return; }
+    resumeTrigger = document.activeElement;
+    resumeFrame = document.createElement("iframe");
+    resumeFrame.title = "Resume Studio";
+    resumeFrame.className = "adm__resume-host";
+    resumeFrame.src = "/studio/resume/?hosted=1";
+    document.body.appendChild(resumeFrame);
+    root.inert = true;
+    resumeFrame.focus();
+  }
+  function closeResumeStudio(caller) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow) throw new Error("This Resume Studio session is closed.");
+    resumeFrame.remove(); resumeFrame = null; root.inert = false;
+    if (resumeTrigger?.isConnected) resumeTrigger.focus();
+  }
+  async function resumeStudioRequest(path, options = {}, caller) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession()) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
+    if (!/^(library|sources(?:\/[a-f0-9]{64})?|resumes(?:\/[a-zA-Z0-9_-]{1,80}(?:\/(?:restore|export|finalize|exports\/[a-zA-Z0-9_-]{1,80}))?)?)$/.test(path) || !["GET", "POST", "PUT"].includes(options.method || "GET")) throw new Error("Invalid Resume Studio request.");
+    const headers = { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" };
+    for (const name of ["If-Match", "X-Resume-Pages"]) if (options.headers?.[name]) headers[name] = options.headers[name];
+    const timeout = AbortSignal.timeout(path.endsWith("/export") ? 90000 : 30000);
+    return fetch(ADMIN_WORKER + "/admin/resume/" + path, { method: options.method || "GET", headers, body: options.body, signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout });
+  }
+
   /* expose the studio entry so the shell can open it after the gate passes */
   window.__RKStudio = { open: open, presentNativeDeck: presentNativeWork, getDraft: function () { return root && root.classList.contains("is-open") ? clone(data) : null; }, addDraftIcon: function (icon) { var name = addGeneratedIcon(icon.name, icon.svg, icon.keywords); if (!saveDraft(true)) throw new Error("Studio draft storage is full"); return name; }, improveText: improveStudioText, generateIcon: async function (description, references, options) { slideAiConfiguration(); if (!String(description || "").trim()) throw new Error("Describe the icon first."); return runIconGen(String(description).slice(0, 1000), references || [], options); }, draftSlides: async function (catalog, brief, options) {
     var cfg = aiCfg("txt");
@@ -19649,4 +19682,53 @@ import { createRefreshGate } from "./studio-refresh.mjs";
   window.__RKStudio.toggleSections = id => toggleStudyContentAccess(data.work.findIndex(work => work.id === id));
   window.__RKStudio.unlockSections = id => decryptStudyForEdit(data.work.findIndex(work => work.id === id));
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
+  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, request: resumeStudioRequest };
+  async function resumeAiConfiguration() {
+    const configured = aiCfg("txt");
+    if (configured.key) return configured;
+    const available = await new Promise(resolve => aiCfRefresh(resolve));
+    const provider = [configured.provider, "openai", "anthropic"].find(provider => ["openai", "anthropic"].includes(provider) && available?.[provider]?.set);
+    if (!provider || !aiSess()) throw new Error("No supported stored AI provider is available for this session.");
+    return { ...configured, provider, key: aiSess(), base: ADMIN_WORKER + "/admin/ai/" + provider, proxied: true, roaming: true };
+  }
+  window.__RKStudio.resumeAI = {
+    async models() {
+      if (!root?.classList.contains("is-open")) throw new Error("Open Studio first.");
+      const cfg = await resumeAiConfiguration();
+      if (!cfg.key || !["openai", "anthropic"].includes(cfg.provider)) throw new Error("A supported Studio AI provider is required.");
+      const catalog = await aiCatalog.discover(cfg);
+      return { provider: cfg.provider, checkedAt: catalog.updatedAt, models: catalog.models.filter(model => model.output?.includes("text") && model.maxOutputTokens >= 12000).map(model => ({ id: model.id, pricing: model.pricing, reasoning: model.reasoning, maxInputTokens: model.maxInputTokens, contextWindow: model.contextWindow })) };
+    },
+    async connect({ model, pricing, budgetId, maxCost }) {
+      if (!root?.classList.contains("is-open")) throw new Error("Open Studio first.");
+      if (!/^[a-zA-Z0-9_-]{1,80}$/.test(budgetId) || !Number.isFinite(maxCost) || maxCost <= 0 || maxCost > 1 || !navigator.locks) throw new Error("A durable evaluation budget of at most $1 is required.");
+      const cfg = await resumeAiConfiguration(), catalog = await aiCatalog.discover(cfg);
+      const selected = catalog.models.find(item => item.id === model);
+      if (!selected || selected.maxOutputTokens < 12000 || selected.pricing.input !== pricing?.input || selected.pricing.output !== pricing?.output) throw new Error("Verify the selected model and current pricing before review.");
+      const key = "rk:resume:ai-budget:" + budgetId;
+      const ledger = () => {
+        const raw = localStorage.getItem(key);
+        const value = raw === null ? { maxCost, reservations: [] } : JSON.parse(raw);
+        if (value.maxCost !== maxCost || !Array.isArray(value.reservations) || value.reservations.some(entry => !Number.isFinite(entry.amount) || entry.amount < 0)) throw new Error("The saved evaluation budget needs review.");
+        return value;
+      };
+      const complete = boundedResumeCompletion({ provider: cfg.provider, model, pricing,
+        reserve: entry => navigator.locks.request(key, () => {
+          const saved = ledger();
+          if (saved.reservations.reduce((sum, item) => sum + item.amount, 0) + entry.amount > maxCost) throw new Error("The $1 evaluation budget is exhausted. No request was sent.");
+          saved.reservations.push(entry); localStorage.setItem(key, JSON.stringify(saved));
+        }),
+        invoke: async request => {
+          if (!root?.classList.contains("is-open")) throw new Error("Studio was closed. No request was sent.");
+          const current = await resumeAiConfiguration();
+          if (!current.key || current.provider !== cfg.provider || current.base !== cfg.base) throw new Error("The Studio AI connection changed. Reconnect the review.");
+          const timeout = AbortSignal.timeout(120000);
+          const result = await aiChatOnce({ ...current, routingModel: selected, routingMaxTokens: request.maxTokens }, model, request.system, request.user, { ...request, signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout });
+          if (!result.ok) throw new Error(result.err || "The review request failed.");
+          return result.text;
+        }
+      });
+      return { configuration: () => ({ available: true, provider: cfg.provider, model, remaining: Math.max(0, maxCost - ledger().reservations.reduce((sum, entry) => sum + entry.amount, 0)) }), complete };
+    }
+  };
 })();

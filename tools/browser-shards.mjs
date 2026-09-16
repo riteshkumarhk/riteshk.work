@@ -6,7 +6,7 @@ const deck = 'slide-studio-deck.test.mjs';
 const authoring = '(?:Prepare |Resume canvas |AI |Draft entire deck |fixed cover |empty hosted deck |linked cover )';
 export const browserShards = {
   authoring: [{ files: [deck], pattern: '^' + authoring }, { files: ['presenter-web.browser.test.mjs'] }],
-  sections: [{ files: [deck], skipPattern: '^' + authoring }],
+  sections: [{ files: [deck], skipPattern: '^' + authoring }, { files: ['resume-workspace.test.mjs'] }],
   recovery: [{ files: [
     'ai-ribbon.test.mjs',
     'project-recovery.browser.test.mjs', 'slide-presenter-readonly.browser.test.mjs',

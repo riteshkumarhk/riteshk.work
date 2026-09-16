@@ -10,6 +10,8 @@ import { PasskeyChallenges, passkeyChallenge } from "./worker/passkey-challenges
 import { contentRevision } from "./src/js/content-revision.mjs";
 import { writeContentRevision } from "./worker/content-publishing.mjs";
 import { readOperationalState, updateOperationalState } from "./worker/operational-state.mjs";
+import { createHostedResumeStore } from "./worker/resume-workspace.mjs";
+import { createResume, resumeText } from "./src/js/resume-workspace.mjs";
 
 const bundled = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node", packages: "external" });
 const { default: worker, ContentPublisher } = await import("data:text/javascript;base64," + Buffer.from(bundled.outputFiles[0].text).toString("base64"));
@@ -35,6 +37,36 @@ function challengeFixture() {
   return { env: { PASSKEY_CHALLENGES: binding }, stores };
 }
 
+test("Hosted resume R2 CAS preserves concurrent versions and immutable source bytes", async () => {
+  const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES'] });
+  try {
+    const bucket = await runtime.getR2Bucket('RESUMES'), store = createHostedResumeStore(bucket);
+    const bytes = new TextEncoder().encode('Original fictional source.');
+    const source = await store.source({ name: 'Original.txt', type: 'text/plain', text: 'Original fictional source.' }, bytes);
+    const document = createResume({ id: 'cloud-fixture', name: 'Private resume', sourceIds: [source.id], model: { summary: 'Original summary', contact: {}, sections: [] } });
+    await store.create(document);
+    const updates = await Promise.allSettled(['First change', 'Second change'].map(summary => store.save(document.id, { ...document, model: { ...document.model, summary } }, 1)));
+    assert.equal(updates.filter(result => result.status === 'fulfilled').length, 1);
+    assert.equal(updates.find(result => result.status === 'rejected').reason.status, 409);
+    const current = await store.get(document.id); assert.equal(current.version, 2); assert.equal(current.versions[0].document.model.summary, 'Original summary');
+    await store.restore(document.id, 1, 2); assert.equal((await store.get(document.id)).version, 3);
+    await assert.rejects(store.create(document), { status: 409 });
+    assert.equal((await store.source({ name: 'Changed.txt', type: 'text/plain', text: 'Replacement extraction' }, bytes)).text, 'Original fictional source.');
+    assert.deepEqual(new Uint8Array((await store.sourceFile(source.id)).bytes), bytes);
+    assert.equal((await store.list()).documents.length, 1);
+    await assert.rejects(store.get('../vault'), { status: 400 });
+    await assert.rejects(store.save(document.id, { ...document, sourceIds: ['f'.repeat(64)] }, 3), /source is missing/);
+    for (const change of [{ design: null }, { design: { ...document.design, font: 'unknown' } }, { target: { ...document.target, jd: 12 } }, { model: { ...document.model, summary: {} } }]) {
+      await assert.rejects(store.save(document.id, { ...document, ...change }, 3), { status: 400 });
+      assert.equal((await store.get(document.id)).version, 3);
+    }
+    const hybrid = { ...document, design: { ...document.design, layout: 'hybrid' } };
+    await store.save(document.id, hybrid, 3);
+    assert.equal((await store.get(document.id)).document.design.layout, 'hybrid');
+    await store.restore(document.id, 3, 4);
+    assert.equal((await store.get(document.id)).document.design.layout, 'single');
+  } finally { await runtime.dispose(); }
+});
 test("transactional passkey challenges allow exactly one concurrent redemption", async () => {
   const fixture = challengeFixture(), challenge = "a".repeat(43);
   await passkeyChallenge(fixture.env, "issue", challenge, { type: "auth", purpose: "publish" });
@@ -85,6 +117,63 @@ async function signedWorkerFixture() {
   return { env, send, assertion, values };
 }
 
+test("Hosted resume routes require an owner session and allowed origin without touching the vault", async () => {
+  const fixture = await signedWorkerFixture();
+  const login = await (await fixture.send('finish', await fixture.assertion())).json();
+  const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES'] });
+  try {
+    fixture.env.RESUMES = await runtime.getR2Bucket('RESUMES');
+    const request = (path, options = {}) => worker.fetch(new Request('https://synthetic.test/admin/resume/' + path, { ...options, headers: { Origin: 'https://synthetic.test', Authorization: 'Bearer ' + login.token, ...options.headers } }), fixture.env);
+    const preflight = await request('resumes/route-fixture', { method: 'OPTIONS', headers: { Authorization: '', 'Access-Control-Request-Method': 'PUT', 'Access-Control-Request-Headers': 'authorization,content-type,if-match,x-resume-pages' } });
+    assert.equal(preflight.status, 204);
+    assert.match(preflight.headers.get('Access-Control-Allow-Headers'), /If-Match,X-Resume-Pages/);
+    assert.equal(preflight.headers.get('Cache-Control'), 'no-store');
+    assert.equal((await request('library', { method: 'OPTIONS', headers: { Origin: 'https://untrusted.test' } })).status, 403);
+    assert.equal((await request('library', { headers: { Authorization: '' } })).status, 401);
+    assert.equal((await request('library', { headers: { Origin: 'https://untrusted.test' } })).status, 403);
+    assert.equal((await request('library', { headers: { Origin: '' } })).status, 403);
+    const document = createResume({ id: 'route-fixture', model: { summary: 'Private text', contact: {}, sections: [] } });
+    assert.equal((await request('resumes', { method: 'POST', body: JSON.stringify({ document }) })).status, 200);
+    assert.equal((await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document }) })).status, 200);
+    assert.equal((await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document }) })).status, 409);
+    const response = await request('library'); assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal((await response.json()).documents[0].version, 2);
+    assert.equal((await request('sources', { method: 'POST', body: JSON.stringify({ base64: 'bad!', text: '' }) })).status, 400);
+    let renders = 0;
+    fixture.env.BROWSER = { async quickAction(action, options) {
+      renders++; assert.equal(action, 'pdf'); assert.equal(options.waitForSelector.selector, 'html[data-resume-verified]');
+      assert.match(options.html, /body\{visibility:hidden\}/); assert.equal(options.allowRequestPattern.length, 1);
+      return new Response('%PDF-synthetic-unit-fixture-not-a-real-artifact');
+    } };
+    const staged = await (await request('resumes/route-fixture/export', { method: 'POST', headers: { 'If-Match': '2' }, body: '{}' })).json();
+    const check = { id: staged.pending.id, sha256: staged.pending.sha256, expectedPages: 1, positions: [{ width: 595.28, height: 841.89, items: [{ str: resumeText(document), x: 40, y: 60, w: 300, h: 12 }] }], links: [] };
+    const finish = input => request('resumes/route-fixture/finalize', { method: 'POST', headers: { 'If-Match': '2' }, body: JSON.stringify(input) });
+    const expired = { ...staged.pending, id: 'expired-render', at: Date.now() - 16 * 60000 };
+    await fixture.env.RESUMES.put('pending/expired-render.json', JSON.stringify(expired));
+    await fixture.env.RESUMES.put('pending/expired-render.pdf', 'expired fixture bytes');
+    const unrelated = { ...expired, id: 'other-resume-render', documentId: 'other-resume' };
+    await fixture.env.RESUMES.put('pending/other-resume-render.json', JSON.stringify(unrelated));
+    await fixture.env.RESUMES.put('pending/other-resume-render.pdf', 'other resume bytes');
+    assert.equal((await finish({ ...check, id: unrelated.id })).status, 404);
+    assert.ok(await fixture.env.RESUMES.head('pending/other-resume-render.pdf'));
+    assert.equal((await finish({ ...check, id: expired.id })).status, 409);
+    assert.equal(await fixture.env.RESUMES.head('pending/expired-render.json'), null);
+    assert.equal(await fixture.env.RESUMES.head('pending/expired-render.pdf'), null);
+    await fixture.env.RESUMES.put('pending/missing-render.json', JSON.stringify({ ...staged.pending, id: 'missing-render' }));
+    const missing = await finish({ ...check, id: 'missing-render' });
+    assert.equal(missing.status, 404); assert.match((await missing.json()).error, /Export again/);
+    assert.ok(await fixture.env.RESUMES.head('pending/' + check.id + '.pdf'));
+    assert.equal((await finish({ ...check, sha256: 'wrong' })).status, 422);
+    assert.equal((await finish({ ...check, positions: [] })).status, 422);
+    assert.equal((await request('resumes/route-fixture/exports/' + check.id)).status, 404);
+    assert.equal((await finish(check)).status, 200);
+    assert.equal((await request('resumes/route-fixture/exports/' + check.id)).status, 200);
+    const cached = await (await request('resumes/route-fixture/export', { method: 'POST', headers: { 'If-Match': '2' }, body: '{}' })).json();
+    assert.equal(cached.entry.id, check.id); assert.equal(renders, 1);
+    assert.equal((await finish(check)).status, 404);
+    assert.equal([...fixture.values.keys()].some(key => key.startsWith('prep/') || key.startsWith('resume/')), false);
+  } finally { await runtime.dispose(); }
+});
 test("vault index publishing skips unchanged writes while retaining historical keys and response counts", async () => {
   const fixture = await signedWorkerFixture();
   const login = await (await fixture.send("finish", await fixture.assertion())).json();

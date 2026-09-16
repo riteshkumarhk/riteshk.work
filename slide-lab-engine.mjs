@@ -64,6 +64,7 @@ export function cornerEnginePlugin() {
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor, openScreenEyeDropper as labOpenScreenEyeDropper, screenColorForCanvas as labScreenColorForCanvas } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
       source += '\nexport { ColorPicker as LabColorPicker, DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE as LAB_BACKGROUND_PALETTE };\n';
+      source += '\nexport { ExcalidrawContainerContext as LabColorPickerContainer, DeviceContext as LabColorPickerDevice, activeEyeDropperAtom as labActiveEyeDropperAtom, EditorJotaiProvider as LabColorPickerStateProvider, useAtom as useLabColorPickerAtom };\n';
       source += '\nexport { useExcalidrawActionManager as useLabActionManager, newElementWith as labNewElementWith, Fonts as LabFontRegistry };\n';
       source = `import { FontCategoryTabs as LabFontCategoryTabs } from ${JSON.stringify(resolve("src/js/slide-font-tabs.jsx").replaceAll("\\", "/"))};\nimport { filterFontCategory as labFilterFontCategory } from ${JSON.stringify(resolve("src/js/slide-font-categories.mjs").replaceAll("\\", "/"))};\n` + source;
       pickerPatched++;

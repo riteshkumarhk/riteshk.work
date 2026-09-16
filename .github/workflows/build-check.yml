@@ -30,7 +30,7 @@ jobs:
 
       - name: Run root regressions sequentially
         run: |
-          mapfile -t tests < <(find . -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) ! -name '*.browser.test.mjs' ! -name 'slide-studio-deck.test.mjs' ! -name 'ai-ribbon.test.mjs' | sort)
+          mapfile -t tests < <(find . -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) ! -name '*.browser.test.mjs' ! -name 'slide-studio-deck.test.mjs' ! -name 'ai-ribbon.test.mjs' ! -name 'resume-workspace.test.mjs' | sort)
           node --test --test-concurrency=1 "${tests[@]}"
 
       - name: Rebuild bundles
@@ -39,11 +39,14 @@ jobs:
       - name: Rebuild slide bundles
         run: npm run build:slide-lab
 
+      - name: Rebuild resume bundles
+        run: npm run build:resume
+
       - name: Fail if committed bundles are out of date
         run: |
-          if [ -n "$(git status --porcelain js/ studio/slide-lab/assets/)" ]; then
+          if [ -n "$(git status --porcelain js/ studio/slide-lab/assets/ studio/resume-preview/assets/)" ]; then
             echo "::error::Committed output is stale. Run both build commands locally and commit the result."
-            git --no-pager diff --stat -- js/ studio/slide-lab/assets/
+            git --no-pager diff --stat -- js/ studio/slide-lab/assets/ studio/resume-preview/assets/
             exit 1
           fi
 

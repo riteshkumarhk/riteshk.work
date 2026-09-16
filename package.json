@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "build:slide-lab": "node slide-lab.build.mjs"
+    "build:slide-lab": "node slide-lab.build.mjs",
+    "build:resume": "node tools/resume-preview.mjs --build"
   },
   "devDependencies": {
     "@excalidraw/excalidraw": "0.18.1",
@@ -37,6 +38,9 @@
     "dompurify": "3.4.15",
     "figma-squircle": "1.1.0",
     "lucide-react": "^1.38.0",
+    "mammoth": "^1.11.0",
+    "pagedjs": "^0.4.3",
+    "pdfjs-dist": "^5.4.624",
     "react-colorful": "5.8.0"
   }
 }

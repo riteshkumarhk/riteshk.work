@@ -24,6 +24,10 @@ bucket_name = "rk-slide-libraries"
 binding = "RELEASE_CHECKS"
 bucket_name = "rk-release-checks"
 
+[[r2_buckets]]
+binding = "RESUMES"
+bucket_name = "rk-resumes"
+
 # Private R2 bucket for NDA media (the "vault") — objects are served only through the Worker.
 [[r2_buckets]]
 binding = "VAULT"

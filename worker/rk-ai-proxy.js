@@ -29,6 +29,7 @@
 import { libraryRoute } from "./slide-library.mjs";
 import { releaseChecksRoute } from "./release-checks.mjs";
 import { readOperationalState, updateOperationalState } from "./operational-state.mjs";
+import { resumeWorkspaceRoute } from "./resume-workspace.mjs";
 
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
@@ -125,10 +126,17 @@ export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     const cors = corsHeaders(origin, env);
-
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-
     const url = new URL(request.url);
+
+    if (request.method === "OPTIONS") {
+      if (url.pathname.startsWith("/admin/resume/")) {
+        const headers = { ...cors, "Cache-Control": "no-store" };
+        if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return new Response(null, { status: 403, headers });
+        headers["Access-Control-Allow-Headers"] += ",If-Match,X-Resume-Pages";
+        return new Response(null, { status: 204, headers });
+      }
+      return new Response(null, { status: 204, headers: cors });
+    }
 
     if (url.pathname === "/admin/release-checks" || url.pathname.startsWith("/admin/release-checks/")) {
       const headers = { ...cors, "Cache-Control": "no-store", "Vary": "Origin" };
@@ -137,6 +145,12 @@ export default {
       return releaseChecksRoute(request, env.RELEASE_CHECKS, headers);
     }
 
+    if (url.pathname.startsWith("/admin/resume/")) {
+      const headers = Object.assign({}, cors, { "Cache-Control": "no-store" });
+      if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return json({ error: "Origin not allowed" }, 403, headers);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, headers);
+      return resumeWorkspaceRoute(request, env.RESUMES, headers, env.BROWSER);
+    }
     if (url.pathname === "/admin/slide-library") {
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, { ...cors, "Cache-Control": "no-store" });
       return libraryRoute(request, env.SLIDE_LIBRARIES, cors);
