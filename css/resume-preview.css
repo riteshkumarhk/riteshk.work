@@ -1443,7 +1443,7 @@
 .rws[data-view="pdf"] .rws-body > :is(.rws-library, .rws-inspector, .rws-sheet-backdrop),
 .rws[data-view="pdf"] .rws-mobile-panels,
 .rws[data-view="library"] :is(.rws-workbar, .rws-workspace, .rws-inspector, .rws-sheet-backdrop, .rws-mobile-panels, .rws-rail-tabs),
-.rws:is([data-view="pdf"], [data-view="library"]) .rws-header-actions > button { display: none; }
+.rws:is([data-view="pdf"], [data-view="library"]) .rws-header-actions > button[aria-label="Resume library"] { display: none; }
 .rws[data-view="library"] .rws-library { display: flex; position: static; width: 100%; max-width: none; height: 100%; transform: none; border: 0; }
 .rws .rws-status { height: 32px; flex: 0 0 32px; }
 .rws-score { display: flex; gap: 16px; align-items: center; margin: 14px 0; }

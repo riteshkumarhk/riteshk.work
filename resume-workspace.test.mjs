@@ -598,7 +598,13 @@ describe('Resume browser acceptance', () => {
       const hostedText = editor.getByRole('region', { name: 'Verified exported PDF', exact: true }).locator('.textLayer').first();
       await hostedText.waitFor();
       assert.ok((await hostedText.textContent()).replace(/\s/g, '').includes('Atruthfulfictionalproduct-designsummary.'));
-      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      assert.equal(await editor.getByRole('button', { name: 'Back to Studio', exact: true }).isVisible(), true);
+      await editor.getByRole('button', { name: 'Back to resumes', exact: true }).click();
+      await editor.locator('.rws[data-view="library"]').waitFor();
+      await editor.getByRole('button', { name: 'Back to Studio', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.getByRole('button', { name: 'Open Resume Studio', exact: true }).click();
+      await editor.locator('.rws-status.is-saved').waitFor();
       await editor.getByRole('tab', { name: 'Review', exact: true }).click();
       await editor.getByRole('button', { name: 'Review with AI', exact: true }).click();
       await editor.getByLabel('Review model', { exact: true }).waitFor();
