@@ -878,8 +878,9 @@ describe('Resume browser acceptance', () => {
         for (const item of (await page.getTextContent()).items) if (item.fontName) fonts.add(page.commonObjs.get(item.fontName).name);
       }
       await parsed.destroy();
-      assert.ok([...fonts].some(name => name.includes(expectedFamily)), font + ': ' + [...fonts].join(', '));
-      assert.ok([...fonts].every(name => name.includes(expectedFamily) || name.includes('Inter')), 'Unexpected fallback: ' + [...fonts].join(', '));
+      const matchesFamily = name => name.replace(/-/g, '').includes(expectedFamily.replace(/-/g, ''));
+      assert.ok([...fonts].some(matchesFamily), font + ': ' + [...fonts].join(', '));
+      assert.ok([...fonts].every(name => matchesFamily(name) || name.includes('Inter')), 'Unexpected fallback: ' + [...fonts].join(', '));
       assert.equal((await exportPdf(document)).id, entry.id);
       document.design.margin = 'narrow'; preview.store.save(document.id, document, 1);
       const narrow = await exportPdf(document);

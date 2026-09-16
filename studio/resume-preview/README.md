@@ -1,13 +1,13 @@
-# Resume Studio: Local Review
+# Resume Studio
 
-The Resume Studio frontend remains local and unreleased. The default preview uses a separate filesystem store with fictional resumes and no AI transport. An explicitly configured evaluation can use consented real inputs and a bounded provider transport. The dedicated private R2 bucket and additive Worker endpoints are deployed; the full Studio entry is tested with synthetic authentication and Miniflare. No real resume has been transferred to the new bucket, and real-cloud PDF rendering remains unverified. Enhancv is the baseline to surpass, not a template or a claim of proven superiority.
+Resume Studio is integrated through Studio's Resumes tab, with dedicated private storage and an authenticated parent bridge. The separate local preview uses a filesystem store with fictional resumes and no AI transport by default. A configured evaluation uses explicit model consent and a bounded provider transport. Automated hosted tests use synthetic authentication and Miniflare; these do not establish real account or cross-device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
 
 ## Start And Test
 
 - Start: `node tools/resume-preview.mjs`
 - Open: http://127.0.0.1:5530/studio/resume-preview/
 - Tests: `node --test resume-workspace.test.mjs worker-stability.test.mjs`; existing ATS checks: `node --test ats-core.test.mjs`.
-- Latest local checkpoint: 77 tests passed, including 21 Resume browser workflows; the final expanded hosted PDF-expiry test also passes. No new paid model calls were made for this checkpoint.
+- Release-candidate checkpoint: 80 Resume/Worker tests passed, including 23 Resume browser workflows; 389 site-wide root checks passed. Actual model quality and account/device acceptance are separate from these fixtures.
 - PDF/browser tests use installed Edge by default. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to another installed Chromium executable when needed.
 - The review store is `%TEMP%/rk-resume-preview-v1`. Keep it to retain sample edits. Tests use a disposable separate store on port 5561.
 
@@ -23,6 +23,7 @@ The Resume Studio frontend remains local and unreleased. The default preview use
 | Duplicate for another role | New document identity; changing its company/JD does not change the original. |
 | Version history | Save a named restore point, inspect an older version, restore it as a new version. Original sources and previous exports remain. |
 | Import TXT, PDF or DOCX | Original bytes are retained separately. Review extracted text before attaching or creating editable content. Scanned/empty files fail explicitly; OCR is not connected. |
+| Structured import | Recognized headings, clear role/bullet blocks, skills and dates become editable fields. Ambiguous blocks and profile text remain intact with review warnings. The source file is unchanged; formatting fidelity and uncertain field assignments still require comparison. |
 | Cancelled import | Delayed reads cannot open on another resume. Cancel invalidates pending attachment or creation responses, including after returning to the same resume. Already accepted remote originals may remain available; cancellation does not delete them. |
 | Original source check | Capture a frozen lexical check against the current target. Later editing/review does not replace it. |
 | Sources and provenance | Linked original files, recorded author answers and export history stay separate. Unlinked library files and hashes are collapsed until needed. Evidence selection retains keyboard focus when a row moves; original-source checks exclude later author answers. Unlinking never deletes source bytes. |
@@ -85,8 +86,8 @@ Reviewed September 16, 2026:
 - PDF text completeness and positional heuristics are not proof that Workday or every ATS will parse fields correctly. Actual vendor upload testing remains a user acceptance gate.
 - The existing production ATS engine supplies deterministic checks/weighting. Unavailable signals are excluded, not assigned a fictional perfect score. The connected review has strict structural guards, but real suggestion quality and calibration remain unaccepted. Mock responses do not prove semantic accuracy or superiority.
 - Built-in generated suggestions are fictional fixtures. User-authored proposals support arbitrary source-backed edits, but exact excerpt/numeric checks do not independently establish semantic truth.
-- There is no OCR or general structured PDF-layout reconstruction. The reviewed real-document reconstruction does not establish automatic import quality for arbitrary documents.
+- Deterministic structured text import covers clear English section headings and entry boundaries. Ambiguous blocks are retained as text, not guessed. There is no OCR or arbitrary PDF-layout reconstruction; complicated columns, profile/contact mapping and unusual headings require review.
 - The private bucket/binding and Worker endpoints are deployed. The bucket has no public endpoint or custom domain; its one-day lifecycle rule applies only to `pending/`. Finalizing an expired attempt also removes that pending pair. Original sources, saved versions and completed exports are excluded. Lifecycle configuration is verified, but elapsed-time background deletion has not been observed.
-- The full Studio entry, private persistence, checked PDF, expired-export retry and failed-close recovery pass with synthetic authentication, Miniflare R2 and local Chromium rendering. Actual owner-authenticated Cloudflare/Browser Rendering, cross-device acceptance and frontend release asset/freshness gates remain. The production renderer's Paged.js asset must ship with the frontend before its first real export.
-- Budget reservations remain browser-local, not a globally enforced cross-device budget. Real model calibration and general structured import are still incomplete.
-- The six-workstream brief and deployment are authorized, but the real-resume milestone is not accepted on quality. Do not present this local checkpoint as a production release or completion of the brief. Original files, owner drafts and unrelated ATS/vault data must remain intact.
+- The full Studio entry, private persistence, checked PDF, expired-export retry and failed-close recovery pass with synthetic authentication, Miniflare R2 and local Chromium rendering. Real owner-authenticated Cloudflare rendering and cross-device acceptance must be recorded separately. The production renderer requires the bundled Paged.js asset.
+- Budget reservations remain browser-local, not a globally enforced cross-device budget. Real model calibration is incomplete; do not assume a new browser shares an existing evaluation allowance.
+- The real-resume milestone is not accepted on suggestion quality. Deployment and passing fixtures do not constitute completion of that acceptance gate. Original files, owner drafts and unrelated ATS/vault data must remain intact.
