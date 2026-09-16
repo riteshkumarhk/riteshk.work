@@ -901,8 +901,22 @@ test("built protected loading times out visibly and recovers without restarting 
     await page.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
     await page.waitForFunction(() => window.timeoutReadStarted);
     await page.locator('iframe[src*="synthetic-public"]').scrollIntoViewIfNeeded();
-    await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").click();
-    await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button",{name:"Prototype step 2",exact:true}).waitFor();
+    await page.waitForFunction(() => {
+      const frame = document.querySelector('iframe[src*="synthetic-public"]'), bounds = frame.getBoundingClientRect();
+      const position = [bounds.x, bounds.y, bounds.width, bounds.height].join(':');
+      const settled = window.timeoutFramePosition === position;
+      window.timeoutFramePosition = position;
+      return settled && bounds.top >= 0 && bounds.left >= 0 && document.elementFromPoint(bounds.left + 20, bounds.top + 20) === frame;
+    });
+    const prototype = page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button");
+    await prototype.click();
+    await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button",{name:"Prototype step 2",exact:true}).waitFor({timeout:5000}).catch(async error => {
+      await page.screenshot({path:join(tmpdir(),'rk-protected-timeout-click-failure.png')});
+      throw new Error(error.message + '\n' + JSON.stringify(await page.locator('iframe[src*="synthetic-public"]').evaluate(frame => {
+        const bounds = frame.getBoundingClientRect();
+        return {bounds:bounds.toJSON(),topmost:document.elementFromPoint(bounds.left + 20,bounds.top + 20)?.outerHTML,scroll:document.querySelector('.pj')?.scrollTop};
+      })));
+    });
     await page.clock.runFor(16000);
     await page.locator("[data-vault-retry]").waitFor();
     assert.equal(await page.locator("[data-vault-retry]").isEnabled(), true);
