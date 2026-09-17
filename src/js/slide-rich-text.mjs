@@ -1,14 +1,28 @@
 const allowed = new Set(["P", "DIV", "BR", "STRONG", "B", "EM", "I", "UL", "OL", "LI", "BLOCKQUOTE", "S", "U"]);
 
-export function notesHtml(value, document = globalThis.document) {
+export function notesHtml(value, document = globalThis.document, { format = "auto" } = {}) {
   const text = String(value ?? "");
   const template = document.createElement("template");
-  if (!/<\/?(?:p|div|br|strong|b|em|i|ul|ol|li|blockquote|s|u)\b/i.test(text)) {
+  if (format === "text" || (format !== "html" && !/<\/?(?:p|div|br|strong|b|em|i|ul|ol|li|blockquote|s|u)\b/i.test(text))) {
     template.textContent = text;
     const escaped = document.createElement("div"); escaped.textContent = text;
     return escaped.innerHTML.replace(/\r?\n/g, "<br>");
   }
   template.innerHTML = text;
+  if (format === "html") {
+    const comments = document.createTreeWalker(template.content, 128);
+    let start;
+    while (comments.nextNode()) {
+      const comment = comments.currentNode;
+      if (comment.data.trim() === "StartFragment") start = comment;
+      if (start && comment.data.trim() === "EndFragment") {
+        const range = document.createRange();
+        range.setStartAfter(start); range.setEndBefore(comment);
+        template.content.replaceChildren(range.cloneContents());
+        break;
+      }
+    }
+  }
   template.content.querySelectorAll("script,style,iframe,object,embed,svg,math,img,video,audio,link,meta").forEach(element => element.remove());
   for (const element of [...template.content.querySelectorAll("*")].reverse()) {
     if (!allowed.has(element.tagName)) { element.replaceWith(...element.childNodes); continue; }
@@ -50,7 +64,7 @@ export function installRichNotes(element, { onChange, onImprove, onFormatChange,
   const paste = event => {
     event.preventDefault();
     const html = event.clipboardData.getData("text/html"), text = event.clipboardData.getData("text/plain");
-    doc.execCommand("insertHTML", false, notesHtml(html || text, doc)); input();
+    doc.execCommand("insertHTML", false, notesHtml(html || text, doc, { format: html ? "html" : "text" })); input();
   };
   const key = event => {
     if (!(event.ctrlKey || event.metaKey) || !["b", "i"].includes(event.key.toLowerCase())) return;

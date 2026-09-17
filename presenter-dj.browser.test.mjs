@@ -616,6 +616,92 @@ test('before-after sections render inside picker cards, navigator and slideshow'
   } finally { await browser.close(); }
 });
 
+test('partial speaker notes copy between slides strips browser clipboard wrappers', { timeout:60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  const page = await browser.newPage();
+  try {
+    const { build } = await import('esbuild');
+    const bundle = await build({ entryPoints:['src/js/slide-rich-text.mjs'], bundle:true, write:false, format:'iife', globalName:'RichNotes' });
+    await page.setContent('<div id="notes" style="white-space:pre-wrap"></div>');
+    await page.addScriptTag({ content:bundle.outputFiles[0].text });
+    const result = await page.evaluate(() => {
+      const element = document.querySelector('#notes');
+      const controller = RichNotes.installRichNotes(element, {});
+      const paste = (value, type) => {
+        controller.set(''); element.focus();
+        const range = document.createRange(); range.selectNodeContents(element);
+        const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        const clipboardData = new DataTransfer(); clipboardData.setData(type, value);
+        element.dispatchEvent(new ClipboardEvent('paste', {clipboardData,bubbles:true,cancelable:true}));
+        return { text:element.innerText, html:element.innerHTML, saved:RichNotes.serializedNotes(element) };
+      };
+      const fragment = '<html>\r\n<body>\r\n<!--StartFragment--><span style="color:rgb(236,231,225);font-family:Hanken Grotesk;white-space:pre-wrap">Selected onboarding sentence.</span><!--EndFragment-->\r\n</body>\r\n</html>';
+      const wrapped = paste(fragment, 'text/html');
+      const span = paste('<span style="color:red">Selected sentence.</span>', 'text/html');
+      const plain = paste('Literal <strong>markup</strong> & text\n\nNext line', 'text/plain');
+      const unsafe = paste('<span onclick="window.clipboardExecuted=true">Safe<script>window.clipboardExecuted=true</script><img src="missing" onerror="window.clipboardExecuted=true"><strong> bold</strong></span>', 'text/html');
+      controller.dispose();
+      return { wrapped, span, plain, unsafe, executed:!!window.clipboardExecuted };
+    });
+    assert.deepEqual(result.wrapped, {text:'Selected onboarding sentence.',html:'Selected onboarding sentence.',saved:'Selected onboarding sentence.'});
+    assert.equal(result.span.text, 'Selected sentence.');
+    assert.equal(result.plain.text, 'Literal <strong>markup</strong> & text\n\nNext line');
+    assert.equal(result.unsafe.text, 'Safe bold');
+    assert.match(result.unsafe.html, /<(?:strong|b)> bold<\//);
+    assert.doesNotMatch(result.unsafe.html, /script|img|onclick|onerror/);
+    assert.equal(result.executed, false);
+    await page.context().grantPermissions(['clipboard-read','clipboard-write'], {origin:base});
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException('Denied','NotAllowedError'));
+      Object.defineProperty(window,'documentPictureInPicture',{value:undefined,configurable:true});
+    });
+    await page.goto(base+'/studio/slide-merge-lab/');
+    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    const notes = page.locator('.merge-notes-input');
+    const original = 'Before. Selected onboarding sentence. After.';
+    await notes.fill(original);
+    const sourceId = await page.evaluate(()=>window.__slideMerge.deck().selected);
+    await notes.evaluate(element => {
+      const sentence = 'Selected onboarding sentence.';
+      const start = element.firstChild.textContent.indexOf(sentence);
+      const range = document.createRange(); range.setStart(element.firstChild,start); range.setEnd(element.firstChild,start+sentence.length);
+      const selection = document.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    });
+    await page.keyboard.press('Control+c');
+    const clipboard = await page.evaluate(async()=>{
+      const entries = await navigator.clipboard.read();
+      const entry = entries.find(item=>item.types.includes('text/html'));
+      return {html:await (await entry.getType('text/html')).text(),text:await navigator.clipboard.readText()};
+    });
+    assert.equal(clipboard.text, 'Selected onboarding sentence.');
+    assert.match(clipboard.html, /Selected onboarding sentence\./);
+    await page.locator('.merge-slide').nth(1).click();
+    await page.waitForFunction(id=>window.__slideMerge.deck().selected!==id&&!document.querySelector('.merge-layout-toggle').disabled,sourceId);
+    await notes.fill('');
+    await page.keyboard.press('Control+v');
+    await page.waitForFunction(()=>document.querySelector('.merge-notes-input')?.innerText==='Selected onboarding sentence.');
+    await page.evaluate(()=>window.__slideMerge.save());
+    assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).notes,sourceId),original);
+    await page.reload();
+    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    assert.equal(await notes.innerText(), 'Selected onboarding sentence.');
+    assert.doesNotMatch(await notes.innerHTML(), /StartFragment|EndFragment|&lt;(?:html|body|span)|style=/);
+    for (const width of [1440,390]) {
+      await page.setViewportSize({width,height:1000});
+      const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});
+      if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+      await notes.scrollIntoViewIfNeeded();
+      await page.screenshot({path:join(tmpdir(),`rk-notes-partial-copy-${width}.png`)});
+    }
+    await page.setViewportSize({width:1440,height:1000});
+    const pending = page.waitForEvent('popup');
+    await page.getByRole('button',{name:'Slide Show',exact:true}).click();
+    const popup = await pending;
+    await popup.waitForFunction(()=>document.querySelector('[data-pp-notes]')?.innerText==='Selected onboarding sentence.');
+    await popup.getByRole('button',{name:'End presentation',exact:true}).click();
+  } finally { await browser.close(); }
+});
+
 test('speaker note clipboard paragraphs do not accumulate spacing during serialization', { timeout:60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   const page = await browser.newPage();
