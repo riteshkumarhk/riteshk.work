@@ -3,10 +3,25 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { patchTypography, patchTextFormatting } from "./slide-lab-typography.mjs";
-import { textFormat, textFontPrefix, formatTextLines, textListLine } from "./src/js/slide-text-format.mjs";
+import { textFormat, textFontPrefix, formatTextLines, textListLine, textCase, displayText, TEXT_CASES } from "./src/js/slide-text-format.mjs";
 import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
 
 const source = readFileSync(new URL("./node_modules/@excalidraw/excalidraw/dist/dev/index.js", import.meta.url), "utf8");
+
+test("case styles preserve original typing and small caps use native font variants", () => {
+  const originalText = "  hELLo NASA\n\u2022 don't STOP: d\u00e9j\u00e0-vu! 42";
+  const expected = [originalText, "  HELLO NASA\n\u2022 DON'T STOP: D\u00c9J\u00c0-VU! 42", "  hello nasa\n\u2022 don't stop: d\u00e9j\u00e0-vu! 42", "  HELLo NASA\n\u2022 Don't STOP: D\u00e9j\u00e0-Vu! 42", originalText];
+  for (const [index, mode] of TEXT_CASES.entries()) {
+    const element = { originalText, customData: { textFormat: { case: mode, bold: true, italic: true } } };
+    assert.equal(displayText(element), expected[index]);
+    assert.equal(element.originalText, originalText);
+    assert.equal(textCase(JSON.parse(JSON.stringify(element))), mode);
+    assert.equal(textFontPrefix(element), mode === "small-caps" ? "italic small-caps bold " : "italic bold ");
+  }
+  assert.equal(displayText({ originalText, customData: { textFormat: { case: "invalid" } } }), originalText);
+  assert.equal(textCase({}), "typed");
+  assert.equal(displayText({ customData: { textFormat: { case: "upper" } } }, "stra\u00dfe"), "STRASSE");
+});
 
 test("selected text formatting is explicit, serializable and leaves unrelated metadata intact", () => {
   const element = { customData: { section: "retained", textFormat: { bold: true, italic: true, underline: true, strikethrough: false } } };
@@ -71,9 +86,16 @@ test("formatting adapter updates native actions, live editing, canvas and SVG to
   const rendered = patchTextFormatting(core, "core");
   assert.match(rendered, /labTextFontPrefix\(element\)/);
   const measure = runInNewContext(rendered.slice(rendered.indexOf("var measureText ="), rendered.indexOf("var DUMMY_TEXT =")) + ";measureText", { getTextHeight: (text, size, height) => text.split("\n").length * size * height, getTextWidth: () => 120 });
-  for (const font of ["28px Inter", "bold 28px Inter", "italic bold 28px Inter"]) assert.equal(measure("One\nTwo", font, 1.25).height, 70);
+  for (const font of ["28px Inter", "bold 28px Inter", "italic bold 28px Inter", "italic small-caps bold 28px Inter"]) assert.equal(measure("One\nTwo", font, 1.25).height, 70);
   assert.match(rendered, /labDrawTextDecorations\(context, element/);
   assert.match(rendered, /text.setAttribute\("text-decoration", labTextDecoration\(element\)\)/);
+  const FontCharacters = runInNewContext("class Fonts {" + rendered.slice(rendered.indexOf("  static getCharsPerFamily("), rendered.indexOf("  static getCharacters(")) + "};Fonts", { isTextElement: element => element.type === "text", labDisplayText: displayText, labTextCase: textCase });
+  for (const mode of ["upper", "small-caps", "title"]) {
+    const element = { type: "text", fontFamily: 1, originalText: "abc", customData: { textFormat: { case: mode } } };
+    const characters = [...FontCharacters.getCharsPerFamily([element])[1]].join("");
+    assert.ok(characters.includes("a") && characters.includes("A"), "Font subsets include source and displayed glyphs");
+    assert.equal(element.originalText, "abc");
+  }
   assert.throws(() => patchTextFormatting(source.replace('renderAction("changeFontSize"),', ""), "renderer"), /anchor changed/);
   assert.throws(() => patchTextFormatting(core.replace('var getFontString =', 'var changedFont ='), "core"), /anchor changed/);
 });
@@ -85,4 +107,10 @@ test("public text preserves only approved style flags and ordinary bullet conten
   assert.deepEqual(result.customData.textFormat, { bold: true, italic: true, underline: true, strikethrough: true });
   assert.equal(result.text, "\u2022 Visible");
   assert.doesNotMatch(JSON.stringify(payload), /privateNote|not public/);
+  for (const mode of [...TEXT_CASES, "unsupported"]) {
+    scene.elements[1].customData.textFormat.case = mode;
+    const exported = publicDeckPayload({ slidesPublic: true, slides: [{ id: "slide", scene }] }, { reviewedSources: true }).slides[0].scene.elements.find(element => element.type === "text");
+    assert.equal(textCase(exported), TEXT_CASES.includes(mode) ? mode : "typed");
+    assert.doesNotMatch(JSON.stringify(exported), /privateNote|unsupported/);
+  }
 });

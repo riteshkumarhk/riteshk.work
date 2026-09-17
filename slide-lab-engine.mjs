@@ -61,7 +61,7 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
       source = patchTextFormatting(patchTypography(patchSelectionBounds(patchFontPicker(source), "renderer")), "renderer");
       source = `import { IconColorControls as LabIconColorControls } from ${JSON.stringify(resolve("src/js/slide-icon-color.jsx").replaceAll("\\", "/"))};\n` + source;
-      source = `import { TextFormatControls as LabTextFormatControls } from ${JSON.stringify(resolve("src/js/slide-text-format.jsx").replaceAll("\\", "/"))};\nimport { textFormat as labTextFormat, textDecoration as labTextDecoration, formatTextLines as labFormatTextLines } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
+      source = `import { TextFormatControls as LabTextFormatControls } from ${JSON.stringify(resolve("src/js/slide-text-format.jsx").replaceAll("\\", "/"))};\nimport { textFormat as labTextFormat, textCase as labTextCase, displayText as labDisplayText, TEXT_CASES as labTextCases, textDecoration as labTextDecoration, formatTextLines as labFormatTextLines } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { FontSizePicker as LabFontSizePicker, FontLibraryIcon as LabFontLibraryIcon } from ${JSON.stringify(resolve("src/js/slide-font-size.jsx").replaceAll("\\", "/"))};\n` + source;
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor, openScreenEyeDropper as labOpenScreenEyeDropper, screenColorForCanvas as labScreenColorForCanvas } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
@@ -88,7 +88,7 @@ export function cornerEnginePlugin() {
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
       source = patchSelectionBounds(source, "handles");
       source = patchTextFormatting(source, "core");
-      source = `import { textFormat as labTextFormat, textFontPrefix as labTextFontPrefix, textDecoration as labTextDecoration, drawTextDecorations as labDrawTextDecorations } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
+      source = `import { textFormat as labTextFormat, textCase as labTextCase, displayText as labDisplayText, textFontPrefix as labTextFontPrefix, textDecoration as labTextDecoration, drawTextDecorations as labDrawTextDecorations } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
       source = patchSlideSnapping(source);
       source = `import { slideReferencePoints as labSlideReferencePoints, isSlideSnappingScene as labIsSlideSnappingScene, slideSnappingEnabled as labSlideSnappingEnabled } from ${JSON.stringify(resolve("src/js/slide-merge-snapping.mjs").replaceAll("\\", "/"))};\n` + source;
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";

@@ -1,11 +1,33 @@
+export const TEXT_CASES = ["typed", "upper", "lower", "title", "small-caps"];
+
+export function textCase(element) {
+  const value = element?.customData?.textFormat?.case;
+  return TEXT_CASES.includes(value) ? value : "typed";
+}
+
+export function displayText(element, value = element.originalText ?? element.text ?? "") {
+  const mode = textCase(element);
+  if (mode === "upper") return value.toUpperCase();
+  if (mode === "lower") return value.toLowerCase();
+  if (mode !== "title") return value;
+  const words = new Intl.Segmenter(undefined, { granularity: "word" });
+  return [...words.segment(value)].map(({ segment, isWordLike }) => {
+    if (!isWordLike) return segment;
+    return segment.replace(/\p{L}[\s\S]*/u, word => {
+      const [first, ...rest] = [...word];
+      return first.toUpperCase() + rest.join("");
+    });
+  }).join("");
+}
+
 export function textFormat(element) {
   const saved = element?.customData?.textFormat;
-  return Object.fromEntries(["bold", "italic", "underline", "strikethrough"].map(key => [key, saved?.[key] === true]));
+  return { ...Object.fromEntries(["bold", "italic", "underline", "strikethrough"].map(key => [key, saved?.[key] === true])), ...(textCase(element) !== "typed" ? { case: textCase(element) } : {}) };
 }
 
 export function textFontPrefix(element) {
   const format = textFormat(element);
-  return `${format.italic ? "italic " : ""}${format.bold ? "bold " : ""}`;
+  return `${format.italic ? "italic " : ""}${textCase(element) === "small-caps" ? "small-caps " : ""}${format.bold ? "bold " : ""}`;
 }
 
 export function textDecoration(element) {

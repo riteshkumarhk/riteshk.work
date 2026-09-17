@@ -62,6 +62,126 @@ async function assertCoverPixel(page, position, expected) {
   }, { position, expected });
 }
 
+test("native text case preserves source editing history mixed selection small caps and exports", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('rk:theme')) localStorage.setItem('rk:theme', 'day');
+      window.casePaint = [];
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        if (/mixed/i.test(String(text))) window.casePaint.push({ text, font: this.font });
+        return fillText.call(this, text, ...args);
+      };
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
+    const ready = () => page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await ready();
+    await page.evaluate(async () => {
+      const api = window.__slideMerge.api, original = api.getSceneElements(), template = original.find(element => element.type === 'text');
+      const text = 'Mixed words\nnext Line';
+      const first = { ...template, id: 'case-first', x: 60, y: 80, width: 300, height: 70, fontSize: 28, autoResize: false, containerId: null, groupIds: [], boundElements: [], locked: false, text, originalText: text, customData: { fixture: 'retained' } };
+      const second = { ...first, id: 'case-second', x: 650, autoResize: true };
+      const locked = { ...second, id: 'case-locked', y: 300, locked: true };
+      api.updateScene({ elements: [original.find(element => element.id === 'lab-slide'), first, second, locked], appState: { selectedElementIds: { 'case-first': true } }, captureUpdate: 'IMMEDIATELY' });
+      await window.__slideMerge.save();
+    });
+    const controls = page.getByRole('group', { name: 'Text case', exact: true });
+    const button = name => controls.getByRole('button', { name, exact: true });
+    const read = () => page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first'));
+    const before = await read();
+    const others = await page.evaluate(() => window.__slideMerge.api.getSceneElements().filter(element => element.id !== 'case-first'));
+    for (const [name, mode, text] of [['All caps', 'upper', 'MIXED WORDS\nNEXT LINE'], ['Lowercase', 'lower', 'mixed words\nnext line'], ['Title case', 'title', 'Mixed Words\nNext Line'], ['Small caps', 'small-caps', before.originalText], ['As typed', 'typed', before.originalText]]) {
+      await button(name).click();
+      const actual = await read();
+      assert.equal(actual.text, text);
+      assert.equal(actual.originalText, before.originalText);
+      assert.equal(actual.customData.textFormat.case, mode);
+      assert.equal(actual.customData.fixture, 'retained');
+      assert.equal(await button(name).getAttribute('aria-pressed'), 'true');
+      assert.ok(Number.isFinite(actual.height) && actual.height > 0);
+    }
+    assert.deepEqual(await page.evaluate(() => window.__slideMerge.api.getSceneElements().filter(element => element.id !== 'case-first')), others);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first').customData.textFormat.case === 'small-caps');
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first').customData.textFormat.case === 'typed');
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true, 'case-second': true, 'case-locked': true } } }));
+    await button('All caps').click();
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
+    await button('Lowercase').click();
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true, 'case-second': true } } }));
+    assert.equal(await controls.locator('[aria-pressed="true"]').count(), 0, 'Mixed modes do not report a false selection');
+    await button('Small caps').click();
+    const mixed = await page.evaluate(() => window.__slideMerge.api.getSceneElements());
+    assert.equal(mixed.find(element => element.id === 'case-locked').customData.textFormat, undefined);
+    assert.equal(mixed.find(element => element.id === 'case-second').customData.textFormat.case, 'small-caps');
+    await page.waitForFunction(() => window.casePaint.some(entry => entry.font.includes('small-caps')));
+    const caps = await page.evaluate(() => {
+      const context = document.createElement('canvas').getContext('2d');
+      context.font = window.casePaint.find(entry => entry.font.includes('small-caps')).font;
+      return { lower: context.measureText('ggg').actualBoundingBoxAscent, upper: context.measureText('GGG').actualBoundingBoxAscent };
+    });
+    assert.ok(caps.lower > 0 && caps.lower < caps.upper, 'Small caps use smaller uppercase glyphs, not ordinary uppercase');
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
+    await button('All caps').click();
+    const resize = await page.evaluate(() => { const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'case-first'), box = document.querySelector('.lab-canvas').getBoundingClientRect(); return { x: box.left + (text.x + text.width + state.scrollX) * state.zoom.value, y: box.top + (text.y + text.height / 2 + state.scrollY) * state.zoom.value, delta: 40 * state.zoom.value, width: text.width }; });
+    await page.mouse.move(resize.x, resize.y);
+    await page.mouse.down();
+    await page.mouse.move(resize.x - resize.delta, resize.y, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForFunction(width => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first').width < width - 20, resize.width);
+    assert.equal((await read()).text, 'MIXED WORDS\nNEXT LINE', 'Native width resize retains display casing');
+    assert.equal((await read()).originalText, before.originalText);
+    const point = await page.evaluate(() => { const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'case-first'), box = document.querySelector('.lab-canvas').getBoundingClientRect(); return { x: box.left + (text.x + 60 + state.scrollX) * state.zoom.value, y: box.top + (text.y + 15 + state.scrollY) * state.zoom.value }; });
+    await page.mouse.dblclick(point.x, point.y);
+    const editable = page.locator('.excalidraw-wysiwyg');
+    await editable.waitFor();
+    assert.equal(await editable.inputValue(), before.originalText);
+    assert.equal(await editable.evaluate(element => getComputedStyle(element).textTransform), 'uppercase');
+    await editable.fill('Mixed edited\nkeep This');
+    await page.keyboard.press('Escape');
+    assert.equal((await read()).originalText, 'Mixed edited\nkeep This');
+    assert.equal((await read()).text, 'MIXED EDITED\nKEEP THIS');
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
+    await button('As typed').click();
+    assert.equal((await read()).text, 'Mixed edited\nkeep This');
+    await button('Small caps').click();
+    await page.locator('.lab-text-format').getByRole('button', { name: 'Bold', exact: true }).click();
+    assert.equal((await read()).customData.textFormat.case, 'small-caps');
+    await page.evaluate(() => window.__slideMerge.save());
+    await page.reload();
+    await ready();
+    assert.equal((await read()).originalText, 'Mixed edited\nkeep This');
+    assert.equal((await read()).customData.textFormat.case, 'small-caps');
+    await page.waitForFunction(() => [...document.querySelectorAll('.merge-slide-card.is-active svg text')].some(text => text.textContent.includes('Mixed edited') && text.getAttribute('font-variant') === 'small-caps' && text.getAttribute('font-weight') === 'bold'));
+    for (const appearance of ['day', 'night']) {
+      if (appearance === 'night') { await page.evaluate(() => localStorage.setItem('rk:theme', 'night')); await page.reload(); await ready(); }
+      await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+        await button('Small caps').scrollIntoViewIfNeeded();
+        await page.evaluate(() => document.fonts.ready);
+        const bounds = await controls.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, buttons: [...element.querySelectorAll('button')].map(button => ({ title: button.title, width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })) }));
+        assert.equal(bounds.buttons.length, 5);
+        assert.ok(bounds.scroll <= bounds.width + 1);
+        assert.ok(bounds.buttons.every(button => button.width >= 28 && button.height >= 28 && button.title));
+        assert.equal(await button('Small caps').getAttribute('aria-pressed'), 'true');
+        await button('Title case').focus();
+        await page.keyboard.press('Enter');
+        assert.equal((await read()).text, 'Mixed Edited\nKeep This');
+        await button('Small caps').click();
+        await page.screenshot({ path: join(tmpdir(), `rk-slide-case-${appearance}-${width}.png`) });
+        if (width === 390) await page.getByRole('button', { name: 'Close panel', exact: true }).click();
+      }
+    }
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test("native text styles bullets and indents retain editing history exports and mobile controls", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
@@ -248,6 +368,11 @@ test("native bound text formatting preserves container geometry history and read
       await window.__slideMerge.save();
     });
     const controls = page.locator('.lab-text-format');
+    await controls.getByRole('button', { name: 'All caps', exact: true }).click();
+    const capitalLabel = await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-label'));
+    assert.equal(capitalLabel.text, capitalLabel.text.toUpperCase());
+    assert.equal(capitalLabel.originalText, 'A useful next action with a clear outcome');
+    await controls.getByRole('button', { name: 'Small caps', exact: true }).click();
     for (const name of ['Bold', 'Italic', 'Underline', 'Strikethrough']) await controls.getByRole('button', { name, exact: true }).click();
     const rendered = await page.evaluate(() => {
       const elements = window.__slideMerge.api.getSceneElements(), label = elements.find(element => element.id === 'format-label'), shape = elements.find(element => element.id === 'format-shape');
@@ -266,7 +391,7 @@ test("native bound text formatting preserves container geometry history and read
     const waiting = page.waitForEvent('popup');
     await page.getByRole('button', { name: 'Slide Show', exact: true }).click();
     const pad = await waiting;
-    await page.waitForFunction(() => window.audienceTextFonts.some(font => font.includes('bold') && font.includes('italic')));
+    await page.waitForFunction(() => window.audienceTextFonts.some(font => font.includes('bold') && font.includes('italic') && font.includes('small-caps')));
     const pixels = await page.locator('.pjp .excalidraw__canvas.static').evaluate(canvas => { const bytes = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; const colors = new Set(); for (let index = 0; index < bytes.length; index += 4) if (bytes[index + 3]) colors.add(`${bytes[index]},${bytes[index + 1]},${bytes[index + 2]}`); return colors.size; });
     assert.ok(pixels > 10, 'Audience renders actual antialiased native content');
     await page.screenshot({ path: join(tmpdir(), 'rk-slide-text-format-audience.png') });

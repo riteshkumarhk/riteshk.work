@@ -29,19 +29,24 @@ export function patchTextFormatting(source, target) {
   const edits = target === "renderer" ? [
     ['        "data-testid": testId,\n        className: clsx3(className, { standalone, active }),', '        "data-testid": testId,\n        "aria-label": props["aria-label"],\n        "aria-pressed": props["aria-pressed"],\n        "aria-haspopup": props["aria-haspopup"],\n        "aria-expanded": props["aria-expanded"],\n        "aria-controls": props["aria-controls"],\n        disabled: props.disabled,\n        onPointerDown: props.onPointerDown,\n        className: clsx3(className, { standalone, active }),'],
     ['      renderAction("changeFontSize"),', '      renderAction("changeFontSize"),\n      renderAction("labTextFormat"),'],
-    ['        lineHeight: updatedTextElement.lineHeight,', '        lineHeight: updatedTextElement.lineHeight,\n        textDecoration: labTextDecoration(updatedTextElement),'],
+    ['        lineHeight: updatedTextElement.lineHeight,', '        lineHeight: updatedTextElement.lineHeight,\n        textDecoration: labTextDecoration(updatedTextElement),\n        textTransform: ({ upper: "uppercase", lower: "lowercase", title: "capitalize" })[labTextCase(updatedTextElement)] || "none",'],
+    ['            element.originalText,\n            getFontString(element),', '            labDisplayText(element),\n            getFontString(element),'],
+    ['            text: element.originalText\n', '            text: labDisplayText(element)\n'],
+    ['          boundTextElement.originalText,\n          getFontString(boundTextElement),', '          labDisplayText(boundTextElement),\n          getFontString(boundTextElement),'],
+    ['          text: boundTextElement.originalText,', '          text: labDisplayText(boundTextElement),'],
     ['    const { textAlign, verticalAlign } = updatedTextElement;', '    if (editable.value !== updatedTextElement.originalText) {\n      const start = editable.selectionStart, end = editable.selectionEnd, direction = editable.selectionDirection;\n      editable.value = updatedTextElement.originalText;\n      editable.setSelectionRange(Math.min(start, editable.value.length), Math.min(end, editable.value.length), direction);\n    }\n    const { textAlign, verticalAlign } = updatedTextElement;'],
     ['var actionChangeTextAlign = register({', `var actionLabTextFormat = register({
   name: "labTextFormat", label: "Text style", trackEvent: false,
   perform: (elements, appState, value, app) => {
-    if (appState.viewModeEnabled || !["bold", "italic", "underline", "strikethrough", "bullets", "bullet-style", "indent", "outdent"].includes(value?.action)) return false;
+    if (appState.viewModeEnabled || !["bold", "italic", "underline", "strikethrough", "case", "bullets", "bullet-style", "indent", "outdent"].includes(value?.action)) return false;
     if (value.action === "bullet-style" && !["dot", "number", "alphabet", "dash"].includes(value.value)) return false;
+    if (value.action === "case" && !labTextCases.includes(value.value)) return false;
     return {
       elements: changeProperty(elements, appState, element => {
         if (!isTextElement(element) || element.locked || app.scene.getContainerElement(element)?.locked) return element;
-        const styleAction = ["bold", "italic", "underline", "strikethrough"].includes(value.action);
+        const styleAction = ["bold", "italic", "underline", "strikethrough", "case"].includes(value.action);
         const originalText = styleAction ? element.originalText : labFormatTextLines(element.originalText ?? element.text, value.action, value.value);
-        const updated = newElementWith(element, styleAction ? { customData: { ...element.customData, textFormat: { ...labTextFormat(element), [value.action]: value.value === true } } } : { originalText, text: originalText });
+        const updated = newElementWith(element, styleAction ? { customData: { ...element.customData, textFormat: { ...labTextFormat(element), [value.action]: value.action === "case" ? value.value : value.value === true } } } : { originalText, text: originalText });
         redrawTextBoundingBox(updated, app.scene.getContainerElement(element), app.scene.getNonDeletedElementsMap());
         return updated;
       }, true),
@@ -55,10 +60,16 @@ export function patchTextFormatting(source, target) {
 });
 var actionChangeTextAlign = register({`]
   ] : [
+    ['      for (const char of element.originalText) {', '      for (const char of (element.originalText ?? element.text) + (labTextCase(element) === "small-caps" ? labDisplayText(element).toUpperCase() : labDisplayText(element))) {'],
+    ['  boundTextUpdates.text = textElement.text;', '  boundTextUpdates.text = labDisplayText(textElement);'],
+    ['      textElement.originalText,\n      getFontString(textElement),', '      labDisplayText(textElement),\n      getFontString(textElement),'],
+    ['          textElement.originalText,\n          getFontString(textElement),', '          labDisplayText(textElement),\n          getFontString(textElement),'],
+    ['      element.originalText,\n      getFontString(element),', '      labDisplayText(element),\n      getFontString(element),'],
+    ['var refreshTextDimensions = (textElement, container, elementsMap, text = textElement.text) => {', 'var refreshTextDimensions = (textElement, container, elementsMap, text = textElement.originalText ?? textElement.text) => {\n  text = labDisplayText(textElement, text);'],
     ['  const fontSize = parseFloat(font);', '  const fontSize = parseFloat(font.match(/(?:^|\\s)([\\d.]+)px\\b/)?.[1] ?? font);'],
     ['var getFontString = ({\n  fontSize,\n  fontFamily\n}) => {\n  return `${fontSize}px ${getFontFamilyString({ fontFamily })}`;\n};', 'var getFontString = (element) => {\n  return `${labTextFontPrefix(element)}${element.fontSize}px ${getFontFamilyString(element)}`;\n};'],
     ['            index * lineHeightPx + verticalOffset\n          );', '            index * lineHeightPx + verticalOffset\n          );\n          labDrawTextDecorations(context, element, lines[index], horizontalOffset, index * lineHeightPx + verticalOffset);'],
-    ['          text.setAttribute("font-size", `${element.fontSize}px`);', '          text.setAttribute("font-size", `${element.fontSize}px`);\n          text.setAttribute("font-weight", labTextFormat(element).bold ? "bold" : "normal");\n          text.setAttribute("font-style", labTextFormat(element).italic ? "italic" : "normal");\n          text.setAttribute("text-decoration", labTextDecoration(element));']
+    ['          text.setAttribute("font-size", `${element.fontSize}px`);', '          text.setAttribute("font-size", `${element.fontSize}px`);\n          text.setAttribute("font-weight", labTextFormat(element).bold ? "bold" : "normal");\n          text.setAttribute("font-style", labTextFormat(element).italic ? "italic" : "normal");\n          text.setAttribute("font-variant", labTextCase(element) === "small-caps" ? "small-caps" : "normal");\n          text.setAttribute("text-decoration", labTextDecoration(element));']
   ];
   for (const [before, after] of edits) {
     if (source.split(before).length !== 2) throw new Error("Text formatting anchor changed: " + before.slice(0, 70));
