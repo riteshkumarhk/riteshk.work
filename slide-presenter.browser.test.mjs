@@ -250,7 +250,11 @@ for (const nativeHost of [true, false]) test(`owner Present mode retries undeplo
       return golden > 100;
     }));
     await audience.screenshot({ path: join(tmpdir(), `rk-owner-presentation-recovered-${nativeHost ? "native" : "web"}.png`) });
-    await page.reload();
+    await audience.evaluate(() => document.querySelector('[data-pjp="exit"]').click());
+    if (nativeHost) await audience.locator(".pjp").waitFor({ state: "detached" });
+    else if (!audience.isClosed()) await audience.waitForEvent("close");
+    await page.bringToFront();
+    await page.goto(baseURL + "/?work=owner-retry");
     await page.waitForFunction(() => !!window.RK?.requestOwnerPresentation);
     assert.equal(await page.evaluate(() => window.RK.isOwnerPresentation()), false);
     assert.equal(await page.evaluate(() => !!window.RK.data.work[0].study.nativeDeckDocument), false);
