@@ -616,6 +616,81 @@ test('before-after sections render inside picker cards, navigator and slideshow'
   } finally { await browser.close(); }
 });
 
+test('speaker note clipboard paragraphs do not accumulate spacing during serialization', { timeout:60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  const page = await browser.newPage();
+  try {
+    const { build } = await import('esbuild');
+    const bundle = await build({ entryPoints:['src/js/slide-rich-text.mjs'], bundle:true, write:false, format:'iife', globalName:'RichNotes' });
+    await page.setContent('<div id="notes" style="white-space:pre-wrap"></div>');
+    await page.addScriptTag({ content:bundle.outputFiles[0].text });
+    const result = await page.evaluate(() => {
+      const element = document.querySelector('#notes');
+      const source = '\n  <p>Sync notice</p>\n  <p>Continuous import</p>\n  <p><br></p>\n  <p>Google import</p>\n';
+      const canonical = RichNotes.notesHtml(source);
+      const controller = RichNotes.installRichNotes(element, {});
+      const cycles = [];
+      controller.set(source);
+      for (let index = 0; index < 4; index++) {
+        const saved = RichNotes.serializedNotes(element);
+        cycles.push({ html:element.innerHTML, saved, height:element.getBoundingClientRect().height });
+        controller.set(JSON.parse(JSON.stringify(saved)));
+      }
+      controller.set('First\n\nSecond');
+      const plain = RichNotes.serializedNotes(element);
+      controller.dispose();
+      return { canonical, cycles, plain };
+    });
+    assert.equal(result.canonical, '<p>Sync notice</p><p>Continuous import</p><p><br></p><p>Google import</p>');
+    assert.ok(result.cycles.every(cycle => cycle.html === result.canonical && cycle.saved === result.canonical));
+    assert.ok(result.cycles.every(cycle => cycle.height === result.cycles[0].height));
+    assert.equal(result.plain, 'First\n\nSecond');
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException('Denied','NotAllowedError'));
+      Object.defineProperty(window,'documentPictureInPicture',{value:undefined,configurable:true});
+    });
+    await page.goto(base+'/studio/slide-merge-lab/');
+    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    const notes = page.locator('.merge-notes-input');
+    await notes.fill('');
+    await notes.evaluate(element => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/html', '\n  <p><strong>Sync notice:</strong> Sign in</p>\n  <p>Continuous import</p>\n  <p><br></p>\n  <ul>\n    <li>Supported browser data</li>\n    <li><em>Google import</em></li>\n  </ul>\n');
+      element.dispatchEvent(new ClipboardEvent('paste', {clipboardData,bubbles:true,cancelable:true}));
+    });
+    await page.evaluate(()=>window.__slideMerge.save());
+    const saved = await page.evaluate(()=>{const deck=window.__slideMerge.deck();return deck.slides.find(slide=>slide.id===deck.selected).notes;});
+    assert.match(saved, /<(?:strong|b)>Sync notice:/);
+    assert.match(saved, /<li>/);
+    assert.match(saved, /<(?:em|i)>Google import/);
+    assert.doesNotMatch(saved, />[\r\n\t ]+</);
+    const heights = [];
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await page.reload();
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      heights.push(await notes.evaluate(element=>element.scrollHeight));
+      await notes.evaluate(element=>element.dispatchEvent(new InputEvent('input',{bubbles:true})));
+      await page.evaluate(()=>window.__slideMerge.save());
+      assert.equal(await page.evaluate(()=>{const deck=window.__slideMerge.deck();return deck.slides.find(slide=>slide.id===deck.selected).notes;}),saved);
+    }
+    assert.ok(heights.every(height=>height===heights[0]), 'Reopening and saving cannot grow note height');
+    for (const width of [1440,390]) {
+      await page.setViewportSize({width,height:1000});
+      const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});
+      if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+      await notes.scrollIntoViewIfNeeded();
+      await page.screenshot({path:join(tmpdir(),`rk-notes-spacing-${width}.png`)});
+    }
+    await page.setViewportSize({width:1440,height:1000});
+    const pending=page.waitForEvent('popup');
+    await page.getByRole('button',{name:'Slide Show',exact:true}).click();
+    const popup=await pending;
+    await popup.locator('[data-pp-notes] li').first().waitFor();
+    assert.equal(await popup.locator('[data-pp-notes]').innerHTML(),saved);
+    await popup.getByRole('button',{name:'End presentation',exact:true}).click();
+  } finally { await browser.close(); }
+});
+
 test('unpublished font faces are authored choices and rich notes survive the web presenter', { timeout:60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   const page = await browser.newPage({viewport:{width:1440,height:1000}});

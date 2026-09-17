@@ -4126,7 +4126,34 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
     await page.getByRole('checkbox', { name: 'Public slideshow', exact: true }).uncheck();
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.__RKStudio.getDraft().work[0].study.slidesPublic === false);
-    const publishedNotes = await page.locator('.merge-notes-input').innerText();
+    const publishingNotes = page.locator('.merge-notes-input');
+    await publishingNotes.fill('');
+    await publishingNotes.evaluate(element => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/html', '\n  <p>Private sync notice</p>\n  <p>Continuous import</p>\n  <p><br></p>\n  <p>Google import</p>\n');
+      element.dispatchEvent(new ClipboardEvent('paste', {clipboardData,bubbles:true,cancelable:true}));
+    });
+    await publishingNotes.press('Tab');
+    await page.locator('[data-l2-back]').click();
+    await page.waitForSelector('.merge-shell', {state:'detached'});
+    await openProjectSlides(page);
+    await page.waitForFunction(()=>document.querySelector('.merge-notes-input')?.textContent.includes('Private sync notice'));
+    const publishedNotes = await page.evaluate(() => new Promise((resolve, reject) => {
+      const reference = window.__RKStudio.getDraft().work[0].study.nativeDeck;
+      const request = indexedDB.open('rk-studio-slide-decks-v1');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result, record = database.transaction('documents').objectStore('documents').get([reference.id, reference.revision]);
+        record.onsuccess = () => {
+          database.close();
+          const deck = record.result?.document, notes = deck?.slides.find(slide => slide.id === deck.selected)?.notes;
+          resolve(notes);
+        };
+        record.onerror = () => { database.close(); reject(record.error); };
+      };
+    }));
+    assert.match(publishedNotes, /Private sync notice/);
+    assert.doesNotMatch(publishedNotes, />[\r\n\t ]+</);
     const publicUploadCount = publicUploads.length;
     holdWrite = true;
     await page.locator('[data-publish]').click();

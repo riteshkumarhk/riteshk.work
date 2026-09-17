@@ -16,6 +16,13 @@ export function notesHtml(value, document = globalThis.document) {
     for (const attribute of [...element.attributes]) element.removeAttribute(attribute.name);
     if (["left", "center", "right"].includes(align)) element.style.textAlign = align;
   }
+  const blocks = new Set(["P", "DIV", "UL", "OL", "LI", "BLOCKQUOTE"]);
+  for (const parent of [template.content, ...template.content.querySelectorAll("*")]) {
+    for (const node of [...parent.childNodes]) {
+      if (node.nodeType !== 3 || !/^[\t\r\n ]+$/.test(node.textContent)) continue;
+      if (blocks.has(node.previousSibling?.nodeName) || blocks.has(node.nextSibling?.nodeName)) node.remove();
+    }
+  }
   const output = document.createElement("div"); output.append(template.content);
   return output.textContent.trim() ? output.innerHTML : "";
 }
@@ -28,7 +35,7 @@ export function notesText(value, document = globalThis.document) {
 
 export function serializedNotes(element) {
   const html = notesHtml(element.innerHTML, element.ownerDocument);
-  if (!/<(?:strong|b|em|i|ul|ol|li|blockquote|s|u)\b|style=/i.test(html)) return element.innerText.replace(/\n$/, "");
+  if (!/<(?:p|div|strong|b|em|i|ul|ol|li|blockquote|s|u)\b|style=/i.test(html)) return element.innerText.replace(/\n$/, "");
   return html;
 }
 
