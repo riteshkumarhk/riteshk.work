@@ -14,18 +14,20 @@ export async function restoreStudioOwnerCopies(work, decrypt) {
   if (study.nativeDeckEnc) {
     const saved = await decrypt(study.nativeDeckEnc);
     if (saved?.version !== 1 || saved.caseStudyId !== work.id || !Array.isArray(saved.document?.slides)) throw new Error("The private slideshow copy is invalid");
+    assertOwnerMediaResolved(saved.document);
     study.nativeDeckDocument = saved.document;
   }
   if (study.slidesOwnerEnc) {
     const slides = await decrypt(study.slidesOwnerEnc);
     if (!Array.isArray(slides)) throw new Error("The private slideshow copy is invalid");
+    assertOwnerMediaResolved(slides);
     study.slides = slides; study.legacyDeckRestored = true;
   }
   if (study.authorSectionsEnc) {
     const saved = await decrypt(study.authorSectionsEnc);
     if (saved?.version !== 1 || saved.caseStudyId !== work.id || !Array.isArray(saved.blocks)) throw new Error("The private case-study copy is invalid");
+    assertOwnerMediaResolved(saved.blocks);
     study.blocks = saved.blocks; study.authorSectionsRestored = true;
   }
-  assertOwnerMediaResolved(restored);
   return restored;
 }

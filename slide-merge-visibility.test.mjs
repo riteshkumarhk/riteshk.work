@@ -221,6 +221,15 @@ test("owner presentation restores notes and hidden sections without changing the
   await assert.rejects(prepareStudioPublication({ work: [restored] }), /owner presentation copy/i);
 });
 
+test("owner deck restoration does not validate separately protected case-study media before its unlock", async () => {
+  const published = { id: "case", study: { nativeDeckEnc: { ct: "deck", wraps: { owner: "key" } }, blocks: [{ locked: true, image: "rkenc:separate-section-file" }] } };
+  const before = structuredClone(published);
+  const restored = await restoreStudioOwnerCopies(published, async () => ({ version: 1, caseStudyId: "case", document: fixture() }));
+  assert.equal(restored.study.nativeDeckDocument.slides[0].notes, "PRIVATE NOTES");
+  assert.deepEqual(restored.study.blocks, published.study.blocks);
+  assert.deepEqual(published, before);
+});
+
 test("disabled sections and hidden projects never move their private media to public hosting", async () => {
   const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
   const start = source.indexOf("async function deVaultUnlockedForPublish("), end = source.indexOf("async function encryptStudioOwner", start);

@@ -113,6 +113,7 @@ test("native text case preserves source editing history mixed selection small ca
     await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
     await button('Lowercase').click();
     await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true, 'case-second': true } } }));
+    await page.waitForFunction(() => { const api = window.__slideMerge.api, selected = api.getAppState().selectedElementIds; return !!selected['case-first'] && !!selected['case-second'] && document.querySelectorAll('.lab-text-case [aria-pressed="true"]').length === 0; });
     assert.equal(await controls.locator('[aria-pressed="true"]').count(), 0, 'Mixed modes do not report a false selection');
     await button('Small caps').click();
     const mixed = await page.evaluate(() => window.__slideMerge.api.getSceneElements());
@@ -1233,7 +1234,7 @@ test("Ticket and Present-mode access notify existing section views after recover
     sessionStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
     localStorage:{getItem:()=>null},baseData:()=>({work:[work]}),hasStudioOwnerCopies:()=>false,
     window:{RK:{},dispatchEvent:event=>events.push({type:event.type,data:environment.window.RK.data,unlocked:values.get('unlock:ticket-case')})},
-    showUnlockingBanner(){},showPresentBanner(){},render(){},revealAll(){},DATA:null,presentActive:false
+    showUnlockingBanner(){},showPresentBanner(){},render(){},revealAll(){},DATA:null,presentActive:false,presentOwnerKeys:new Map()
   };
   const markStart = source.indexOf('  function rkMarkUnlocked('), markEnd = source.indexOf('  async function rkDecryptStudyBlocks(',markStart);
   const presentStart = source.indexOf('  async function presentAll('), presentEnd = source.indexOf('  function exitPresent()',presentStart);

@@ -9,6 +9,7 @@ import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
 import { NATIVE_AUDIENCE_SCHEMA } from "./src/js/slide-studio-publication.mjs";
+import { rkNewSek, rkWrapSek, rkEncWithSek } from "./src/js/admin-core.js";
 
 const baseURL = process.env.SLIDE_LAB_URL;
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
@@ -167,6 +168,84 @@ test("website Play uses the published native audience without loading the editor
     assert.deepEqual(await page.locator("body").evaluate(element => ({ font: getComputedStyle(element).fontFamily, background: getComputedStyle(element).backgroundColor })), originalStyle);
     published.work[0].study.slidesPublic = false; delete published.work[0].study.nativeDeckPublic;
     await page.goto(baseURL + "/?work=native-live"); await page.locator(".pj.is-open").waitFor();
+    assert.equal(await page.locator('.pj [data-pj="present"]').isVisible(), false);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+for (const nativeHost of [true, false]) test(`owner Present mode retries undeployed encrypted slide media without another recovery prompt: ${nativeHost ? "native host" : "web audience tab"}`, { skip: !enabled, timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+  const errors = []; page.on("pageerror", error => errors.push(error.message));
+  try {
+    await page.addInitScript(denyCapture);
+    if (nativeHost) await page.addInitScript(() => { window.__RK_NATIVE_PRESENTER = true; });
+    await page.goto(baseURL + "/studio/slide-merge-lab/");
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    const fixture = await page.evaluate(() => {
+      const deck = window.__slideMerge.deck();
+      deck.slides = [deck.slides[0]]; deck.slidesPublic = false; deck.slides[0].notes = "PRIVATE RECOVERY NOTES";
+      const canvas = document.createElement("canvas"); canvas.width = 80; canvas.height = 80;
+      const context = canvas.getContext("2d"); context.fillStyle = "#e8bd4c"; context.fillRect(0, 0, 80, 80);
+      const scene = deck.slides[0].scene, template = scene.elements.find(element => element.type === "rectangle");
+      scene.elements.push({ ...template, id: "protected-photo", type: "image", fileId: "protected-photo", x: 80, y: 80, width: 80, height: 80, frameId: "lab-slide", status: "saved", scale: [1, 1], crop: null, boundElements: null, groupIds: [] });
+      return { deck, image: canvas.toDataURL() };
+    });
+    const recovery = "synthetic-owner-recovery", key = rkNewSek(), iv = crypto.getRandomValues(new Uint8Array(12));
+    const cryptoKey = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
+    const ciphertext = Buffer.from(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, Buffer.from(fixture.image.split(",")[1], "base64")));
+    const protectedRef = "rkenc:" + Buffer.from(JSON.stringify({ p: "/assets/protected/synthetic-owner-retry.enc", iv: Buffer.from(iv).toString("base64"), m: "image/png" })).toString("base64");
+    fixture.deck.slides[0].scene.files["protected-photo"] = { id: "protected-photo", mimeType: "image/png", dataURL: protectedRef, created: 1 };
+    const envelope = { ...await rkEncWithSek(key, { version: 1, caseStudyId: "owner-retry", document: fixture.deck }), wraps: { owner: await rkWrapSek(recovery, key) } };
+    const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
+    published.work = [{ id: "owner-retry", title: "Owner recovery regression", featured: true, study: { slidesPublic: false, blocks: [{ type: "text", body: "Original case-study content" }], nativeDeckEnc: envelope } }];
+    let available = false, requests = 0;
+    await page.route("**/content.json*", route => route.fulfill({ contentType: "application/json", body: JSON.stringify(published) }));
+    await page.route("**/assets/protected/synthetic-owner-retry.enc", route => { requests++; return route.fulfill({ status: available ? 200 : 404, contentType: "application/octet-stream", body: available ? ciphertext : Buffer.from("Not deployed yet") }); });
+    await page.goto(baseURL + "/?work=owner-retry");
+    await page.waitForFunction(() => !!window.RK?.requestOwnerPresentation);
+    assert.equal(await page.locator('.pj [data-pj="present"]').isVisible(), false);
+    const invalid = await page.evaluate(() => window.RK.presentAll("incorrect-synthetic-phrase"));
+    assert.equal(invalid.ok, false);
+    assert.equal(await page.evaluate(() => window.RK.isOwnerPresentation()), false);
+    await page.evaluate(() => { sessionStorage.setItem("rk:present:active", "1"); });
+    assert.equal(await page.evaluate(() => window.RK.isOwnerPresentation()), false, "A storage flag does not prove owner access");
+    assert.equal((await page.evaluate(recovery => window.RK.presentAll(recovery), recovery)).ok, true);
+    assert.equal(await page.evaluate(() => !!window.RK.data.work[0].study.nativeDeckDocument), false);
+    assert.equal(await page.evaluate(() => window.RK.isOwnerPresentation()), true, "A missing image does not invalidate successful owner decryption");
+    await page.evaluate(() => window.RK.openProject("owner-retry"));
+    await page.evaluate(() => { window.recoveryPrompts = 0; const request = window.RK.requestOwnerPresentation; window.RK.requestOwnerPresentation = (...args) => { window.recoveryPrompts++; return request(...args); }; });
+    await page.locator('.pj [data-pj="present"]').click();
+    await page.getByRole("dialog", { name: "Presentation unavailable" }).waitFor();
+    assert.match(await page.locator('.pass__sub[role="alert"]').innerText(), /protected media file/);
+    assert.equal(await page.locator('.pass input[type="password"]').count(), 0);
+    assert.equal(await page.evaluate(() => window.recoveryPrompts), 0);
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    available = true;
+    const opened = nativeHost ? Promise.resolve(page) : page.waitForEvent("popup");
+    await page.locator('.pj [data-pj="present"]').click();
+    const audience = await opened;
+    await audience.locator(".pjp--canvas .merge-present-stage canvas").first().waitFor();
+    await audience.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "1 / 1");
+    assert.equal(await page.evaluate(() => window.recoveryPrompts), 0);
+    assert.ok(requests >= 3);
+    assert.deepEqual(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckEnc), envelope);
+    assert.equal(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckDocument.slides[0].notes), "PRIVATE RECOVERY NOTES");
+    assert.equal(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckDocument.slides[0].scene.files["protected-photo"].dataURL), fixture.image, "Restored native media retains its exact original bytes");
+    assert.doesNotMatch(await audience.locator(".pjp .merge-present-stage").innerText(), /PRIVATE RECOVERY NOTES/);
+    assert.ok(await audience.locator(".pjp canvas").evaluateAll(canvases => canvases.some(canvas => { const context = canvas.getContext("2d"); return context && canvas.width && canvas.height && context.getImageData(0, 0, canvas.width, canvas.height).data.some((value, index) => index % 4 === 3 && value > 0); })));
+    await audience.waitForFunction(() => [...document.querySelectorAll(".pjp canvas")].some(canvas => {
+      const context = canvas.getContext("2d"); if (!context || !canvas.width || !canvas.height) return false;
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let golden = 0;
+      for (let offset = 0; offset < pixels.length; offset += 4) if (pixels[offset] > 180 && pixels[offset + 1] > 130 && pixels[offset + 1] < 220 && pixels[offset + 2] < 110 && pixels[offset + 3] > 200) golden++;
+      return golden > 100;
+    }));
+    await audience.screenshot({ path: join(tmpdir(), `rk-owner-presentation-recovered-${nativeHost ? "native" : "web"}.png`) });
+    await page.reload();
+    await page.waitForFunction(() => !!window.RK?.requestOwnerPresentation);
+    assert.equal(await page.evaluate(() => window.RK.isOwnerPresentation()), false);
+    assert.equal(await page.evaluate(() => !!window.RK.data.work[0].study.nativeDeckDocument), false);
     assert.equal(await page.locator('.pj [data-pj="present"]').isVisible(), false);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

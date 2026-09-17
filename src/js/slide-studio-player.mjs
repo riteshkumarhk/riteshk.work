@@ -16,13 +16,24 @@ export function presentStudioDeck(work, options = {}) {
 }
 
 async function openStudioDeck(work, options) {
+  const current = window.RK?.data?.work?.find(item => item.id === work.id);
+  if (!work.study?.nativeDeckDocument && current?.study?.nativeDeckDocument) work = current;
   let document = options.document || work.study?.nativeDeckDocument;
   if (!document && options.draft && work.study?.nativeDeck) document = (await loadStudioDeck(work.study.nativeDeck, { latest: true })).document;
   document ||= nativePublicDeck(work);
+  if (!document && work.study?.nativeDeckEnc && window.RK?.isOwnerPresentation?.()) {
+    work = await window.RK.restoreOwnerPresentation(work.id);
+    document = work.study?.nativeDeckDocument;
+    if (!document) throw new Error("The private slideshow could not be restored. Your saved slides and notes have not changed; retry after the latest publication finishes deploying.");
+  }
   if (!document && work.study?.nativeDeckEnc && window.RK?.requestOwnerPresentation) {
     if (!await window.RK.requestOwnerPresentation()) return null;
     work = window.RK.data.work.find(item => item.id === work.id) || work;
     document = work.study?.nativeDeckDocument;
+    if (!document && window.RK?.isOwnerPresentation?.()) {
+      work = await window.RK.restoreOwnerPresentation(work.id);
+      document = work.study?.nativeDeckDocument;
+    }
   }
   if (!document) throw new Error("This slideshow is owner-only. Open it in Studio or owner Present mode.");
   window.EXCALIDRAW_ASSET_PATH ||= new URL("/studio/slide-lab/assets/", location.href).href;

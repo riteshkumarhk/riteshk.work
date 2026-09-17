@@ -1170,6 +1170,7 @@ import {
 
   /* ---------- present mode (owner: unlock everything to present) ---------- */
   function presentDialog(onDone) {
+    if (window.RK?.isOwnerPresentation?.()) { onDone?.(true); return; }
     if (!(window.RK && window.RK.presentAll)) { flash("Present mode isn't ready yet - reload and try again."); onDone?.(false); return; }
     // Nothing protected? Just show everything unlocked, no passphrase needed.
     if (window.RK.rkHasProtected && !window.RK.rkHasProtected()) {

@@ -819,6 +819,7 @@ import { contentRevision } from "./content-revision.mjs";
   const SV_KEY = "rk:sv:active";
   let DATA = null;
   let presentActive = false;
+  let presentOwnerKeys = new Map();
   function baseData() { return (window.RK && window.RK.data) || DATA; }
 
   function svById(id) {
@@ -874,9 +875,15 @@ import { contentRevision } from "./content-revision.mjs";
       var o = targets[i].o, k = targets[i].k;
       try {
         var meta = JSON.parse(atob(o[k].slice(6)));
-        var res = await fetch(meta.p); if (!res.ok) continue;
+        var res = await fetch(meta.p, { cache: "reload" }); if (!res.ok) continue;
         var bytes = await rkDecBytes(sekBytes, meta.iv, new Uint8Array(await res.arrayBuffer()));
-        o[k] = URL.createObjectURL(new Blob([bytes], { type: meta.m || "application/octet-stream" }));
+        const blob = new Blob([bytes], { type: meta.m || "application/octet-stream" });
+        o[k] = /^(?:original)?dataURL$/i.test(k) ? await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        }) : URL.createObjectURL(blob);
         // The blob: URL drops the ".mp4" extension, so the renderer's extension-based detection
         // would fall back to <img> and the video silently vanishes. Pin kind:"video" (mirrors the
         // admin's resolvePreviewData) so a decrypted video still renders as a <video>.
@@ -1065,9 +1072,12 @@ import { contentRevision } from "./content-revision.mjs";
     // Show the working state right away — the decrypt loop below can take a moment.
     showUnlockingBanner("Unlocking\u2026");
     var ids = [], hadProtected = 0, unlocked = 0, passOk = false, hadVault = false;
+    const ownerKeys = new Map();
     const decryptOwnerCopy = async encrypted => {
       const key = await rkUnwrapSek(recovery, encrypted.wraps.owner);
       const value = await rkDecWithSek(key, encrypted);
+      ownerKeys.set(encrypted.ct, key);
+      passOk = true;
       await rkResolveEncImages(value, key);
       return value;
     };
@@ -1108,6 +1118,7 @@ import { contentRevision } from "./content-revision.mjs";
     try { sessionStorage.setItem(RK_PRESENT_IDS, JSON.stringify(ids)); sessionStorage.setItem(RK_PRESENT_ACTIVE, "1"); } catch (e) {}
     if (window.RK) window.RK.data = data;
     DATA = data;
+    presentOwnerKeys = ownerKeys;
     presentActive = true;
     render(data);
     revealAll();
@@ -1126,7 +1137,26 @@ import { contentRevision } from "./content-revision.mjs";
     window.dispatchEvent(new Event("rk:section-access"));
     return { ok: true, unlocked: unlocked, total: data.work.length };
   }
+  async function restoreOwnerPresentation(workId) {
+    if (!presentActive) throw new Error("Open owner Present mode to unlock this slideshow.");
+    const work = baseData()?.work?.find(item => item.id === workId);
+    if (!work) throw new Error("This case study is no longer available.");
+    if (work.study?.nativeDeckDocument) return work;
+    const ownerKeys = presentOwnerKeys;
+    const restored = await restoreStudioOwnerCopies(work, async encrypted => {
+      const key = ownerKeys.get(encrypted.ct);
+      if (!key) throw new Error("This slideshow could not be decrypted in the current owner session. Exit Present mode and unlock again.");
+      const value = await rkDecWithSek(key, encrypted);
+      await rkResolveEncImages(value, key);
+      return value;
+    });
+    if (!presentActive || presentOwnerKeys !== ownerKeys || !ownerKeys.size) throw new Error("Owner Present mode has ended.");
+    work.study = restored.study;
+    return work;
+  }
   function rkClearPresent() {
+    presentActive = false;
+    presentOwnerKeys.clear();
     try {
       var ids = JSON.parse(sessionStorage.getItem(RK_PRESENT_IDS) || "[]");
       (ids || []).forEach(function (id) { sessionStorage.removeItem(RK_UNLOCK_PREFIX + id); });
@@ -1248,6 +1278,8 @@ import { contentRevision } from "./content-revision.mjs";
       svExpired: svExpired,
       svDaysLeft: svDaysLeft,
       presentAll: presentAll,
+      isOwnerPresentation: () => presentActive,
+      restoreOwnerPresentation: restoreOwnerPresentation,
       exitPresent: exitPresent,
       rkHasProtected: rkHasProtected,
     });

@@ -1820,12 +1820,14 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
         if (pjIsOwner() && !PREVIEW && !window.__RK_NATIVE_PRESENTER) {
           openPresenterTab({
             url:"/?" + new URLSearchParams({ work:work.id, slideshow:"1" }),
-            present:async (audience, presenterWindow, _prepared, onClose) => {
-              const document = work.study?.nativeDeckDocument || nativePublicDeck(work);
-              const ids = [work.id, ...(document?.slides || []).flatMap(slide => (slide.scene?.elements || []).map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
+            prepare:() => window.RK?.isOwnerPresentation?.() && work.study?.nativeDeckEnc ? window.RK.restoreOwnerPresentation(work.id) : work,
+            present:async (audience, presenterWindow, prepared, onClose) => {
+              const presentationWork = prepared || work;
+              const document = presentationWork.study?.nativeDeckDocument || nativePublicDeck(presentationWork);
+              const ids = [presentationWork.id, ...(document?.slides || []).flatMap(slide => (slide.scene?.elements || []).map(element => element.customData?.sectionReference?.caseStudyId).filter(Boolean))];
               const disconnect = connectSectionAccess(audience, ids);
               try {
-                const player = await audience.RK.presentDeck(work, { floatingPresenter:true, presenterOwner:window, presenterWindow, onClose:() => { disconnect(); onClose(); }, autoStart:false });
+                const player = await audience.RK.presentDeck(presentationWork, { floatingPresenter:true, presenterOwner:window, presenterWindow, onClose:() => { disconnect(); onClose(); }, autoStart:false });
                 if (!player) disconnect();
                 return player;
               } catch (error) { disconnect(); throw error; }
@@ -2256,7 +2258,7 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
     var _dots = overlay.querySelector("[data-dotswrap]"); if (_dots) _dots.innerHTML = dotsHtml(_navItems);
     if (navMode === "mini" && _navItems.length) { try { if (!localStorage.getItem("rk:pj:navpeek")) { localStorage.setItem("rk:pj:navpeek", "1"); overlay.classList.add("pj--navpeek"); setTimeout(function () { overlay.classList.remove("pj--navpeek"); }, 2400); } } catch (e) {} }
   }
-  function pjIsOwner() { try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
+  function pjIsOwner() { if (window.RK?.isOwnerPresentation?.()) return true; try { return localStorage.getItem("rk:owner") === "1"; } catch (e) { return false; } }
   function pjHasSavedDeck(w) {
     var st = w && w.study;
     if (!st) return false;
