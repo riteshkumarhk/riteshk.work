@@ -7442,7 +7442,7 @@ import { resumeSignature } from "./resume-workspace.mjs";
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.29";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.30";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();

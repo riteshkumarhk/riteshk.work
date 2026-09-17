@@ -3,7 +3,7 @@ import { resolve, dirname } from "node:path";
 import postcss from "postcss";
 import { patchFontPicker } from "./slide-lab-font-picker.mjs";
 import { patchSelectionBounds } from "./slide-lab-selection-bounds.mjs";
-import { patchTypography } from "./slide-lab-typography.mjs";
+import { patchTypography, patchTextFormatting } from "./slide-lab-typography.mjs";
 import { patchSlideSnapping } from "./slide-lab-snapping.mjs";
 
 export function stripUpstreamFirebase(source) {
@@ -59,7 +59,8 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY.Excalifont,\n    icon: FreedrawIcon,\n    text: t("labels.handDrawn")', 'value: FONT_FAMILY.Fraunces,\n    icon: TextIcon,\n    text: "Fraunces"');
       source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
-      source = patchTypography(patchSelectionBounds(patchFontPicker(source), "renderer"));
+      source = patchTextFormatting(patchTypography(patchSelectionBounds(patchFontPicker(source), "renderer")), "renderer");
+      source = `import { TextFormatControls as LabTextFormatControls } from ${JSON.stringify(resolve("src/js/slide-text-format.jsx").replaceAll("\\", "/"))};\nimport { textFormat as labTextFormat, textDecoration as labTextDecoration, formatTextLines as labFormatTextLines } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { FontSizePicker as LabFontSizePicker, FontLibraryIcon as LabFontLibraryIcon } from ${JSON.stringify(resolve("src/js/slide-font-size.jsx").replaceAll("\\", "/"))};\n` + source;
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { sampleCanvasColor as labSampleCanvasColor, openScreenEyeDropper as labOpenScreenEyeDropper, screenColorForCanvas as labScreenColorForCanvas } from ${JSON.stringify(resolve("src/js/slide-lab-eyedropper.mjs").replaceAll("\\", "/"))};\n` + source;
@@ -85,6 +86,8 @@ export function cornerEnginePlugin() {
       const version = JSON.parse(await readFile("node_modules/@excalidraw/excalidraw/package.json", "utf8")).version;
       if (version !== "0.18.1") throw new Error("Revalidate the Slide Lab corner adapter for Excalidraw " + version);
       source = patchSelectionBounds(source, "handles");
+      source = patchTextFormatting(source, "core");
+      source = `import { textFormat as labTextFormat, textFontPrefix as labTextFontPrefix, textDecoration as labTextDecoration, drawTextDecorations as labDrawTextDecorations } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
       source = patchSlideSnapping(source);
       source = `import { slideReferencePoints as labSlideReferencePoints, isSlideSnappingScene as labIsSlideSnappingScene, slideSnappingEnabled as labSlideSnappingEnabled } from ${JSON.stringify(resolve("src/js/slide-merge-snapping.mjs").replaceAll("\\", "/"))};\n` + source;
       const shapeAnchor = "  embedsValidationStatus\n}) => {\n  switch (element.type) {";

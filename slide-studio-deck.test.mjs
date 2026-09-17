@@ -62,6 +62,161 @@ async function assertCoverPixel(page, position, expected) {
   }, { position, expected });
 }
 
+test("native text styles bullets and indents retain editing history exports and mobile controls", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('rk:theme')) localStorage.setItem('rk:theme', 'day');
+      window.formatFonts = [];
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        if (String(text).includes('Formatting example')) window.formatFonts.push(this.font);
+        return fillText.call(this, text, ...args);
+      };
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await page.evaluate(async () => {
+      const api = window.__slideMerge.api, original = api.getSceneElements(), text = original.find(element => element.type === 'text');
+      const first = { ...text, id: 'format-first', x: 60, y: 80, width: 450, height: 70, fontSize: 28, autoResize: false, containerId: null, groupIds: [], boundElements: [], locked: false, text: 'Formatting example\nSecond paragraph', originalText: 'Formatting example\nSecond paragraph', customData: { fixture: 'preserve' } };
+      const second = { ...first, id: 'format-second', x: 650, originalText: 'Other text', text: 'Other text' };
+      const locked = { ...second, id: 'format-locked', y: 300, locked: true };
+      api.updateScene({ elements: [original.find(element => element.id === 'lab-slide'), first, second, locked], appState: { selectedElementIds: { 'format-first': true } }, captureUpdate: 'IMMEDIATELY' });
+      await window.__slideMerge.save();
+    });
+    const controls = page.locator('.lab-text-format');
+    const button = name => controls.getByRole('button', { name, exact: true });
+    const readText = () => page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first'));
+    await button('Bold').waitFor();
+    const before = await readText();
+    for (const name of ['Bold', 'Italic', 'Underline', 'Strikethrough']) {
+      await button(name).click();
+      assert.equal(await button(name).getAttribute('aria-pressed'), 'true');
+    }
+    await page.waitForFunction(() => window.formatFonts.some(font => font.includes('italic') && font.includes('bold')));
+    assert.deepEqual((await readText()).customData.textFormat, { bold: true, italic: true, underline: true, strikethrough: true });
+    assert.equal((await readText()).customData.fixture, 'preserve');
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => !window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first').customData.textFormat.strikethrough);
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first').customData.textFormat.strikethrough);
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
+    await button('Bullets').click();
+    assert.equal((await readText()).originalText, '\u2022 Formatting example\n\u2022 Second paragraph');
+    await button('Increase indent').click();
+    assert.equal((await readText()).originalText, '  \u2022 Formatting example\n  \u2022 Second paragraph');
+    assert.ok((await readText()).text.startsWith('  \u2022 Formatting example'));
+    await button('Decrease indent').click();
+    await button('Bullets').click();
+    assert.equal((await readText()).originalText, before.originalText);
+    assert.equal(await button('Decrease indent').isDisabled(), true);
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true, 'format-second': true, 'format-locked': true } } }));
+    assert.equal(await button('Bold').getAttribute('aria-pressed'), 'mixed');
+    await button('Bold').click();
+    assert.equal(await button('Bold').getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-locked').customData.textFormat), undefined);
+    await button('Bullets').click();
+    await page.evaluate(async () => { await window.__slideMerge.save(); });
+    const saved = await readText();
+    await page.reload();
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    assert.deepEqual((await readText()).customData, saved.customData);
+    assert.equal((await readText()).originalText, saved.originalText);
+    assert.ok(Number.isFinite((await readText()).height) && (await readText()).height > 0);
+    await page.waitForFunction(() => [...document.querySelectorAll('.merge-slide-card.is-active svg text')].some(text => text.textContent.includes('Formatting example') && text.getAttribute('font-weight') === 'bold' && text.getAttribute('font-style') === 'italic' && text.getAttribute('text-decoration') === 'underline line-through'));
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
+    const point = await page.evaluate(() => { const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'format-first'), box = document.querySelector('.lab-canvas').getBoundingClientRect(); return { x: box.left + (text.x + 60 + state.scrollX) * state.zoom.value, y: box.top + (text.y + 15 + state.scrollY) * state.zoom.value }; });
+    await page.mouse.dblclick(point.x, point.y);
+    const editable = page.locator('.excalidraw-wysiwyg');
+    await editable.waitFor();
+    const editingStyle = await editable.evaluate(element => { const style = getComputedStyle(element); return { weight: style.fontWeight, style: style.fontStyle, decoration: style.textDecorationLine }; });
+    assert.deepEqual(editingStyle, { weight: '700', style: 'italic', decoration: 'underline line-through' });
+    await editable.fill('\u2022 Formatting example edited\n\u2022 Second paragraph');
+    await button('Bullets').click();
+    assert.equal(await editable.inputValue(), 'Formatting example edited\nSecond paragraph');
+    await page.keyboard.press('Escape');
+    await page.evaluate(async () => { await window.__slideMerge.save(); window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }); });
+    for (const appearance of ['day', 'night']) {
+      if (appearance === 'night') {
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.evaluate(() => localStorage.setItem('rk:theme', 'night'));
+        await page.reload();
+        await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+        await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
+      }
+      await page.evaluate(() => document.fonts.ready);
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+        if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
+        await button('Bold').scrollIntoViewIfNeeded();
+        assert.equal(await button('Bold').getAttribute('aria-pressed'), 'true');
+        for (const fieldset of await controls.all()) {
+          const bounds = await fieldset.evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth, children: [...element.querySelectorAll('button')].map(button => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })) }));
+          assert.ok(bounds.scrollWidth <= bounds.width + 1);
+          assert.ok(bounds.children.every(button => button.width >= 28 && button.height >= 28));
+        }
+        await page.screenshot({ path: join(tmpdir(), `rk-slide-text-format-${appearance}-${width}.png`) });
+      }
+    }
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test("native bound text formatting preserves container geometry history and readonly presentation", { timeout: 60000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  try {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'documentPictureInPicture', { value: undefined, configurable: true });
+      navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException('Denied', 'NotAllowedError'));
+      window.audienceTextFonts = [];
+      const fillText = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
+        if (document.querySelector('.pjp') && String(text).includes('useful')) window.audienceTextFonts.push(this.font);
+        return fillText.call(this, text, ...args);
+      };
+    });
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await page.evaluate(async () => {
+      const api = window.__slideMerge.api, original = api.getSceneElements(), template = original.find(element => element.type === 'text');
+      const shape = { ...template, type: 'rectangle', id: 'format-shape', x: 80, y: 160, width: 280, height: 180, locked: false, boundElements: [{ id: 'format-label', type: 'text' }], customData: { fixture: 'container' } };
+      const text = 'A useful next action with a clear outcome';
+      const label = { ...template, id: 'format-label', x: 85, y: 165, width: 260, height: 140, fontSize: 28, text, originalText: text, autoResize: true, containerId: shape.id, boundElements: [], locked: false, customData: {} };
+      api.updateScene({ elements: [original.find(element => element.id === 'lab-slide'), shape, label], appState: { selectedElementIds: { [shape.id]: true } }, captureUpdate: 'IMMEDIATELY' });
+      await window.__slideMerge.save();
+    });
+    const controls = page.locator('.lab-text-format');
+    for (const name of ['Bold', 'Italic', 'Underline', 'Strikethrough']) await controls.getByRole('button', { name, exact: true }).click();
+    const rendered = await page.evaluate(() => {
+      const elements = window.__slideMerge.api.getSceneElements(), label = elements.find(element => element.id === 'format-label'), shape = elements.find(element => element.id === 'format-shape');
+      return { label, shape };
+    });
+    assert.ok(Number.isFinite(rendered.label.height) && rendered.label.height > 0);
+    assert.ok(rendered.label.width <= rendered.shape.width);
+    assert.ok(rendered.label.y >= rendered.shape.y && rendered.label.y + rendered.label.height <= rendered.shape.y + rendered.shape.height);
+    assert.equal(rendered.shape.customData.textFormat, undefined);
+    assert.equal(rendered.label.customData.textFormat.bold, true);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => !window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-label').customData.textFormat.strikethrough);
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-label').customData.textFormat.strikethrough);
+    await page.evaluate(() => window.__slideMerge.save());
+    const waiting = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'Slide Show', exact: true }).click();
+    const pad = await waiting;
+    await page.waitForFunction(() => window.audienceTextFonts.some(font => font.includes('bold') && font.includes('italic')));
+    const pixels = await page.locator('.pjp .excalidraw__canvas.static').evaluate(canvas => { const bytes = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; const colors = new Set(); for (let index = 0; index < bytes.length; index += 4) if (bytes[index + 3]) colors.add(`${bytes[index]},${bytes[index + 1]},${bytes[index + 2]}`); return colors.size; });
+    assert.ok(pixels > 10, 'Audience renders actual antialiased native content');
+    await page.screenshot({ path: join(tmpdir(), 'rk-slide-text-format-audience.png') });
+    assert.equal(await page.locator('.pjp .lab-text-format').count(), 0);
+    await pad.getByRole('button', { name: 'End presentation', exact: true }).click();
+    await page.waitForSelector('.pjp', { state: 'detached' });
+  } finally { await browser.close(); }
+});
+
 test("fixed cover edits from the right panel preserve media, other slides and history", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];

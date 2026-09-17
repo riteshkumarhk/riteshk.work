@@ -79,10 +79,12 @@ lucide-react/dist/esm/icons/refresh-cw.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:
 lucide-react/dist/esm/icons/rotate-cw.mjs:
 lucide-react/dist/esm/icons/square.mjs:
+lucide-react/dist/esm/icons/strikethrough.mjs:
 lucide-react/dist/esm/icons/thumbs-down.mjs:
 lucide-react/dist/esm/icons/thumbs-up.mjs:
 lucide-react/dist/esm/icons/timer.mjs:
 lucide-react/dist/esm/icons/trash-2.mjs:
+lucide-react/dist/esm/icons/underline.mjs:
 lucide-react/dist/esm/icons/undo-2.mjs:
 lucide-react/dist/esm/icons/ungroup.mjs:
 lucide-react/dist/esm/icons/user-round.mjs:

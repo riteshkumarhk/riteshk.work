@@ -637,7 +637,7 @@ test('unpublished font faces are authored choices and rich notes survive the web
     assert.equal(await page.evaluate(()=>window.__slideMerge.deck().fonts[0].family),'Draft Display');
     const notes=page.locator('.merge-notes-input');await notes.fill('Rich note for presenter');
     await notes.evaluate(element=>{const range=document.createRange();range.selectNodeContents(element);getSelection().removeAllRanges();getSelection().addRange(range);});
-    await page.getByRole('button',{name:'Bold',exact:true}).click();
+    await page.getByRole('toolbar',{name:'Speaker notes formatting'}).getByRole('button',{name:'Bold',exact:true}).click();
     await page.evaluate(()=>window.__slideMerge.save());
     const waiting=page.waitForEvent('popup');await page.getByRole('button',{name:'Slide Show',exact:true}).click();const popup=await waiting;
     await popup.locator('[data-pp-notes] b,[data-pp-notes] strong').waitFor();
