@@ -7437,7 +7437,7 @@ import { resumeSignature } from "./resume-workspace.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.14", "/css/slide-studio.css?v=1.6"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.15", "/css/slide-studio.css?v=1.6"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);

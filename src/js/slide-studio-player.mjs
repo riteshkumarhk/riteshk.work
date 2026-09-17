@@ -27,7 +27,7 @@ async function openStudioDeck(work, options) {
   if (!document) throw new Error("This slideshow is owner-only. Open it in Studio or owner Present mode.");
   window.EXCALIDRAW_ASSET_PATH ||= new URL("/studio/slide-lab/assets/", location.href).href;
   const stylesheet = window.document.createElement("link");
-  stylesheet.rel = "stylesheet"; stylesheet.href = "/studio/slide-lab/assets/audience.css?v=1.5";
+  stylesheet.rel = "stylesheet"; stylesheet.href = "/studio/slide-lab/assets/audience.css?v=1.6";
   stylesheet.dataset.nativeAudience = "true";
   const loaded = new Promise((resolve, reject) => { stylesheet.onload = resolve; stylesheet.onerror = () => reject(new Error("Presentation styles could not be loaded")); });
   window.document.head.append(stylesheet);

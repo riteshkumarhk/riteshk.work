@@ -180,6 +180,19 @@ test("native text styles bullets and indents retain editing history exports and 
         if (await button('Bullets').getAttribute('aria-pressed') !== 'true') await button('Bullets').click();
         const triggerBox = await button('Bullet style').boundingBox(), indentBox = await button('Increase indent').boundingBox();
         assert.ok(triggerBox.x > indentBox.x + indentBox.width, 'Style picker is the rightmost list control');
+        const separators = await page.evaluate(() => {
+          const native = document.querySelector('[data-testid="font-family-show-fonts"]').closest('.FontPicker__container').querySelector(':scope > div[style]');
+          return [native, ...document.querySelectorAll('.lab-font-size .button-separator, .lab-text-format .button-separator')].map(element => {
+            const bounds = element.getBoundingClientRect(), style = getComputedStyle(element);
+            return { width: bounds.width, height: bounds.height, background: style.backgroundColor, margin: style.margin, opacity: style.opacity };
+          });
+        });
+        assert.equal(separators.length, 3);
+        assert.equal(separators[0].width, 1);
+        assert.ok(separators[0].height > 0);
+        assert.notEqual(separators[0].background, 'rgba(0, 0, 0, 0)');
+        assert.deepEqual(separators[1], separators[0], 'Font-size divider matches native font family');
+        assert.deepEqual(separators[2], separators[0], 'List divider matches native font family');
         for (const fieldset of await controls.all()) {
           const bounds = await fieldset.evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth, children: [...element.querySelectorAll('button')].map(button => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })) }));
           assert.ok(bounds.scrollWidth <= bounds.width + 1);
