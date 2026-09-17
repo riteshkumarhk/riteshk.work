@@ -16,6 +16,8 @@ html.pjp-on { overflow: hidden; }
 .pjp__pointer.is-control { width:24px; height:28px; margin:0; border:0; border-radius:0; background:none; box-shadow:none; }
 .pjp__pointer.is-control::after,.pjp__pointer.is-control .pjp__pointer-trail { display:none; }
 .pjp__pointer.is-control svg { display:block; width:24px; height:28px; fill:#fff; stroke:#141417; stroke-width:1.5; }
+.pjp__pointer.is-control .pjp__pointer-pan,.pjp__pointer.is-pan .pjp__pointer-hand { display:none; }
+.pjp__pointer.is-pan .pjp__pointer-pan { display:block; }
 @media (prefers-reduced-motion: reduce) { .pjp__pointer-trail { display:none; } }
 .pjp--native .pjp__present,.pjp--native .pjp__notesbtn,.pjp--native .pjp__popbtn { display:none !important; }
 .pjp--native .pjp__bar { opacity:0; }

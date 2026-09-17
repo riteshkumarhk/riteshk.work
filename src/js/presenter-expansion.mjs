@@ -16,6 +16,7 @@ export function installSlideExpansion(frame) {
     if (!active) return;
     const previous = active;
     active = null;
+    if (previous.target.__rkPresentationRoot === frame) { delete previous.target.__rkPresentationRoot; previous.target.removeAttribute('data-rk-presentation-overlay'); }
     previous.layer?.remove();
     previous.changes.reverse().forEach(([element, style]) => {
       if (style === null) element.removeAttribute("style"); else element.setAttribute("style", style);
@@ -40,6 +41,7 @@ export function installSlideExpansion(frame) {
     if (active?.target === target) { if (!overlay) restore(); return true; }
     restore();
     active = { target, overlay, changes:[], trigger };
+    if (overlay) { target.__rkPresentationRoot = frame; target.setAttribute('data-rk-presentation-overlay',''); }
     for (let child = doc; child !== rootDocument;) {
       const embedded = child.defaultView.frameElement;
       const parent = embedded.ownerDocument;

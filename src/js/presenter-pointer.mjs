@@ -1,4 +1,6 @@
-import { isPresenterInput, observePresentationDocuments, presentationHit, presentationPoint, presentationRootPoint, presentationSurface } from "./presenter-interaction.mjs";
+import { isPresenterInput, observePresentationDocuments, presentationCursor, presentationHit, presentationPoint, presentationRootPoint, presentationSurface } from "./presenter-interaction.mjs";
+import { __iconNode as handPointer } from "lucide-react/dist/esm/icons/pointer.mjs";
+import { __iconNode as hand } from "lucide-react/dist/esm/icons/hand.mjs";
 
 export function createPresenterLaser(container, preview = false) {
   const doc = container.ownerDocument, view = doc.defaultView;
@@ -6,7 +8,9 @@ export function createPresenterLaser(container, preview = false) {
   element.className = "pjp__pointer" + (preview ? " pjp__pointer--preview" : "");
   element.setAttribute("aria-hidden", "true");
   element.hidden = true;
-  element.innerHTML = '<canvas class="pjp__pointer-trail" width="160" height="160"></canvas><svg viewBox="0 0 24 28"><path d="M3 2v21l5-5 4 8 4-2-4-8h8Z"/></svg>';
+  const icon = (nodes, name) => '<svg class="'+name+'" viewBox="0 0 24 24">'+nodes.map(([tag,attrs]) => '<'+tag+' '+Object.entries(attrs).filter(([key])=>key!=='key').map(([key,value])=>key+'="'+value+'"').join(' ')+'/>').join('')+'</svg>';
+  element.innerHTML = '<canvas class="pjp__pointer-trail" width="160" height="160"></canvas>'+icon(handPointer,'pjp__pointer-hand')+icon(hand,'pjp__pointer-pan');
+  if (!preview && element.showPopover) { element.setAttribute('popover','manual'); element.style.cssText = 'inset:auto;overflow:visible;padding:0;border:0;background:transparent;color:inherit'; }
   container.appendChild(element);
   const canvas = element.firstElementChild, context = canvas.getContext("2d");
   const motion = view.matchMedia("(prefers-reduced-motion: reduce)");
@@ -98,7 +102,9 @@ export function createPresenterLaser(container, preview = false) {
     const snap = !position || element.hidden || control || element.classList.contains("is-control") || motion.matches;
     target = { x, y };
     element.hidden = false;
-    element.classList.toggle("is-control", control);
+    if (element.hasAttribute('popover') && !element.matches(':popover-open')) element.showPopover();
+    element.classList.toggle("is-control", !!control);
+    element.classList.toggle("is-pan", control === 'grabbing');
     if (snap) {
       view.cancelAnimationFrame(animation); animation = 0;
       position = { ...target }; samples = [];
@@ -113,6 +119,7 @@ export function createPresenterLaser(container, preview = false) {
     view.cancelAnimationFrame(animation); animation = 0;
     target = position = null; samples = [];
     element.hidden = true;
+    if (element.matches(':popover-open')) element.hidePopover();
     clear();
   }
   function onMotion() { if (target && motion.matches) point(target.x, target.y, element.classList.contains("is-control")); }
@@ -123,13 +130,13 @@ export function createPresenterLaser(container, preview = false) {
 export function installPresenterPointer(stage, frame, remoteInput = false) {
   const doc = stage.ownerDocument, view = doc.defaultView;
   const laser = createPresenterLaser(stage);
-  let fullscreenHost = null, fullscreenLaser = null;
+  let fullscreenHost = null, fullscreenLaser = null, dragging = false;
   stage.classList.add("pjp--laser");
   const documents = new Set();
-  function hide() { laser.hide(); fullscreenLaser?.hide(); stage.removeAttribute("data-pointer"); for (const child of documents) child.documentElement?.removeAttribute("data-rk-presenter-pointer"); }
+  function hide() { dragging = false; laser.hide(); fullscreenLaser?.hide(); stage.removeAttribute("data-pointer"); for (const child of documents) child.documentElement?.removeAttribute("data-rk-presenter-pointer"); }
   function fullscreenChanged() { hide(); fullscreenLaser?.dispose(); fullscreenLaser = null; fullscreenHost = null; }
-  function pointerLayer() {
-    let host = presentationSurface(frame);
+  function pointerLayer(hit) {
+    let host = hit.target.closest('dialog:modal') || presentationSurface(frame);
     if (host === frame) return { laser, document: doc };
     while (host.tagName === "IFRAME") {
       let child;
@@ -143,28 +150,39 @@ export function installPresenterPointer(stage, frame, remoteInput = false) {
   function point(x, y, remote = false) {
     const hit = presentationHit(frame, x, y);
     if (!hit) { hide(); return null; }
-    const control = !!hit.control || hit.blocked;
-    const layer = pointerLayer(), position = presentationPoint(frame, layer.document, x, y);
+    const control = dragging ? 'grabbing' : presentationCursor(hit.target) === "pointer";
+    const layer = pointerLayer(hit), position = presentationPoint(frame, layer.document, x, y);
     if (layer.laser !== laser) laser.hide(); else fullscreenLaser?.hide();
     if (control && !remote || !position) layer.laser.hide(); else layer.laser.point(position.x, position.y, control);
-    stage.dataset.pointer = control ? "control" : "laser";
-    for (const child of documents) child.documentElement.dataset.rkPresenterPointer = control || hit.blocked ? "control" : "laser";
+    const mode = dragging ? 'grabbing' : control ? 'control' : 'laser';
+    stage.dataset.pointer = mode;
+    for (const child of documents) child.documentElement.dataset.rkPresenterPointer = mode;
     return hit;
   }
   function move(event) {
     if (isPresenterInput(event)) return;
+    if (event.buttons && event.target?.closest('.pjx.is-grab')) dragging = true;
     const owner = event.target?.ownerDocument || doc;
     const position = presentationRootPoint(frame, owner, event.clientX, event.clientY);
     if (position) point(position.x, position.y, remoteInput); else hide();
   }
+  function down(event) {
+    if (event.button !== 0) return;
+    const target = event.target;
+    const cursor = target?.ownerDocument?.defaultView.getComputedStyle(target).cursor;
+    dragging = presentationCursor(target) !== 'pointer' && (!!target?.closest('[data-expand-pan]') || target?.matches('.react-flow__pane') || cursor === 'grab' || cursor === 'grabbing');
+    move(event);
+  }
+  function up(event) { dragging = false; move(event); }
   const stopObserving = observePresentationDocuments(frame, child => {
-    if (child === doc) return;
     documents.add(child);
     const style = child.createElement("style");
-    style.textContent = 'html[data-rk-presenter-pointer="laser"],html[data-rk-presenter-pointer="laser"] *{cursor:none!important}html[data-rk-presenter-pointer="control"],html[data-rk-presenter-pointer="control"] *{cursor:auto!important}';
+    const scope = child === doc ? ':is(.pjp__frame,[data-rk-presentation-overlay])' : ':is(html,body)';
+    style.textContent = ['laser','control','grabbing'].map(mode => 'html[data-rk-presenter-pointer="'+mode+'"] '+scope+',html[data-rk-presenter-pointer="'+mode+'"] '+scope+' *{cursor:'+(remoteInput || mode==='laser' ? 'none' : mode==='grabbing' ? 'grabbing' : 'pointer')+'!important}').join('');
     child.head.appendChild(style);
     child.addEventListener("pointermove", move, true);
-    return () => { child.removeEventListener("pointermove", move, true); child.documentElement?.removeAttribute("data-rk-presenter-pointer"); style.remove(); documents.delete(child); if (fullscreenHost?.ownerDocument === child) fullscreenChanged(); };
+    child.addEventListener('pointerdown',down,true); child.addEventListener('pointerup',up,true); child.addEventListener('pointercancel',up,true);
+    return () => { child.removeEventListener("pointermove", move, true); child.removeEventListener('pointerdown',down,true); child.removeEventListener('pointerup',up,true); child.removeEventListener('pointercancel',up,true); child.documentElement?.removeAttribute("data-rk-presenter-pointer"); style.remove(); documents.delete(child); if (fullscreenHost?.ownerDocument === child) fullscreenChanged(); };
   });
   function onVisibility() { if (doc.hidden) hide(); }
   stage.addEventListener("pointermove", move);

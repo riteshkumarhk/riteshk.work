@@ -7,10 +7,20 @@ Portable Windows x64 companion for riteshk.work. Opens Content Studio or Slide S
 1. Download StudioPresenter.exe from Studio > More on the actual presenting PC. Requires Windows 10 2004+ or Windows 11 and Microsoft Edge WebView2 Runtime. The self-contained executable needs no separate .NET install and does not request administrator access.
 2. Sign in within the app. It has its own persistent profile, separate from Edge/Chrome, and does not inherit unsaved browser drafts. Open existing saved work or export/import a Slide Studio deck. Do not publish private or unreviewed work just to transfer it. Use Open > Slide Studio for that editor.
 3. Start Present/Rehearse. Keep the audience window open and not minimized. Place it on the display you share. Move or resize the companion as needed.
-4. The companion preview is a live DWM mirror of the slide itself, not a second renderer. Mouse motion shows a laser; controls/media/embedded content show an arrow. Click, drag, wheel and keyboard input target the live WebView2 presentation. Leave the preview to use the normal cursor on notes and controls.
+4. The companion preview is a live DWM mirror of the slide itself, not a second renderer. Content uses a laser, enabled controls use a pointing hand and supported canvas drags use a panning hand. Click, drag, wheel and keyboard input target the live WebView2 presentation. Leave the preview to use the normal cursor on notes and controls.
 5. Verify the outgoing feed with another participant before using private notes. Share the whole display: the companion should be absent, with slides normally visible underneath. Also verify recordings and each display/capture configuration you use.
 
 Unsigned preview build: do not disable Windows security to run it. Report any block. The app does not attach to a presentation already open in another browser. Browser presenter windows remain ordinary, capturable windows.
+
+## DJ Updates (0.3.2)
+
+This version adds a laser over media and expanded dialogs, a pointing hand over enabled controls, and a panning hand during supported canvas drags. Cover depth recovers after late decoding and slide navigation. Native next-slide previews include case-study section snapshots inside a script-disabled sandbox. Workflow no longer displays the optional React Flow attribution label.
+
+Owner Work-card launches now use the draft-saving editor path. Notes and slide names can be edited without Publish; the action beside Next slide opens an editable overview inside the notes area while retaining the live mirror. Renaming changes slide metadata, not authored slide artwork.
+
+Private metadata sync uses an owner-only endpoint, conditional field saves, a durable local pending queue and explicit local/cloud conflict comparison. Wait for the private sync acknowledgement before relying on another profile. Only edits made in the DJ for matching native decks enter this sync path. Existing editor notes are not automatically uploaded; regular editor changes, legacy decks, media and unpublished decks are not transferred. Matching case/slide IDs are required. Offline edits remain on the current device until sync succeeds.
+
+Native checks cover DWM pixels, input, notes/name edits, overview, sync command round trips, focused-field deferral, conflict resolution and protection-loss cleanup. Native sync tests use a synthetic callback; separate browser/Miniflare tests cover private storage and independent profiles. Actual authenticated Figma and meeting privacy still require acceptance on the presenting GPU PC. The 0.3.1 notes below are historical; 0.3.2 keeps the live mirror visible while the notes-area overview is open.
 
 ## Presenter DJ Pad (0.3.1)
 

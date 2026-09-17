@@ -12,6 +12,8 @@ import { writeContentRevision } from "./worker/content-publishing.mjs";
 import { readOperationalState, updateOperationalState } from "./worker/operational-state.mjs";
 import { createHostedResumeStore } from "./worker/resume-workspace.mjs";
 import { createResume, resumeText } from "./src/js/resume-workspace.mjs";
+import { createPresenterMetadataStore, presenterMetadataRoute } from "./worker/presenter-metadata.mjs";
+import { createPresenterMetadataSync } from "./src/js/presenter-metadata-sync.mjs";
 
 const bundled = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node", packages: "external" });
 const { default: worker, ContentPublisher } = await import("data:text/javascript;base64," + Buffer.from(bundled.outputFiles[0].text).toString("base64"));
@@ -36,6 +38,74 @@ function challengeFixture() {
   };
   return { env: { PASSKEY_CHALLENGES: binding }, stores };
 }
+
+test("Presenter metadata conditional writes preserve independent fields and reject stale edits", async () => {
+  const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['PRESENTER'] });
+  try {
+    const bucket = await runtime.getR2Bucket('PRESENTER'), store = createPresenterMetadataStore(bucket);
+    const initial = await store.get('case-one', 'deck-one');
+    assert.deepEqual(initial, { version: 1, revision: 0, fields: [] });
+    await Promise.all(['notes', 'title'].map(key => store.edit('case-one', 'deck-one', { slideId: 'first', key, initial: '', value: 'Private ' + key, expected: 0 })));
+    const record = await store.get('case-one', 'deck-one');
+    assert.equal(record.fields.length, 2);
+    assert.equal(record.revision, 2);
+    const edits = await Promise.allSettled(['Device one', 'Device two'].map(value => store.edit('case-one', 'deck-one', { slideId: 'first', key: 'notes', initial: '', value, expected: 1 })));
+    assert.equal(edits.filter(result => result.status === 'fulfilled').length, 1);
+    assert.equal(edits.find(result => result.status === 'rejected').reason.status, 409);
+    const saved = await store.get('case-one', 'deck-one');
+    assert.equal(saved.fields.find(field => field.key === 'notes').initial, '');
+    assert.equal(saved.fields.find(field => field.key === 'title').value, 'Private title');
+    await assert.rejects(store.edit('case-one', 'deck-one', { slideId: 'first', key: 'scene', initial: '', value: 'media', expected: 0 }), { status: 400 });
+    await assert.rejects(store.get('../case', 'deck-one'), { status: 400 });
+    assert.deepEqual((await store.get('case-two', 'deck-one')).fields, []);
+    const response = await presenterMetadataRoute(new Request('https://example.test/admin/presenter-metadata?case=case-one&deck=deck-one'), bucket, {});
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), saved);
+  } finally { await runtime.dispose(); }
+});
+
+test("Presenter metadata clients retain offline edits, compare conflicts and ignore signed-out responses", async () => {
+  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['PRESENTER'] });
+  try {
+    const store = createPresenterMetadataStore(await runtime.getR2Bucket('PRESENTER'));
+    const firstSlides = [{ id: 'first', notes: 'Original', title: '' }], secondSlides = structuredClone(firstSlides);
+    let offline = false, firstState, secondState, valid = true, hold;
+    const client = (slides, load, save) => createPresenterMetadataSync({
+      storage: { load, save }, current: () => valid, read: () => slides,
+      apply: async (id, key, value) => { slides.find(slide => slide.id === id)[key] = value; },
+      request: async (method, body) => { if (offline) throw new Error('Offline; local edits kept.'); const result = method === 'GET' ? await store.get('case', 'native') : await store.edit('case', 'native', body); if (hold) await hold; return result; }
+    });
+    const first = client(firstSlides, () => firstState, value => { firstState = structuredClone(value); });
+    const second = client(secondSlides, () => secondState, value => { secondState = structuredClone(value); });
+    await first.refresh(); await second.refresh();
+    firstSlides[0].title = 'Deferred name';
+    await first.edit('first', 'title', 'Deferred name', '', { defer: true });
+    assert.equal((await store.get('case', 'native')).fields.length, 0);
+    await first.refresh({ applyRemote: false });
+    await second.refresh({ applyRemote: false }); assert.equal(secondSlides[0].title, '');
+    await second.refresh(); assert.equal(secondSlides[0].title, 'Deferred name');
+    offline = true; firstSlides[0].notes = 'Offline private edit';
+    assert.match((await first.edit('first', 'notes', firstSlides[0].notes, 'Original')).saveStatus, /Offline/);
+    assert.equal(firstState.pending.length, 1);
+    offline = false;
+    await client(firstSlides, () => firstState, value => { firstState = value; }).refresh();
+    assert.equal(firstState.pending.length, 0);
+    await second.refresh(); assert.equal(secondSlides[0].notes, 'Offline private edit');
+    secondSlides[0].notes = 'Second device'; await second.edit('first', 'notes', 'Second device', 'Offline private edit');
+    firstSlides[0].notes = 'First device newer';
+    const conflict = await first.edit('first', 'notes', 'First device newer', 'Offline private edit');
+    assert.equal(conflict.conflicts[0].remote, 'Second device');
+    assert.equal(firstSlides[0].notes, 'First device newer');
+    await first.resolve('first', 'notes', 'local', 'First device newer', 'Second device');
+    await second.refresh(); assert.equal(secondSlides[0].notes, 'First device newer');
+    firstSlides[0].title = 'Private name'; await first.edit('first', 'title', 'Private name', '');
+    let release; hold = new Promise(resolve => { release = resolve; });
+    const refreshing = second.refresh();
+    await new Promise(resolve => setImmediate(resolve)); valid = false; release();
+    assert.match((await refreshing).saveStatus, /session changed/);
+    assert.equal(secondSlides[0].title, 'Deferred name');
+  } finally { await runtime.dispose(); }
+});
 
 test("Hosted resume R2 CAS preserves concurrent versions and immutable source bytes", async () => {
   const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES'] });
@@ -139,6 +209,35 @@ test('ATS cutover rejects old-editor writes and deletes while retaining unrelate
     assert.equal((await request('prep/del', { tool: 'cl', id: 'letter-route' })).status, 200);
     assert.equal((await request('resume/resumes/' + record.document.id + '/recover-legacy', {}, false)).status, 401);
     assert.equal((await createHostedResumeStore(fixture.env.RESUMES).get(record.document.id)).version, 1);
+  } finally { await runtime.dispose(); }
+});
+
+test("Presenter metadata routes accept only owner sessions and allowed origins", async () => {
+  const fixture = await signedWorkerFixture();
+  const login = await (await fixture.send('finish', await fixture.assertion())).json();
+  const publish = await (await fixture.send('finish', await fixture.assertion('publish'))).json();
+  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['VAULT'] });
+  try {
+    fixture.env.VAULT = await runtime.getR2Bucket('VAULT');
+    const request = (options = {}) => worker.fetch(new Request('https://synthetic.test/admin/presenter-metadata?case=case-one&deck=deck-one', {
+      ...options, headers: { Origin: 'https://synthetic.test', Authorization: 'Bearer ' + login.token, ...options.headers }
+    }), fixture.env);
+    for (const token of ['', 'Bearer visitor', 'Bearer ' + publish.publishToken, 'Bearer ' + login.trust]) {
+      const response = await request({ headers: { Authorization: token } });
+      assert.equal(response.status, 401); assert.equal(response.headers.get('cache-control'), 'no-store');
+    }
+    for (const origin of ['', 'https://untrusted.test']) {
+      assert.equal((await request({ headers: { Origin: origin } })).status, 403);
+      assert.equal((await request({ method: 'OPTIONS', headers: { Origin: origin } })).status, 403);
+    }
+    assert.equal((await request({ method: 'OPTIONS', headers: { Authorization: '' } })).status, 204);
+    const input = { slideId: 'slide-one', key: 'notes', value: 'Private live note', initial: '', expected: 0 };
+    assert.equal((await request({ method: 'POST', body: JSON.stringify(input) })).status, 200);
+    assert.equal((await request({ method: 'POST', body: JSON.stringify(input) })).status, 409);
+    const response = await request();
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal((await response.json()).fields[0].value, input.value);
+    assert.deepEqual((await fixture.env.VAULT.list()).objects.map(object => object.key), ['presenter-metadata/case-one/deck-one.json']);
   } finally { await runtime.dispose(); }
 });
 

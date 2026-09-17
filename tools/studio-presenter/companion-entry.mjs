@@ -17,8 +17,10 @@ document.querySelector('[data-pp-status]').dataset.state = 'live';
 document.querySelector('[data-pp-privacy]').textContent = 'Verify the meeting feed before showing private notes.';
 let state = null, received = 0, pendingMove = null, animation = 0;
 const send = message => bridge.postMessage(message);
-function place() { const rect = preview.getBoundingClientRect(); send({type:'rect',left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,visible:!document.querySelector('[data-pp-overview]').open}); }
+function place() { const rect = preview.getBoundingClientRect(); send({type:'rect',left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,visible:true}); }
 const panel = installPresenterPanel({ doc:document, onCommand: command => send({type:'command',command}),
+  onBusy: value => send({type:'command',command:'metadata-busy',value}),
+  onResolve: value => send({type:'command',command:'metadata-resolve',value}),
   storage:{getItem:()=>null,setItem:(key,value)=>send({type:'preference',key,value})},
   onEdit: (index,key,value) => { if (state?.editable) { panel.saved('Saving...'); send({type:'command',command:'edit',index,key,value}); } },
   onJump: index => send({type:'command',command:'jump',index}), onResize:place,
@@ -31,6 +33,7 @@ function renderThumbnail(container,index) {
     container._thumbnail=source; container.replaceChildren();
     if(slide?.thumbnail) { const image=document.createElement('img');image.style.cssText='width:100%;height:100%;object-fit:contain';image.alt='';image.src=slide.thumbnail;container.appendChild(image); }
     else if(slide?.document) { const frame=document.createElement('iframe');frame.setAttribute('sandbox','');frame.tabIndex=-1;frame.title=slide.title;frame.style.cssText='width:1280px;height:720px;border:0;transform-origin:top left;pointer-events:none';frame.srcdoc=slide.document;container.appendChild(frame); }
+    else if(slide) { const status=document.createElement('span');status.setAttribute('role','status');status.textContent='Preparing preview';status.style.cssText='display:grid;place-items:center;width:100%;height:100%;font:11px var(--sans,sans-serif);color:#b8b2aa';container.append(status); }
   }
   if(container.firstChild?.tagName==='IFRAME') container.firstChild.style.transform='scale('+container.clientWidth/1280+')';
 }
@@ -45,7 +48,6 @@ bridge.addEventListener('message', event => {
   const next = document.querySelector('[data-pp-next]'); next.style.display = state.index+1<state.total?'':'none';
   renderThumbnail(next,state.index+1);
   document.querySelectorAll('[data-native-thumb]').forEach(container=>renderThumbnail(container,Number(container.dataset.nativeThumb)));
-  document.querySelector('[data-pp-nexttitle]').textContent=state.nextTitle||'End of deck';
   preview.parentElement.style.aspectRatio=state.width+'/'+state.height; place();
 });
 function pointer(event,kind) { const rect=preview.getBoundingClientRect();return {type:'input',kind,x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height,buttons:event.buttons,deltaX:event.deltaX||0,deltaY:event.deltaY||0}; }

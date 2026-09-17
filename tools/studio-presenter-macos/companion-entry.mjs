@@ -21,6 +21,8 @@ function thumbnail(container,index) {
 }
 const panel = installPresenterPanel({doc:document,
   onCommand:command=>send({type:'command',command}),
+  onBusy:value=>send({type:'command',command:'metadata-busy',value}),
+  onResolve:value=>send({type:'command',command:'metadata-resolve',value}),
   onEdit:(index,key,value)=>{if(state?.editable)send({type:'command',command:'edit',index,key,value});},
   onJump:index=>send({type:'command',command:'jump',index}),
   storage:{getItem:()=>null,setItem:(key,value)=>send({type:'preference',key,value})},

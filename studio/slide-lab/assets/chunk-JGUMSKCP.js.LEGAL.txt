@@ -52,9 +52,11 @@ lucide-react/dist/esm/icons/eye.mjs:
 lucide-react/dist/esm/icons/globe.mjs:
 lucide-react/dist/esm/icons/grip-vertical.mjs:
 lucide-react/dist/esm/icons/group.mjs:
+lucide-react/dist/esm/icons/hand.mjs:
 lucide-react/dist/esm/icons/image.mjs:
 lucide-react/dist/esm/icons/italic.mjs:
 lucide-react/dist/esm/icons/layers.mjs:
+lucide-react/dist/esm/icons/layout-grid.mjs:
 lucide-react/dist/esm/icons/layout-template.mjs:
 lucide-react/dist/esm/icons/link.mjs:
 lucide-react/dist/esm/icons/list-indent-decrease.mjs:
@@ -71,6 +73,7 @@ lucide-react/dist/esm/icons/palette.mjs:
 lucide-react/dist/esm/icons/pencil-off.mjs:
 lucide-react/dist/esm/icons/pencil.mjs:
 lucide-react/dist/esm/icons/play.mjs:
+lucide-react/dist/esm/icons/pointer.mjs:
 lucide-react/dist/esm/icons/presentation.mjs:
 lucide-react/dist/esm/icons/refresh-cw.mjs:
 lucide-react/dist/esm/icons/rotate-ccw.mjs:

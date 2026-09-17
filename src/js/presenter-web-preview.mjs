@@ -1,6 +1,6 @@
 import { presenterIcon } from "./presenter-panel.mjs";
 import { createPresenterLaser } from "./presenter-pointer.mjs";
-import { createPresentationHover, dispatchPresenterInput, presentationContains, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
+import { createPresentationHover, dispatchPresenterInput, presentationContains, presentationCursor, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
 export function requestPresenterCapture() {
   const handle = crypto.randomUUID();
   let cancelled = false, captured = null;
@@ -108,7 +108,7 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (!position) { release(); return null; }
     const hit = pointer.point(position.x, position.y, true);
     if (!hit) { if (!pressed) release(); return null; }
-    const control = !!hit.control;
+    const control = presentationCursor(hit.target) === 'pointer';
     const surface = previewSurface.getBoundingClientRect();
     if (control || liveFrame) localLaser.hide();
     else localLaser.point(event.clientX - surface.left - previewSurface.clientLeft, event.clientY - surface.top - previewSurface.clientTop);

@@ -200,8 +200,8 @@ function PresentationCanvas({ slides, index, renderEmbed }) {
     if (!api) return;
     const scene = structuredClone(slide.scene);
     api.resetScene();
-    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewModeEnabled: true, zenModeEnabled: true, theme: canvasTheme(scene.elements, appearance), viewBackgroundColor: sceneBackground(), selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null }, captureUpdate: CaptureUpdateAction.NEVER });
     api.addFiles(Object.values(scene.files));
+    api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewModeEnabled: true, zenModeEnabled: true, theme: canvasTheme(scene.elements, appearance), viewBackgroundColor: sceneBackground(), selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null }, captureUpdate: CaptureUpdateAction.NEVER });
     const old = previous.current; previous.current = { slide, index };
     let animationFrame = 0, animation = null;
     const transition = slideSettings(scene.elements).transition || "fade";
@@ -238,6 +238,54 @@ function PresentationThumbnail({ slide, renderEmbed }) {
   return slide && svg ? <div className="merge-present-thumbnail" style={{ background: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() }}><SectionThumbnail svg={svg} elements={slide.scene.elements} files={slide.scene.files} embeds renderEmbed={renderEmbed} /></div> : null;
 }
 
+async function nativeThumbnailDocument(slide) {
+  const appearance = document.documentElement.dataset.appearance || 'dark';
+  const scene = slide.scene, frame = scene.elements.find(element => element.id === FRAME_ID);
+  const styles = getComputedStyle(document.documentElement);
+  const tokens = Object.fromEntries(['--text','--text-dim','--text-faint','--accent','--bg','--bg-2','--line-soft','--sans','--serif','--mono'].map(key => [key,styles.getPropertyValue(key)]));
+  const snapshot = document.implementation.createHTMLDocument('Slide preview');
+  snapshot.documentElement.dataset.appearance = appearance;
+  for (const [key,value] of Object.entries(tokens)) snapshot.documentElement.style.setProperty(key,value);
+  const base = snapshot.createElement('base'); base.href = location.origin + '/'; snapshot.head.append(base);
+  const sheet = snapshot.createElement('style'); sheet.textContent = 'html,body{margin:0;width:1280px;height:720px;overflow:hidden}body{position:relative}body>svg{position:absolute;inset:0;width:1280px;height:720px}'; snapshot.head.append(sheet);
+  snapshot.body.style.background = tokens['--bg'];
+  snapshot.body.style.color = tokens['--text']; snapshot.body.style.fontFamily = tokens['--sans'];
+  const svg = await exportToSvg({ elements:scene.elements, files:scene.files, exportingFrame:frame, skipInliningFonts:true, appState:{exportBackground:false,exportWithDarkMode:canvasTheme(scene.elements,appearance)==='dark'} });
+  snapshot.body.append(snapshot.importNode(svg,true));
+  for (const layer of nativeSectionLayers(scene.elements,{zoom:{value:1},scrollX:0,scrollY:0})) {
+    const custom = layer.element.customData;
+    if (!custom.sectionComponent && !custom.sectionReference) continue;
+    const source = custom.sectionReference ? resolvedSectionSource(custom.sectionReference) : {block:custom.sectionComponent,icons:custom.sectionIcons};
+    const container = snapshot.createElement('div'); Object.assign(container.style,{position:'absolute',overflow:'hidden',...Object.fromEntries(Object.entries(layer.style).map(([key,value])=>[key,typeof value==='number' && key!=='opacity'?value+'px':value]))});
+    snapshot.body.append(container);
+    if (!source) { container.textContent = 'Protected section'; container.style.color = tokens['--text']; continue; }
+    const runtime = await sectionRuntimeData(source);
+    const renderFrame = document.createElement('iframe');
+    renderFrame.style.cssText = `position:fixed;left:-20000px;top:0;width:${layer.element.width}px;height:${layer.element.height}px;border:0;pointer-events:none`;
+    try {
+      await new Promise((resolve,reject) => {
+        const timer = setTimeout(()=>reject(new Error('Section preview timed out')),15000);
+        renderFrame.onload = () => { clearTimeout(timer); resolve(); };
+        renderFrame.onerror = () => { clearTimeout(timer); reject(new Error('Section preview unavailable')); };
+        renderFrame.src = '/studio/slide-runtime/component.html?v=1.2'; document.body.append(renderFrame);
+      });
+      renderFrame.contentWindow.RK.renderSectionComponent({...runtime,textVisibility:custom.sectionTextVisibility,tokens,appearance});
+      await new Promise(resolve => renderFrame.contentWindow.requestAnimationFrame(()=>renderFrame.contentWindow.requestAnimationFrame(resolve)));
+      const child = renderFrame.contentDocument.documentElement.cloneNode(true);
+      child.querySelectorAll('script').forEach(element=>element.remove());
+      child.querySelectorAll('[href],[src]').forEach(element=>{for(const attribute of ['href','src']) if(element.hasAttribute(attribute)) element.setAttribute(attribute,new URL(element.getAttribute(attribute),renderFrame.contentDocument.baseURI).href);});
+      const nested = snapshot.createElement('template'); nested.setAttribute('shadowrootmode','open');
+      for (const element of child.querySelectorAll('head > style,head > link[rel="stylesheet"],body > *')) nested.content.append(snapshot.importNode(element,true));
+      container.append(nested);
+    } finally { renderFrame.remove(); }
+    if (layer.foreground.length) {
+      const foreground = await exportToSvg({elements:[...layer.foreground,frame],files:scene.files,exportingFrame:frame,skipInliningFonts:true,appState:{exportBackground:false,exportWithDarkMode:canvasTheme(scene.elements,appearance)==='dark'}});
+      snapshot.body.append(snapshot.importNode(foreground,true));
+    }
+  }
+  return '<!doctype html>'+snapshot.documentElement.outerHTML;
+}
+
 export function createNativePresenter(work, slides, options = {}) {
   const roots = new Map();
   const mount = (container, content) => { if (!roots.has(container)) roots.set(container, createRoot(container)); roots.get(container).render(content); };
@@ -246,7 +294,7 @@ export function createNativePresenter(work, slides, options = {}) {
     pjNotesHtml: notes => notesHtml(notes) || '<span class="pjp__pnote-empty">No notes for this slide</span>',
     mountSlide: (frame, slide, index) => { frame.closest(".pjp").classList.add("pjp--canvas"); mount(frame, <PresentationCanvas slides={slides} index={index} renderEmbed={options.renderEmbed} />); options.onIndex?.(index); },
     renderThumbnail: (container, slide) => mount(container, <PresentationThumbnail slide={slide} renderEmbed={options.renderEmbed} />),
-    thumbnailData: async slide => { const svg = await exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false } }); return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg.outerHTML); },
+    thumbnailDocument: nativeThumbnailDocument,
     disposePresenter: document => { for (const [container, root] of roots) if (container.ownerDocument === document) { root.unmount(); roots.delete(container); } },
     dispose: () => { roots.forEach(root => root.unmount()); roots.clear(); }
   });

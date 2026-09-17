@@ -304,7 +304,9 @@ function attach(media, img, depthImg, ctx, slideSettings = null, pointerSurface 
       const r = media.getBoundingClientRect();
       target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
       target.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+      if (!active) activate(true);
     }, { signal: events.signal });
+    if (media.matches(':hover')) activate(true);
   }
   return () => {
     events.abort(); active = false; cancelAnimationFrame(raf); raf = 0;

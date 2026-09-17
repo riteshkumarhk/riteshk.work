@@ -249,6 +249,7 @@ for (const capture of [false, true]) test(`DJ input reaches native section contr
     });
     const section = page.frameLocator('iframe[data-section="compare"]');
     await section.locator(".pjb__cmp-base").evaluate(image => image.decode());
+    await section.locator('.pjb__cmp-grip').evaluate(async element => { await element.ownerDocument.fonts.ready; await new Promise(resolve=>element.ownerDocument.defaultView.requestAnimationFrame(()=>element.ownerDocument.defaultView.requestAnimationFrame(resolve))); });
     if (capture) {
       await popup.locator("[data-pp-live]").click();
       await popup.locator("[data-pp-now] canvas").waitFor();
@@ -371,7 +372,7 @@ for (const capture of [false, true]) test(`DJ forwards native gallery, annotatio
     await render({ type: "gen", heading: "Interactive generated section", spec: { version: 2, root: { type: "showpiece", children: [{ type: "card", fx: "orbit", style: "width:500px;height:280px;background:#248c79", children: [{ type: "text", text: "Drag, zoom and reset" }] }] } } });
     const orbit = section.locator('[data-rk-fx="orbit"]'), orbitPosition = await position(orbit), rest = await orbit.evaluate(element => element.style.transform);
     await popup.mouse.move(orbitPosition.x, orbitPosition.y);
-    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "control");
+    assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser");
     await popup.mouse.down(); await popup.mouse.move(orbitPosition.x + 35, orbitPosition.y + 10, { steps: 6 }); await popup.mouse.up();
     assert.notEqual(await orbit.evaluate(element => element.style.transform), rest);
     const beforeZoom = await orbit.evaluate(element => element.style.transform);
@@ -406,8 +407,8 @@ for (const capture of [false, true]) test(`DJ forwards native gallery, annotatio
     for (const controls of [true,false]) {
       await section.locator('video').evaluate((video,controls)=>{video.controls=controls;},controls);
       await section.locator('video').hover();
-      assert.equal(await page.locator('.pjp').getAttribute('data-pointer'),'control');
-      assert.notEqual(await section.locator('video').evaluate(video=>getComputedStyle(video).cursor),'none');
+      assert.equal(await page.locator('.pjp').getAttribute('data-pointer'),'laser');
+      assert.equal(await section.locator('video').evaluate(video=>getComputedStyle(video).cursor),'none');
     }
     await render({type:'workflow',heading:'Scaled workflow',graph:{version:1,nodes:[{id:'start',position:{x:0,y:0},data:{title:'Start',note:'A tall node with multiple lines to measure and connect correctly.'}},{id:'review',position:{x:280,y:130},data:{title:'Review'}},{id:'ship',position:{x:560,y:0},data:{title:'Ship'}}],edges:[{id:'forward',source:'start',sourceHandle:'r',target:'review',targetHandle:'l',data:{kind:'main',route:'elbow'}},{id:'branch',source:'review',sourceHandle:'t',target:'ship',targetHandle:'b',data:{kind:'alternative',route:'curved'}},{id:'return',source:'ship',sourceHandle:'b',target:'start',targetHandle:'t',data:{kind:'return',route:'curved'}}]}});
     await section.locator('.react-flow__edge-path').first().waitFor();
@@ -430,6 +431,16 @@ for (const capture of [false, true]) test(`DJ forwards native gallery, annotatio
     await section.locator('rk-workflow').evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
     await assertPorts();
     await page.screenshot({path:join(tmpdir(),'rk-presenter-workflow-connectors.png')});
+    assert.equal(await section.locator('.react-flow__attribution').count(),0);
+    await click(section.getByRole('button',{name:'Expand diagram',exact:true}));
+    const expandedFlow=section.getByRole('dialog',{name:'Expanded flow diagram',exact:true});
+    await expandedFlow.waitFor();
+    await expandedFlow.locator('.react-flow__pane').hover({position:{x:20,y:50}});
+    assert.equal(await page.locator('.pjp').getAttribute('data-pointer'),'laser');
+    assert.equal(await expandedFlow.locator('.pjp__pointer:popover-open').isVisible(),true);
+    await page.screenshot({path:join(tmpdir(),'rk-real-workflow-expanded-laser.png')});
+    await expandedFlow.getByRole('button',{name:'Close expanded diagram',exact:true}).click();
+    await expandedFlow.waitFor({state:'detached'});
     assert.equal(await page.locator("[data-pjp-count]").textContent(), "1 / 2");
   } finally { await browser.close(); }
 });

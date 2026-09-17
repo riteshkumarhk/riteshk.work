@@ -32,7 +32,7 @@ test("More offers the native companion and safe web fallback instructions", { sk
     const card = page.locator("[data-presenter-capture-test]");
     await card.waitFor();
     const link = card.getByRole("link", { name: /Download app/ });
-    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.1/StudioPresenter.exe");
+    assert.equal(await link.getAttribute("href"), "https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.2/StudioPresenter.exe");
     assert.equal(await link.getAttribute("rel"), "noopener noreferrer");
     assert.equal(await card.locator("ol li").count(), 5);
     assert.match(await card.textContent(), /app has its own local profile/);

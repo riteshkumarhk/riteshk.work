@@ -5,7 +5,7 @@ import { createPresenterClock } from "./presenter-clock.mjs";
 import { installSlideExpansion } from "./presenter-expansion.mjs";
 import { presenterPanelMarkup, presenterPanelStyles, installPresenterPanel } from "./presenter-panel.mjs";
 var pjpStage = null;
-export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, thumbnailData, disposePresenter, dispose }) {
+export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, pjSlideTitle, pjNotesHtml, fitSections, enhanceStudyBlocks, mountSlide, renderThumbnail, thumbnailData, thumbnailDocument, disposePresenter, dispose }) {
   opts = opts || {};
   var separatePresenter = !!(opts.presenterWindow || opts.floatingPresenter);
   if (!w || pjpStage) return;
@@ -51,25 +51,44 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   var nextThumb = stage.querySelector("[data-pjp-nextthumb]"), timerEl = stage.querySelector("[data-pjp-timer]"), clockEl = stage.querySelector("[data-pjp-clock]"), startT = Date.now(), presenterWin = null;
   var exited = false, openingPresenter = false, pipUnavailable = false, webPreview = null, panel = null, presenterDocument = null, presenterRefresh = 0;
   var clock = createPresenterClock(), lastTimedIndex = idx, ownsFullscreen = false, editRevision = 0, launchCapture = null, saveStatus = "";
+  var metadataBusy = false, syncBusy = false, pendingEdits = 0, lastMetadataSync = Date.now(), syncConflicts = opts.metadataState?.conflicts || [];
+  saveStatus = opts.metadataState?.saveStatus || '';
   var nativeThumbnails = [];
-  var nativeDocuments = nativeHost && !thumbnailData ? slides.map(function (slide) {
+  var nativeDocuments = nativeHost && !thumbnailData && !thumbnailDocument ? slides.map(function (slide) {
     var links = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(function (link) { return '<link rel="stylesheet" href="' + link.href + '">'; }).join('');
     return '<!doctype html><html><head><meta charset="utf-8">' + links + '<style>html,body{margin:0;width:1280px;height:720px;overflow:hidden}body>.pjps{width:1280px;height:720px}</style></head><body>' + renderPjSlide(slide) + '</body></html>';
   }) : [];
-  var metadata = slides.map(function (slide) { return { notes: opts.audienceOnly ? "" : slide.notes || "", durationMinutes: opts.audienceOnly ? 0 : Math.max(0, Math.min(240, Number(slide.durationMinutes) || 0)) }; });
+  var metadata = slides.map(function (slide) { return { title:pjSlideTitle(slide), notes: opts.audienceOnly ? "" : slide.notes || "", durationMinutes: opts.audienceOnly ? 0 : Math.max(0, Math.min(240, Number(slide.durationMinutes) || 0)) }; });
   function currentNotes() { return metadata[idx].notes; }
-  function panelState() { return { index: idx, notes: currentNotes(), durationMinutes: metadata[idx].durationMinutes, saveStatus:saveStatus, slides: slides.map(function (slide, index) { return { title: pjSlideTitle(slide), thumbnail:nativeThumbnails[index], document:nativeDocuments[index] }; }) }; }
+  function panelState() { return { index: idx, notes: currentNotes(), durationMinutes: metadata[idx].durationMinutes, saveStatus:saveStatus, syncEnabled:!!opts.onMetadataSync && !opts.audienceOnly, syncBusy, conflicts:syncConflicts, slides: slides.map(function (slide, index) { return { title: metadata[index].title, thumbnail:nativeThumbnails[index], document:nativeDocuments[index] }; }) }; }
+  async function refreshMetadata(request) {
+    if (!opts.onMetadataSync || opts.audienceOnly || exited || syncBusy || pendingEdits) return;
+    const revision = editRevision;
+    syncBusy = true; lastMetadataSync = Date.now();
+    try {
+      const result = await opts.onMetadataSync(request || { applyRemote: () => !metadataBusy && !pendingEdits && revision === editRevision && !exited });
+      if (exited || revision !== editRevision) return;
+      saveStatus = result.saveStatus; syncConflicts = result.conflicts || [];
+      for (const updated of result.slides || []) {
+        const index = slides.findIndex(slide => slide.id === updated.id);
+        if (index < 0) continue;
+        metadata[index] = { ...metadata[index], notes: updated.notes || '', durationMinutes: Number(updated.durationMinutes) || 0, title: updated.title || pjSlideTitle(slides[index]) };
+      }
+    } catch (error) { if (!exited) saveStatus = error.message || 'Saved on this device. Retry private sync.'; }
+    finally { syncBusy = false; if (!exited) { panel?.update(panelState()); syncNative(); } }
+  }
   function pacing() { var budget = metadata[idx].durationMinutes * 60000; return { elapsed: clock.elapsed(), paused: clock.paused, budget: budget, remaining: budget - clock.slideElapsed(), totalBudget: metadata.reduce(function (total, slide) { return total + slide.durationMinutes * 60000; }, 0), format: fmtDur }; }
   function editSlide(index, key, value) {
-    if (opts.audienceOnly || !opts.onSlideEdit || !Number.isInteger(index) || !slides[index] || !["notes", "durationMinutes"].includes(key)) return;
-    if (key === "notes") { if (typeof value !== "string") return; }
+    if (opts.audienceOnly || !opts.onSlideEdit || !Number.isInteger(index) || !slides[index] || !["notes", "durationMinutes", "title"].includes(key)) return;
+    if (key === "notes" || key === 'title') { if (typeof value !== "string") return; if (key === 'title') { value = value.trim(); if (!value || value.length > 200) return; } }
     else { value = Number(value); if (!Number.isFinite(value) || value < 0 || value > 240) return; }
     metadata[index][key] = value;
     var revision = ++editRevision;
     saveStatus = "Saving..."; panel?.saved(saveStatus);
-    Promise.resolve().then(function () { return opts.onSlideEdit(slides[index], key, value); }).then(function () { if (revision === editRevision) { saveStatus = "Saved to deck"; panel?.saved(saveStatus); syncNative(); } }, function () { if (revision === editRevision) { saveStatus = "Not saved. Edit again to retry."; panel?.saved(saveStatus); syncNative(); } });
+    pendingEdits++;
+    Promise.resolve().then(function () { return opts.onSlideEdit(slides[index], key, value); }).then(function (result) { if (revision === editRevision) { saveStatus = result?.saveStatus || "Saved to deck"; syncConflicts = result?.conflicts || syncConflicts; panel?.saved(saveStatus); syncNative(); } }, function () { if (revision === editRevision) { saveStatus = "Not saved. Edit again to retry."; panel?.saved(saveStatus); syncNative(); } }).finally(function () { pendingEdits--; });
     if (notesEl && !nativeHost && !separatePresenter) notesEl.innerHTML = pjNotesHtml(currentNotes());
-    tick(); syncNative();
+    panel?.update(panelState()); tick(); syncNative();
   }
   async function fullscreen() {
     if (exited || nativeHost || document.fullscreenElement) return;
@@ -81,6 +100,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     else if (action === "timer-pause") { clock.toggle(); tick(); syncNative(); }
     else if (action === "timer-reset") { clock.reset(); startT = Date.now(); tick(); syncNative(); }
     else if (action === "fullscreen") fullscreen();
+    else if (action === 'metadata-sync') refreshMetadata();
   }
   var popButton = stage.querySelector('[data-pjp="popout"]');
   popButton.title = window.documentPictureInPicture ? "Open always-on-top presenter window" : "Open presenter window (always-on-top is unavailable in this browser)";
@@ -117,7 +137,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   }
   function pjPad(n) { return (n < 10 ? "0" : "") + n; }
   function fmtDur(ms) { var s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + pjPad(m) : m) + ":" + pjPad(s % 60); }
-  function tick() { if (presenterWin && presenterWin.closed) onPresenterClosed(); if (timerEl) timerEl.textContent = fmtDur(clock.elapsed()); if (clockEl) clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); if (panel) panel.tick(pacing()); if (nativeHost) syncNative(); }
+  function tick() { if (presenterWin && presenterWin.closed) onPresenterClosed(); if (timerEl) timerEl.textContent = fmtDur(clock.elapsed()); if (clockEl) clockEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); if (panel) panel.tick(pacing()); if (nativeHost) syncNative(); if (Date.now()-lastMetadataSync >= 5000) refreshMetadata(); }
   var clockTimer = setInterval(tick, 1000); tick();
   prog.innerHTML = slides.map(function (_, i) { return '<span class="pjp__pdot" data-pjp-dot="' + i + '"></span>'; }).join("");
   document.documentElement.classList.add("pjp-on");
@@ -138,6 +158,8 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     else if (message.command === "pointer-leave") pointer.hide();
     else if (message.command === "jump" && Number.isInteger(message.index) && slides[message.index]) { idx = message.index; render(1); }
     else if (message.command === "edit") editSlide(message.index, message.key, message.value);
+    else if (message.command === 'metadata-busy') metadataBusy = message.value === true;
+    else if (message.command === 'metadata-resolve' && message.value && ['local','remote'].includes(message.value.choice)) refreshMetadata(message.value);
     else command(message.command);
   }
   if (nativeHost) { window.chrome.webview.addEventListener("message", onNative); window.addEventListener("resize", syncNative); }
@@ -311,7 +333,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
     var captureTicket = launchCapture; launchCapture = null;
     webPreview = installWebPresenterPreview({ frame: frame, pointer: pointer, container: presenterDoc.querySelector("[data-pp-now]"), presenterWindow: presenterWin, button: presenterDoc.querySelector("[data-pp-live]"), status: presenterDoc.querySelector("[data-pp-status]"), onDisconnect: function () { if (presenterWin === opened) syncPresenter(); }, captureTicket:captureTicket });
     popButton.title = pinned ? "Focus always-on-top presenter window" : "Focus presenter window (not always-on-top)";
-    panel = installPresenterPanel({ doc: presenterDoc, onCommand: command, onEdit: opts.onSlideEdit ? editSlide : null, onJump: function (index) { idx = index; render(1); }, renderThumbnail: function (container, index) { preview(container, slides[index]); }, onResize: function () { if (presenterWin === opened && !exited) syncPresenter(); } });
+    panel = installPresenterPanel({ doc: presenterDoc, onCommand: command, onBusy: value => { metadataBusy = value; }, onResolve: refreshMetadata, onEdit: opts.onSlideEdit ? editSlide : null, onJump: function (index) { idx = index; render(1); }, renderThumbnail: function (container, index) { preview(container, slides[index]); }, onResize: function () { if (presenterWin === opened && !exited) syncPresenter(); } });
     presenterWin.addEventListener("keydown", onKey);
     presenterWin.addEventListener("pagehide", onPresenterClosed);
     stage.classList.add("pjp--popped"); presenting = false; stage.classList.remove("pjp--presenting");
@@ -356,6 +378,18 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
   document.addEventListener("keydown", onKey);
   render(1);
   if (nativeHost && thumbnailData) slides.forEach(function (slide,index) { Promise.resolve(thumbnailData(slide)).then(function (image) { if (!exited) { nativeThumbnails[index] = image; syncNative(); } }).catch(function () {}); });
+  if (nativeHost && thumbnailDocument) (async function () {
+    const remaining = new Set(slides.map((_,index)=>index));
+    while (remaining.size) {
+      if (exited) return;
+      const index = [idx+1,idx].find(index=>remaining.has(index)) ?? remaining.values().next().value;
+      remaining.delete(index);
+      const slide = slides[index];
+      try { nativeDocuments[index] = await thumbnailDocument(slide); }
+      catch { nativeDocuments[index] = '<!doctype html><body style="background:#141417;color:#ece7e1;font:24px sans-serif">Preview unavailable</body>'; }
+      syncNative();
+    }
+  })();
   var ready = Promise.resolve();
   if (separatePresenter && !opts.audienceOnly) {
     window.addEventListener("pagehide", exit);

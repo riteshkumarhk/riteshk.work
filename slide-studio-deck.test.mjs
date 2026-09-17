@@ -16,6 +16,8 @@ import { contentRevision } from "./src/js/content-revision.mjs";
 import { loadProtectedBlocks } from "./src/js/project-recovery.mjs";
 import { normalizeSectionReference } from "./src/js/slide-merge-section-component.mjs";
 import { publicDeckPayload, setDeckVisibility } from "./src/js/slide-merge-visibility.mjs";
+import { Miniflare } from "miniflare";
+import { presenterMetadataRoute } from "./worker/presenter-metadata.mjs";
 
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
@@ -501,6 +503,35 @@ test("linked cover depth renders saved originals and degrades to static media", 
     })));
     assert.ok(sample.slice(0, 3).some(channel => channel > 20), 'Depth canvas is nonblank');
     await page.screenshot({ path: join(tmpdir(), 'rk-linked-cover-depth-1440.png') });
+    await page.evaluate(async () => {
+      window.__RK_NATIVE_PRESENTER = true;
+      const bridge = new EventTarget(); bridge.postMessage = state => { window.coverState = state; }; window.chrome.webview = bridge;
+      const draft = window.__RKStudio.getDraft();
+      await window.__RKStudio.presentNativeDeck(draft.work[0].id,{},(work,options)=>{
+        const document=structuredClone(options.document),first=document.slides[0];
+        document.slides.push({id:'depth-away',title:'Away',notes:'',scene:{...first.scene,elements:first.scene.elements.filter(element=>element.type==='frame'),files:{}}});
+        return window.RK.presentDeck(work,{...options,document});
+      });
+    });
+    const presented = page.locator('.pjp .merge-cover-depth');
+    await presented.locator('canvas').waitFor();
+    await presented.hover({position:{x:50,y:50}});
+    await page.waitForFunction(() => document.querySelector('.pjp .merge-cover-depth canvas')?.classList.contains('is-on'));
+    const presentationFirst = await presented.screenshot();
+    const presentationBounds = await presented.boundingBox();
+    await page.mouse.move(presentationBounds.x + presentationBounds.width - 40, presentationBounds.y + presentationBounds.height - 40, {steps:15});
+    assert.notDeepEqual(await presented.screenshot(), presentationFirst);
+    await page.evaluate(()=>window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'next'}})));
+    await presented.waitFor({state:'detached'});
+    await page.evaluate(()=>window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'prev'}})));
+    await presented.locator('canvas').waitFor();
+    await presented.hover({position:{x:50,y:50}});
+    await page.waitForFunction(()=>document.querySelector('.pjp .merge-cover-depth canvas')?.classList.contains('is-on'));
+    const revisited=await presented.screenshot();
+    const revisitedBounds=await presented.boundingBox();
+    await page.mouse.move(revisitedBounds.x+revisitedBounds.width-40,revisitedBounds.y+revisitedBounds.height-40,{steps:15});
+    assert.notDeepEqual(await presented.screenshot(),revisited,'Revisited cover responds with changing depth pixels');
+    await page.evaluate(() => window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'exit'}})));
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await overlay.locator('canvas').waitFor({ state: 'detached' });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -532,8 +563,111 @@ test("linked cover depth renders saved originals and degrades to static media", 
     const publicImage = audience.slides[0].scene.elements.find(element => element.customData?.slideDepth);
     assert.equal(audience.slides[0].scene.files[publicImage.customData.slideDepth.fileId].dataURL, media.depth);
     assert.equal(JSON.stringify(audience).includes('integrated-case'), false);
+    const publishedBefore=await page.evaluate(()=>JSON.stringify(window.RK.studioPublished));
+    await page.locator('[data-act="study-slideshow-preview"]').first().click();
+    await page.locator('.pjp--native').waitFor();
+    await page.waitForFunction(()=>window.coverState?.editable===true);
+    for (const [key,value] of [['notes','PRIVATE LOCAL DJ NOTE'],['title','Renamed privately']]) {
+      await page.evaluate(({key,value})=>window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'edit',index:0,key,value}})),{key,value});
+      await page.waitForFunction(()=>window.coverState.saveStatus==='Saved to deck');
+    }
+    await page.evaluate(()=>window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'exit'}})));
+    await page.locator('.pjp').waitFor({state:'detached'});
+    await page.locator('[data-act="study-slideshow-preview"]').first().click();
+    await page.waitForFunction(()=>window.coverState?.notes==='PRIVATE LOCAL DJ NOTE' && window.coverState?.slides[0].title==='Renamed privately');
+    assert.equal(await page.locator('[data-pjp-notes]').textContent(),'');
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.RK.studioPublished)),publishedBefore);
+    await page.evaluate(()=>window.chrome.webview.dispatchEvent(new MessageEvent('message',{data:{channel:'rk-presenter',command:'exit'}})));
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
+});
+
+test('Private DJ metadata sync crosses independent owner profiles without Publish and retains conflicts', { timeout: 120000 }, async () => {
+  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['PRESENTER'] });
+  const bucket = await runtime.getR2Bucket('PRESENTER');
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const first = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const second = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  let offline = false;
+  async function connect(page) {
+    await page.context().route('**/admin/presenter-metadata?**', async route => {
+      assert.equal(route.request().headers().authorization, 'Bearer synthetic-presenter-owner');
+      if (offline) return route.fulfill({ status: 503, json: { error: 'Offline fixture' } });
+      const request = new Request(route.request().url(), { method: route.request().method(), body: route.request().postData() || undefined });
+      const response = await presenterMetadataRoute(request, bucket, { 'Access-Control-Allow-Origin': '*' });
+      return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() });
+    });
+    await page.evaluate(() => {
+      localStorage.setItem('rk:admin:sess', JSON.stringify({ token: 'synthetic-presenter-owner', exp: Date.now() + 3600000 }));
+      window.__RK_NATIVE_PRESENTER = true;
+      const bridge = new EventTarget(); bridge.postMessage = state => { if (state.type === 'state') window.syncedPresenter = state; };
+      window.chrome.webview = bridge;
+    });
+  }
+  const send = (page, command, value = {}) => page.evaluate(({ command, value }) => window.chrome.webview.dispatchEvent(new MessageEvent('message', { data: { channel: 'rk-presenter', command, ...value } })), { command, value });
+  const start = async page => { await page.locator('[data-act="study-slideshow-preview"]').first().click(); await page.locator('.pjp--native').waitFor(); await page.waitForFunction(() => window.syncedPresenter?.syncEnabled); };
+  const edit = async (page, key, value) => { await send(page, 'edit', { index: 0, key, value }); await page.waitForFunction(() => /Private sync pending/.test(window.syncedPresenter.saveStatus)); };
+  const sync = async page => { await send(page, 'metadata-sync'); await page.waitForFunction(() => !window.syncedPresenter.syncBusy && /synced privately/.test(window.syncedPresenter.saveStatus)); };
+  try {
+    await openIntegratedFixture(first);
+    await openProjectSlides(first);
+    await first.getByRole('button', { name: 'Add cover', exact: true }).click();
+    await first.getByLabel('Cover title', { exact: true }).waitFor({ state: 'attached' });
+    const original = await first.evaluate(async () => {
+      let document;
+      await window.__RKStudio.presentNativeDeck('integrated-case', {}, (_work, options) => { document = options.document; return true; });
+      return document;
+    });
+    await first.locator('[data-l2-back]').click();
+    await connect(first);
+    const firstPublished = await first.evaluate(() => JSON.stringify(window.RK.studioPublished));
+    await start(first);
+    await edit(first, 'notes', 'Private note from first profile'); await sync(first);
+    await edit(first, 'title', 'Private cross-profile name'); await sync(first);
+    const reference = { schema: STUDIO_DECK_SCHEMA, version: 1, caseStudyId: 'integrated-case', id: 'independent-local-copy', revision: 0, slideCount: original.slides.length };
+    await openIntegratedFixture(second, undefined, { nativeDeck: reference });
+    const storageBundle = await build({ entryPoints: [fileURLToPath(new URL('./src/js/slide-studio-deck.mjs', import.meta.url))], bundle: true, format: 'iife', globalName: 'StudioDeckStorage', write: false });
+    await second.addScriptTag({ content: storageBundle.outputFiles[0].text });
+    await second.evaluate(async ({ reference, original }) => {
+      await window.StudioDeckStorage.saveStudioDeck(reference, original);
+    }, { reference, original });
+    await connect(second);
+    const secondPublished = await second.evaluate(() => JSON.stringify(window.RK.studioPublished));
+    await start(second);
+    await second.waitForFunction(() => window.syncedPresenter.notes === 'Private note from first profile' && window.syncedPresenter.slides[0].title === 'Private cross-profile name');
+    await send(second, 'metadata-busy', { value: true });
+    await edit(first, 'notes', 'Remote update during typing'); await sync(first);
+    await sync(second);
+    assert.equal(await second.evaluate(() => window.syncedPresenter.notes), 'Private note from first profile');
+    await send(second, 'metadata-busy', { value: false }); await sync(second);
+    await second.waitForFunction(() => window.syncedPresenter.notes === 'Remote update during typing');
+    await edit(second, 'notes', 'Retained conflicting local note');
+    await edit(first, 'notes', 'Retained cloud note'); await sync(first);
+    await send(second, 'metadata-sync');
+    await second.waitForFunction(() => window.syncedPresenter.conflicts.length === 1);
+    const conflict = await second.evaluate(() => window.syncedPresenter.conflicts[0]);
+    assert.equal(conflict.local, 'Retained conflicting local note'); assert.equal(conflict.remote, 'Retained cloud note');
+    await send(second, 'metadata-resolve', { value: { ...conflict, choice: 'remote' } });
+    await second.waitForFunction(() => window.syncedPresenter.notes === 'Retained cloud note' && window.syncedPresenter.conflicts.length === 0);
+    offline = true;
+    await edit(first, 'notes', 'Offline note survives reopen');
+    await send(first, 'metadata-sync'); await first.waitForFunction(() => /failed \(503\)/.test(window.syncedPresenter.saveStatus));
+    await send(first, 'exit'); await first.locator('.pjp').waitFor({ state: 'detached' });
+    await start(first); assert.equal(await first.evaluate(() => window.syncedPresenter.notes), 'Offline note survives reopen');
+    offline = false; await sync(first); await sync(second);
+    await second.waitForFunction(() => window.syncedPresenter.notes === 'Offline note survives reopen');
+    for (const [page, published] of [[first, firstPublished], [second, secondPublished]]) {
+      assert.equal(await page.evaluate(() => JSON.stringify(window.RK.studioPublished)), published);
+      assert.equal(await page.locator('[data-pjp-notes]').textContent(), '');
+      await send(page, 'exit'); await page.locator('.pjp').waitFor({ state: 'detached' });
+      const scene = await page.evaluate(async () => {
+        let document;
+        await window.__RKStudio.presentNativeDeck('integrated-case', {}, (_work, options) => { document = options.document; return true; });
+        return document.slides[0].scene;
+      });
+      assert.deepEqual(scene, original.slides[0].scene);
+    }
+  } finally { await browser.close(); await runtime.dispose(); }
 });
 
 test("slide eyedropper samples screen results over inserted sections and outside the canvas", { timeout: 90000 }, async () => {

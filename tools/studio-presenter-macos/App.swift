@@ -113,9 +113,11 @@ final class PresenterApp: NSObject, NSApplicationDelegate, WKScriptMessageHandle
                 let bounded = key == preferenceKeys[0] ? min(75, max(40, value)) : min(32, max(14, value))
                 UserDefaults.standard.set(String(bounded), forKey: key)
             } else if type == "command", let action = payload["command"] as? String {
-                if ["prev", "next", "exit", "timer-reset", "timer-pause", "pointer-leave"].contains(action) { command(["command": action]) }
+                if ["prev", "next", "exit", "timer-reset", "timer-pause", "pointer-leave", "metadata-sync"].contains(action) { command(["command": action]) }
+                else if action == "metadata-busy", let value = payload["value"] as? Bool { command(["command": action, "value": value]) }
+                else if action == "metadata-resolve", let value = payload["value"] as? [String: Any], let choice = value["choice"] as? String, ["local", "remote"].contains(choice) { command(["command": action, "value": value]) }
                 else if action == "jump", let index = payload["index"] as? Int { command(["command": action, "index": index]) }
-                else if action == "edit", let index = payload["index"] as? Int, let key = payload["key"] as? String, ["notes", "durationMinutes"].contains(key), let value = payload["value"] { command(["command": action, "index": index, "key": key, "value": value]) }
+                else if action == "edit", let index = payload["index"] as? Int, let key = payload["key"] as? String, ["notes", "durationMinutes", "title"].contains(key), let value = payload["value"] { command(["command": action, "index": index, "key": key, "value": value]) }
             } else if type == "pointer", let x = payload["x"] as? Double, let y = payload["y"] as? Double, x.isFinite, y.isFinite, let current {
                 command(["command": "pointer", "x": (current["left"] as? Double ?? 0) + min(1, max(0, x)) * (current["width"] as? Double ?? 0), "y": (current["top"] as? Double ?? 0) + min(1, max(0, y)) * (current["height"] as? Double ?? 0)])
             }

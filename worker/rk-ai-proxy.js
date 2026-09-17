@@ -30,6 +30,7 @@ import { libraryRoute } from "./slide-library.mjs";
 import { releaseChecksRoute } from "./release-checks.mjs";
 import { readOperationalState, updateOperationalState } from "./operational-state.mjs";
 import { resumeWorkspaceRoute, legacyAtsDestination } from "./resume-workspace.mjs";
+import { presenterMetadataRoute } from "./presenter-metadata.mjs";
 import { atsMigrationIdentity } from "../src/js/resume-ats.mjs";
 
 const PROVIDERS = {
@@ -130,6 +131,10 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
+      if (url.pathname === "/admin/presenter-metadata") {
+        const headers = { ...cors, "Cache-Control": "no-store", "Vary": "Origin" };
+        return new Response(null, { status: origin && cors["Access-Control-Allow-Origin"] === origin ? 204 : 403, headers });
+      }
       if (url.pathname.startsWith("/admin/resume/")) {
         const headers = { ...cors, "Cache-Control": "no-store" };
         if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return new Response(null, { status: 403, headers });
@@ -146,6 +151,12 @@ export default {
       return releaseChecksRoute(request, env.RELEASE_CHECKS, headers);
     }
 
+    if (url.pathname === "/admin/presenter-metadata") {
+      const headers = { ...cors, "Cache-Control": "no-store", "Vary": "Origin" };
+      if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return json({ error: "Origin not allowed" }, 403, headers);
+      if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, headers);
+      return presenterMetadataRoute(request, env.VAULT, headers);
+    }
     if (url.pathname.startsWith("/admin/resume/")) {
       const headers = Object.assign({}, cors, { "Cache-Control": "no-store" });
       if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return json({ error: "Origin not allowed" }, 403, headers);

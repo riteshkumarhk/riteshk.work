@@ -641,7 +641,7 @@ function Merger({ integration, controller }) {
     paint(next); schedule();
   }
   async function presenterMetadata(id, key, value) {
-    if (!["notes", "durationMinutes"].includes(key)) return;
+    if (!["notes", "durationMinutes", "title"].includes(key)) return;
     paint({ ...live.current.deck, slides: live.current.deck.slides.map(slide => slide.id === id ? { ...slide, [key]: value } : slide) });
     schedule();
     await save();

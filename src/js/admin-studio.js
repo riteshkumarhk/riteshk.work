@@ -43,6 +43,7 @@ import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
+import { createPresenterMetadataSync } from "./presenter-metadata-sync.mjs";
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
@@ -6609,7 +6610,14 @@ import { resumeSignature } from "./resume-workspace.mjs";
   function openStudyPresentation(i, options = {}) {
     const work = data.work[i];
     if (!work || !studyHasSlides(work)) return;
-    if (window.__RK_NATIVE_PRESENTER) return window.RK.presentDeck(work, { ...options, autoStart:true });
+    if (window.__RK_NATIVE_PRESENTER) {
+      if (work.study?.nativeDeck || work.study?.nativeDeckEnc) return presentNativeWork(work.id, { ...options, autoStart:true }).catch(error => status(error.message || "The slideshow could not be opened."));
+      return window.RK.presentDeck(work, { ...options, autoStart:true, onSlideEdit:options.onSlideEdit || ((slide,key,value) => {
+        if (!data.work.includes(work) || !["notes","durationMinutes","title"].includes(key) || !work.study?.slides?.includes(slide)) throw new Error("This slide is no longer editable.");
+        slide[key] = value;
+        if (!saveDraft(true)) throw new Error("The speaker notes could not be saved.");
+      }) });
+    }
     return openPresenterTab({
       url: studyVisitorUrl(work, true),
       prepare: async () => {
@@ -6629,7 +6637,7 @@ import { resumeSignature } from "./resume-workspace.mjs";
           } catch (error) { disconnect(); throw error; }
         });
         return audience.RK.presentDeck(work, { ...settings, onSlideEdit:options.onSlideEdit || ((slide, key, value) => {
-          if (!data.work.includes(work) || !["notes", "durationMinutes"].includes(key) || !work.study?.slides?.includes(slide)) throw new Error("This slide is no longer editable.");
+          if (!data.work.includes(work) || !["notes", "durationMinutes", "title"].includes(key) || !work.study?.slides?.includes(slide)) throw new Error("This slide is no longer editable.");
           slide[key] = value;
           if (!saveDraft(true)) throw new Error("The speaker notes could not be saved.");
         }) });
@@ -7351,13 +7359,57 @@ import { resumeSignature } from "./resume-workspace.mjs";
     }
     if (!current() || !document) throw new Error("The case-study presentation session has changed");
     let queue = Promise.resolve();
-    return present(work, { ...options, document, onSlideEdit: (slide, key, value) => {
-      if (!["notes", "durationMinutes"].includes(key) || !document.slides.some(item => item.id === slide.id)) throw new Error("This slide's presenter metadata is not editable");
+    const owner = adminSession();
+    const syncCurrent = () => current() && !!owner && adminSession() === owner;
+    const snapshot = () => active?.editor ? active.editor.snapshot() : document;
+    const applyMetadata = async (slideId, key, value) => {
+      if (!current()) throw new Error("The case-study presentation session has changed");
+      if (active?.editor) { await active.editor.editMetadata(slideId, key, value); document = active.editor.snapshot(); }
+      else {
+        const target = document.slides.find(slide => slide.id === slideId);
+        if (!target) throw new Error("This slide is no longer in the deck");
+        target[key] = value;
+        await saveNativeWork(session, document, current);
+      }
+    };
+    let sync = null, syncState = null;
+    if (owner) {
+      try {
+        const storageKey = 'rk:presenter-sync:v1:' + work.id + ':native';
+        sync = createPresenterMetadataSync({
+          current: syncCurrent, read: () => snapshot().slides, apply: applyMetadata,
+          storage: {
+            load: () => JSON.parse(localStorage.getItem(storageKey) || 'null'),
+            save: state => localStorage.setItem(storageKey, JSON.stringify(state))
+          },
+          request: async (method, body) => {
+            if (!syncCurrent()) throw new Error('Sign in again to sync private presenter metadata.');
+            const response = await fetch(ADMIN_WORKER + '/admin/presenter-metadata?case=' + encodeURIComponent(work.id) + '&deck=native', {
+              method, headers: { Authorization: 'Bearer ' + owner, 'Content-Type': 'application/json' },
+              body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000), cache: 'no-store'
+            });
+            if (!syncCurrent()) throw new Error('The presenter owner session changed. Local edits are retained.');
+            if (!response.ok) throw new Error(response.status === 401 ? 'Saved on this device. Sign in again to sync privately.' : 'Saved on this device. Private sync failed (' + response.status + '). Retry sync.');
+            return response.json();
+          }
+        });
+        syncState = await sync.refresh();
+        document = snapshot();
+      } catch (error) { syncState = { saveStatus: error.message, conflicts: [] }; }
+    }
+    const metadataSync = sync ? async request => {
+      await queue.catch(() => {});
+      const result = request?.choice ? await sync.resolve(request.slideId, request.key, request.choice, request.local, request.remote) : await sync.refresh({ applyRemote: request?.applyRemote ?? true });
+      return { ...result, slides: snapshot().slides.map(({ id, notes, title, durationMinutes }) => ({ id, notes, title, durationMinutes })) };
+    } : null;
+    return present(work, { ...options, document, metadataState: syncState, onMetadataSync: metadataSync, onSlideEdit: (slide, key, value) => {
+      if (!["notes", "durationMinutes", "title"].includes(key) || !document.slides.some(item => item.id === slide.id)) throw new Error("This slide's presenter metadata is not editable");
       queue = queue.catch(() => {}).then(async () => {
         if (!current()) throw new Error("The case-study presentation session has changed");
-        if (active?.editor) return active.editor.editMetadata(slide.id, key, value);
-        const target = document.slides.find(item => item.id === slide.id); target[key] = value;
-        await saveNativeWork(session, document, current);
+        const target = snapshot().slides.find(item => item.id === slide.id);
+        const initial = key === 'durationMinutes' ? Number(target[key]) || 0 : target[key] || '';
+        await applyMetadata(slide.id, key, value);
+        return sync ? sync.edit(slide.id, key, value, initial, { defer: true }) : syncState;
       });
       return queue;
     } });
@@ -7385,12 +7437,12 @@ import { resumeSignature } from "./resume-workspace.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.13", "/css/slide-studio.css?v=1.6"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.14", "/css/slide-studio.css?v=1.6"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.28";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.29";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -9782,12 +9834,12 @@ import { resumeSignature } from "./resume-workspace.mjs";
         '<div class="adm__ext" data-presenter-capture-test>' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>Studio Presenter</b><span>Windows 10 (2004+) / 11, x64 - portable preview release</span></div></div>' +
           '<p class="adm__ext-lead">Your live slides, speaker notes and controls in an always-on-top companion. Point with the laser, play media and interact with sections directly from its live preview.</p>' +
-          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.1/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
+          '<div class="imgblk__row"><a class="btn btn--primary" href="https://github.com/riteshkumarhk/riteshk.work/releases/download/studio-presenter-v0.3.2/StudioPresenter.exe" target="_blank" rel="noopener noreferrer">' + extIcon("dl", 15) + ' Download app (.exe)</a></div>' +
           '<ol class="adm__ext-steps">' +
             '<li>Download on your presenting PC and open <b>StudioPresenter.exe</b>. It needs Microsoft Edge WebView2 Runtime, normally already installed on Windows. No separate .NET installation is needed.</li>' +
             '<li>Sign in inside the app. Open your saved deck in <b>Content Studio</b>, or choose <b>Open &gt; Slide Studio</b>. The app has its own local profile; browser drafts are not copied automatically. Slide Studio supports deck export/import. Do not publish private or unreviewed work just to transfer it.</li>' +
             '<li>Choose <b>Slide Show</b>. Slides fill the audience window and the protected notes companion opens automatically. Keep the audience window open and not minimized.</li>' +
-            '<li>Point or click inside the companion preview. The laser appears on the live slides; interactive controls use an arrow. Media, sections, keyboard input, slide navigation and the timer control the same presentation.</li>' +
+            '<li>Point or click inside the companion preview. The laser appears on the live slides; interactive controls use a pointing hand. Media, sections, keyboard input, slide navigation and the timer control the same presentation.</li>' +
             '<li>Before presenting private notes, verify from another participant during <b>entire-display sharing</b>: only the slides should appear, with no companion and no black rectangle. Recheck recordings and other displays when used.</li>' +
           '</ol>' +
           '<div class="af__hint">Unsigned preview build. Do not disable Windows security to run it; report any block. Capture exclusion passed your Teams probe test, but this integrated app still needs a meeting check. The ordinary browser presenter is not capture-excluded.</div>' +
@@ -12512,7 +12564,7 @@ import { resumeSignature } from "./resume-workspace.mjs";
     if (act === "slide-rehearse") {
       var _rhw = data.work[i]; if (!_rhw || !(window.RK && window.RK.presentDeck)) { status("Reload the studio to start Slide Show \u2014 the deck player didn\u2019t load."); return; }
       var _rhopts = { autoStart: true };
-      _rhopts.onSlideEdit = function (slide, key, value) { if (!["notes", "durationMinutes"].includes(key) || !_rhw.study || !_rhw.study.slides || !_rhw.study.slides.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); };
+      _rhopts.onSlideEdit = function (slide, key, value) { if (!["notes", "durationMinutes", "title"].includes(key) || !_rhw.study || !_rhw.study.slides || !_rhw.study.slides.includes(slide)) throw new Error("Slide is not editable"); slide[key] = value; if (!saveDraft(true)) throw new Error("Draft storage full"); };
       _rhopts.onClose = function () { renderL2(); };
       if (b.dataset.sindex != null && _rhw.study && _rhw.study.slides) { var _full = _rhw.study.slides, _tgt = +b.dataset.sindex, _vis = 0; for (var _vi = 0; _vi < _tgt && _vi < _full.length; _vi++) { if (_full[_vi] && !_full[_vi].hidden) _vis++; } _rhopts.start = _vis; }
       openStudyPresentation(i, _rhopts);

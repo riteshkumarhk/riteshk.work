@@ -53,7 +53,7 @@ function framePath(root, document) {
 
 export function presentationContains(root, target) {
   if (!target?.isConnected) return false;
-  return target.ownerDocument === root.ownerDocument ? root.contains(target) : framePath(root, target.ownerDocument) !== null;
+  return target.ownerDocument === root.ownerDocument ? root.contains(target) || target.closest('[data-rk-presentation-overlay]')?.__rkPresentationRoot === root : framePath(root, target.ownerDocument) !== null;
 }
 
 export function presentationSurface(root) {
@@ -90,10 +90,16 @@ export function presentationControl(target) {
   return control && !control.closest(':disabled,[aria-disabled="true"],[inert]') ? control : null;
 }
 
+export function presentationCursor(target) {
+  if (!target || target.closest(':disabled,[aria-disabled="true"],[inert]')) return "laser";
+  if (target.closest('a[href],button,input,textarea,select,summary,[role="button"],[role="slider"],[role="tab"],[role="checkbox"],[role="switch"],[role="link"],[role="menuitem"],[role="radio"],[role="combobox"],[contenteditable="true"],[data-pjhref],[data-pjjump]')) return "pointer";
+  return "laser";
+}
+
 export function presentationHit(root, x, y) {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   let document = root.ownerDocument, target = document.elementFromPoint(x, y);
-  if (!target || !root.contains(target)) return null;
+  if (!target || !presentationContains(root, target)) return null;
   let point = { x, y }, depth = 0;
   while (target?.tagName === "IFRAME" && depth++ < 8) {
     const child = frameDocument(target);

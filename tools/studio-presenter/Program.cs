@@ -273,9 +273,10 @@ internal sealed class CompanionWindow : Form
                 else if (type == "command")
                 {
                     var command = message.GetProperty("command").GetString();
-                    if (command is "prev" or "next" or "exit" or "timer-reset" or "timer-pause" or "pointer-leave") audience.Command(command);
+                    if (command is "prev" or "next" or "exit" or "timer-reset" or "timer-pause" or "pointer-leave" or "metadata-sync") audience.Command(command);
+                    else if (command is "metadata-busy" or "metadata-resolve" && message.TryGetProperty("value", out var metadata)) audience.Command(command, value: metadata.Clone());
                     else if (command == "jump" && message.TryGetProperty("index", out var target) && target.TryGetInt32(out var index)) audience.Command(command, index);
-                    else if (command == "edit" && message.TryGetProperty("index", out var slide) && slide.TryGetInt32(out var slideIndex) && message.TryGetProperty("key", out var field) && field.GetString() is "notes" or "durationMinutes" && message.TryGetProperty("value", out var value)) audience.Command(command, slideIndex, field.GetString(), value.Clone());
+                    else if (command == "edit" && message.TryGetProperty("index", out var slide) && slide.TryGetInt32(out var slideIndex) && message.TryGetProperty("key", out var field) && field.GetString() is "notes" or "durationMinutes" or "title" && message.TryGetProperty("value", out var value)) audience.Command(command, slideIndex, field.GetString(), value.Clone());
                 }
                 else if (type == "input") await ForwardInput(message.Clone());
             }

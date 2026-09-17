@@ -24,7 +24,7 @@ internal static class SelfTest
         {
             Check(AudienceWindow.Trusted("https://riteshk.work/studio/", false) && !AudienceWindow.Trusted("https://riteshk.work.evil.test/", false) && !AudienceWindow.Trusted("http://127.0.0.1:5510/", false), "Host origin allowlist");
             await Until(async () => await Script(audience.Browser, "!!window.fixture") == "true", "fixture startup");
-            await Script(audience.Browser, "window.fixture.editable=true;window.fixture.start()");
+            await Script(audience.Browser, "window.fixture.editable=true;window.fixture.syncCalls=[];window.fixture.onMetadataSync=request=>{if(request.choice){window.fixture.syncResolution=request;window.fixture.syncConflict=null;}else window.fixture.syncCalls.push(request.applyRemote());return {saveStatus:'Synthetic private sync complete',conflicts:window.fixture.syncConflict?[window.fixture.syncConflict]:[]};};window.fixture.start()");
             await Until(async () => audience.Companion?.Interface.CoreWebView2 != null && await Script(audience.Companion.Interface, "document.querySelector('#notes')?.textContent") == "\"Private first note\"", "private notes connected");
             var companion = audience.Companion!;
             Check(companion.Protected && companion.TopMost, "Companion topmost and capture-excluded");
@@ -66,11 +66,16 @@ internal static class SelfTest
             await Until(async () => await Script(audience.Browser, "window.fixture.slides[1].notes==='Edited native note'&&window.fixture.slides[1].durationMinutes===2.5") == "true", "native metadata saved");
             Check(true, "Native notes and budget edits reach their deck slide");
             await Script(companion.Interface, "document.querySelector('[data-pp=overview]').click()");
-            await Until(() => Task.FromResult(companion.MirrorSuppressed), "overview hides mirror");
+            await Until(async () => await Script(companion.Interface, "document.querySelector('[data-pp-overview]').open") == "true", "overview opens in notes pane");
+            Check(!companion.MirrorSuppressed, "Notes-pane overview preserves the live mirror");
             Check(await Script(companion.Interface, "document.querySelector('[data-pp-grid] iframe')?.getAttribute('sandbox')") == "\"\"", "Content thumbnails use script-disabled sandbox frames");
+            await Script(companion.Interface, "(()=>{const title=document.querySelector('[data-pp-title=\"0\"]');title.value='Renamed native slide';title.dispatchEvent(new Event('change',{bubbles:true}));})()");
+            await Until(async () => await Script(audience.Browser, "window.fixture.slides[0].title") == "\"Renamed native slide\"", "native title saved");
+            Check(true, "Native slide-name edits reach the owning deck");
             await Script(companion.Interface, "document.querySelector('[data-pp-jump=\"0\"]').click()");
             await Until(async () => !companion.MirrorSuppressed && await Script(companion.Interface, "document.querySelector('#count').textContent") == "\"1 / 2\"", "overview jump");
-            Check(true, "Private overview hides mirror and jumps to selected slide");
+            Check(true, "Private notes-pane overview jumps to selected slide");
+            await MetadataSync(audience);
             await Script(companion.Interface, "document.querySelector('[data-pp=notes-smaller]').click();document.querySelector('[data-pp=notes-larger]').click()");
             await Until(async () => await Script(audience.Browser, "Number(localStorage.getItem('rk:presenter:notes-size'))>=14") == "true", "notes preference persisted");
             Check(true, "Native notes size persists in the app profile");
@@ -98,6 +103,30 @@ internal static class SelfTest
             Report(new { passed = checks, error = error.ToString(), audienceState, companionState, sectionState, protectedWindow = audience.Companion?.Protected });
         }
         finally { audience.Close(); }
+    }
+
+    private static async Task MetadataSync(AudienceWindow audience)
+    {
+        var companion = audience.Companion!;
+        await Script(audience.Browser, "window.fixture.syncCalls=[]");
+        await Script(companion.Interface, "document.querySelector('#notes').focus()");
+        await Until(async () => await Script(companion.Interface, "document.activeElement.id") == "\"notes\"", "native metadata focus");
+        await Script(companion.Interface, "document.querySelector('[data-pp=metadata-sync]').click()");
+        await Until(async () => await Script(audience.Browser, "window.fixture.syncCalls.includes(false)") == "true", "native sync defers focused metadata");
+        Check(true, "Native private sync command respects focused notes");
+        await Script(companion.Interface, "document.querySelector('#notes').blur()");
+        await Script(companion.Interface, "document.querySelector('[data-pp=metadata-sync]').click()");
+        await Until(async () => await Script(audience.Browser, "window.fixture.syncCalls.at(-1)") == "true", "native sync resumes after blur");
+        Check(true, "Native private sync resumes incoming metadata after blur");
+        await Script(audience.Browser, "window.fixture.syncConflict={slideId:'native-first',key:'notes',local:'Private device version',remote:'Private cloud version',remoteRevision:2}");
+        await Script(companion.Interface, "document.querySelector('[data-pp=metadata-sync]').click()");
+        await Until(async () => await Script(companion.Interface, "!document.querySelector('[data-pp=review-sync]').hidden") == "true", "native sync conflict available");
+        await Script(companion.Interface, "document.querySelector('[data-pp=review-sync]').click()");
+        await Until(async () => await Script(companion.Interface, "document.querySelector('dialog[aria-label=\"Private sync conflict\"]').open") == "true", "native conflict comparison opens");
+        Check(!companion.MirrorSuppressed, "Native conflict comparison preserves live mirror");
+        await Script(companion.Interface, "document.querySelector('[data-pp=use-remote]').click()");
+        await Until(async () => await Script(audience.Browser, "window.fixture.syncResolution?.choice==='remote'&&window.fixture.syncResolution?.local==='Private device version'&&window.fixture.syncResolution?.remote==='Private cloud version'") == "true", "native conflict resolution retains compared values");
+        Check(await Script(audience.Browser, "document.querySelector('[data-pjp-notes]').textContent") == "\"\"", "Native private conflict resolution stays outside audience notes");
     }
 
     private static void Check(bool condition, string name)

@@ -135,3 +135,8 @@ test('Studio Apply rejects stale sections and concealed content and leaves Cance
     }
   }
 });
+
+test('Workflow hides optional library attribution through the supported React Flow option',()=>{
+  const source=readFileSync(new URL('./src/js/workflow.jsx',import.meta.url),'utf8');
+  assert.match(source,/proOptions=\{\{hideAttribution:true\}\}/);
+});

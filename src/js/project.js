@@ -2987,6 +2987,7 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
       });
     }
     function pjSlideTitle(s) {
+      if (s?.title) return pjPlain(s.title).slice(0,200);
       var z = (s && s.slots) || {};
       var t = z.title || z.heading || z.quote || z.value || z.label || z.caption || z.kicker || "";
       if (!t && s && s.layout === "free") { var textBlock = (s.blocks || []).find(function (block) { return block.kind === "text" && pjPlain(block.text).trim(); }); t = textBlock ? textBlock.text : ""; }

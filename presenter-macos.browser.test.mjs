@@ -40,6 +40,15 @@ test('macOS shared DJ pad handles native state and private metadata commands', a
     assert.equal(await page.locator('[data-pp-minutes]').inputValue(),'240:00');
     assert.equal(await page.getByRole('button',{name:'Increase slide time',exact:true}).isDisabled(),true);
     assert.equal(await page.getByRole('button',{name:'Decrease slide time',exact:true}).isEnabled(),true);
+    await page.evaluate(()=>window.receivePresenter({type:'state',index:0,total:1,notes:'Local Mac note',editable:true,syncEnabled:true,conflicts:[{slideId:'first',key:'notes',local:'Local Mac note',remote:'Cloud Mac note',remoteRevision:2}],elapsed:0,remaining:0,budget:0,totalBudget:0,paused:true,width:1280,height:720,slides:[{title:'First'}]}));
+    await page.locator('[data-pp-notes]').focus();
+    await page.waitForFunction(()=>window.messages.some(message=>message.command==='metadata-busy'&&message.value===true));
+    await page.getByRole('button',{name:'Sync private notes and names',exact:true}).click();
+    await page.getByRole('button',{name:'Review conflict',exact:true}).click();
+    await page.getByRole('button',{name:'Use cloud version',exact:true}).click();
+    const syncMessages=await page.evaluate(()=>window.messages);
+    assert.ok(syncMessages.some(message=>message.command==='metadata-sync'));
+    assert.ok(syncMessages.some(message=>message.command==='metadata-resolve'&&message.value.choice==='remote'&&message.value.local==='Local Mac note'&&message.value.remote==='Cloud Mac note'));
     await page.getByRole('button',{name:'End presentation',exact:true}).click();
     assert.equal(await page.evaluate(()=>window.messages.at(-1).command),'exit');
   } finally { await browser.close(); }
