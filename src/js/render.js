@@ -868,14 +868,18 @@ import { contentRevision } from "./content-revision.mjs";
   }
   // Fetch each "rkenc:" protected image, decrypt it with the section key, and swap in a
   // blob: URL so it renders. Runs right after a ticket unlock, in place on the data.
-  async function rkResolveEncImages(node, sekBytes) {
+  async function rkResolveEncImages(node, sekBytes, options = {}) {
     var targets = [];
     (function walk(o) { if (!o || typeof o !== "object") return; for (var k in o) { var v = o[k]; if (typeof v === "string") { if (/^rkenc:/.test(v)) targets.push({ o: o, k: k }); } else if (v && typeof v === "object") walk(v); } })(node);
     for (var i = 0; i < targets.length; i++) {
       var o = targets[i].o, k = targets[i].k;
       try {
         var meta = JSON.parse(atob(o[k].slice(6)));
-        var res = await fetch(meta.p, { cache: "reload" }); if (!res.ok) continue;
+        var res = await fetch(meta.p, { cache: "reload" }).catch(() => null);
+        if (!res?.ok && options.owner && /^\/assets\/protected\/[a-f0-9]{64}\.enc$/i.test(meta.p)) {
+          res = await fetch("https://raw.githubusercontent.com/riteshkumarhk/riteshk.work/main" + meta.p, { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+        }
+        if (!res?.ok) continue;
         var bytes = await rkDecBytes(sekBytes, meta.iv, new Uint8Array(await res.arrayBuffer()));
         const blob = new Blob([bytes], { type: meta.m || "application/octet-stream" });
         o[k] = /^(?:original)?dataURL$/i.test(k) ? await new Promise((resolve, reject) => {
@@ -1078,7 +1082,7 @@ import { contentRevision } from "./content-revision.mjs";
       const value = await rkDecWithSek(key, encrypted);
       ownerKeys.set(encrypted.ct, key);
       passOk = true;
-      await rkResolveEncImages(value, key);
+      await rkResolveEncImages(value, key, { owner: true });
       return value;
     };
     for (var idx = 0; idx < data.work.length; idx++) {
@@ -1147,7 +1151,7 @@ import { contentRevision } from "./content-revision.mjs";
       const key = ownerKeys.get(encrypted.ct);
       if (!key) throw new Error("This slideshow could not be decrypted in the current owner session. Exit Present mode and unlock again.");
       const value = await rkDecWithSek(key, encrypted);
-      await rkResolveEncImages(value, key);
+      await rkResolveEncImages(value, key, { owner: true });
       return value;
     });
     if (!presentActive || presentOwnerKeys !== ownerKeys || !ownerKeys.size) throw new Error("Owner Present mode has ended.");

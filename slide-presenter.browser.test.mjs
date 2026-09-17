@@ -194,14 +194,21 @@ for (const nativeHost of [true, false]) test(`owner Present mode retries undeplo
     const recovery = "synthetic-owner-recovery", key = rkNewSek(), iv = crypto.getRandomValues(new Uint8Array(12));
     const cryptoKey = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
     const ciphertext = Buffer.from(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, Buffer.from(fixture.image.split(",")[1], "base64")));
-    const protectedRef = "rkenc:" + Buffer.from(JSON.stringify({ p: "/assets/protected/synthetic-owner-retry.enc", iv: Buffer.from(iv).toString("base64"), m: "image/png" })).toString("base64");
+    const protectedPath = "/assets/protected/" + createHash("sha256").update(ciphertext).digest("hex") + ".enc";
+    const protectedRef = "rkenc:" + Buffer.from(JSON.stringify({ p: protectedPath, iv: Buffer.from(iv).toString("base64"), m: "image/png" })).toString("base64");
     fixture.deck.slides[0].scene.files["protected-photo"] = { id: "protected-photo", mimeType: "image/png", dataURL: protectedRef, created: 1 };
     const envelope = { ...await rkEncWithSek(key, { version: 1, caseStudyId: "owner-retry", document: fixture.deck }), wraps: { owner: await rkWrapSek(recovery, key) } };
     const published = JSON.parse(readFileSync(new URL("./content.json", import.meta.url), "utf8"));
     published.work = [{ id: "owner-retry", title: "Owner recovery regression", featured: true, study: { slidesPublic: false, blocks: [{ type: "text", body: "Original case-study content" }], nativeDeckEnc: envelope } }];
-    let available = false, requests = 0;
+    let available = false, requests = 0, repositoryRequests = 0;
     await page.route("**/content.json*", route => route.fulfill({ contentType: "application/json", body: JSON.stringify(published) }));
-    await page.route("**/assets/protected/synthetic-owner-retry.enc", route => { requests++; return route.fulfill({ status: available ? 200 : 404, contentType: "application/octet-stream", body: available ? ciphertext : Buffer.from("Not deployed yet") }); });
+    await page.route(baseURL + protectedPath, route => { requests++; return route.fulfill({ status: 404, contentType: "application/octet-stream", body: "Not deployed yet" }); });
+    await page.route("https://raw.githubusercontent.com/riteshkumarhk/riteshk.work/main" + protectedPath, route => {
+      repositoryRequests++;
+      assert.equal(route.request().headers().referer, undefined);
+      assert.equal(route.request().headers().authorization, undefined);
+      return route.fulfill({ status: available ? 200 : 404, contentType: "application/octet-stream", body: available ? ciphertext : Buffer.from("Not available yet") });
+    });
     await page.goto(baseURL + "/?work=owner-retry");
     await page.waitForFunction(() => !!window.RK?.requestOwnerPresentation);
     assert.equal(await page.locator('.pj [data-pj="present"]').isVisible(), false);
@@ -229,6 +236,7 @@ for (const nativeHost of [true, false]) test(`owner Present mode retries undeplo
     await audience.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "1 / 1");
     assert.equal(await page.evaluate(() => window.recoveryPrompts), 0);
     assert.ok(requests >= 3);
+    assert.ok(repositoryRequests >= 3, "Owner playback recovers while Pages still returns 404");
     assert.deepEqual(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckEnc), envelope);
     assert.equal(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckDocument.slides[0].notes), "PRIVATE RECOVERY NOTES");
     assert.equal(await page.evaluate(() => window.RK.data.work[0].study.nativeDeckDocument.slides[0].scene.files["protected-photo"].dataURL), fixture.image, "Restored native media retains its exact original bytes");
