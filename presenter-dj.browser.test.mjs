@@ -733,6 +733,11 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
       await trigger.click();
       const submit = form.getByRole('button',{name:'Generate',exact:true});
       await description.fill(''); assert.equal(await submit.isDisabled(),true);
+      const longDescription=('A detailed icon description that wraps naturally in the panel. '+ 'unbroken'.repeat(16)+'\n').repeat(4);
+      await description.fill(longDescription);
+      const wrapping=await description.evaluate(element=>({horizontal:element.scrollWidth>element.clientWidth+1,vertical:element.scrollHeight>element.clientHeight,whiteSpace:getComputedStyle(element).whiteSpace,overflowX:getComputedStyle(element).overflowX}));
+      assert.deepEqual(wrapping,{horizontal:false,vertical:true,whiteSpace:'pre-wrap',overflowX:'hidden'});
+      assert.equal(await description.inputValue(),longDescription);
       await description.fill('A minimal square mark');
       await description.scrollIntoViewIfNeeded();
       const geometry = await form.evaluate(element=>{
@@ -785,6 +790,12 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
       assert.equal(await preview.evaluate(async image=>{await image.decode();const canvas=document.createElement('canvas');canvas.width=72;canvas.height=72;const context=canvas.getContext('2d');context.drawImage(image,0,0,72,72);return context.getImageData(0,0,72,72).data.some((value,index)=>index%4===3&&value>0);}),true);
       const previewBounds=await form.evaluate(element=>{const box=element.getBoundingClientRect(),panel=element.closest('.merge-pane-body').getBoundingClientRect();return {inside:box.left>=panel.left&&box.right<=panel.right+1,visible:box.top>=0&&box.bottom<=innerHeight,overflow:element.scrollWidth>element.clientWidth+1};});
       assert.deepEqual(previewBounds,{inside:true,visible:true,overflow:false});
+      const actions=await form.evaluate(element=>{
+        const style=selector=>{const computed=getComputedStyle(element.querySelector(selector));return {background:computed.backgroundColor,border:computed.borderColor};};
+        return {cancel:style('button[type="button"]'),regenerate:style('button[type="submit"]'),confirm:style('.merge-icon-confirm')};
+      });
+      assert.deepEqual(actions.regenerate,actions.cancel,'Regenerate is neutral like Cancel');
+      assert.notDeepEqual(actions.confirm,actions.regenerate,'Only Add icon is primary when a preview exists');
       await page.screenshot({path:join(tmpdir(),`rk-icon-confirmation-${width}.png`)});
       await form.getByRole('button',{name:'Add icon',exact:true}).click();
       await trigger.waitFor();

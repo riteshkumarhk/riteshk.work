@@ -26,10 +26,12 @@
 .merge-icon-composer { display:grid;gap:8px;width:100%;min-width:0;border-top:1px solid var(--merge-line);padding-top:10px; }
 .merge-icon-composer label { display:grid;gap:6px;font:12px var(--sans);color:var(--merge-text); }
 .merge-icon-composer textarea { box-sizing:border-box;width:100%;min-width:0;min-height:66px;max-height:160px;resize:vertical;padding:8px;border:1px solid var(--merge-line);border-radius:4px;background:var(--bg-2);color:var(--merge-text);font:14px/1.4 var(--sans); }
+.merge-shell .merge-icon-composer textarea { white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden;overflow-y:auto; }
 .merge-icon-composer textarea:focus-visible { outline:1px solid var(--merge-accent); }
 .merge-icon-composer-actions { display:flex;gap:6px; }
 .merge-icon-composer-actions button { display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--merge-line);border-radius:4px;background:transparent;color:var(--merge-text);font:12px var(--sans);cursor:pointer; }
 .merge-icon-composer-actions button[type="submit"] { flex:1;background:var(--ui-selected);border-color:var(--merge-accent); }
+.merge-icon-composer:has(.merge-icon-confirm) button[type="submit"] { background:transparent;border-color:var(--merge-line); }
 .merge-icon-composer-actions .merge-icon-confirm { width:100%;background:var(--ui-selected);border-color:var(--merge-accent); }
 .merge-icon-preview { display:grid;justify-items:center;gap:6px;min-width:0;padding:8px 0; }
 .merge-icon-preview img { width:72px;height:72px;object-fit:contain; }
