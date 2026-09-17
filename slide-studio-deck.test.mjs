@@ -3037,7 +3037,9 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
     assert.equal(await cardPad.locator('html').getAttribute('data-presenter-window'), 'always-on-top');
     assert.equal(await slideshow.evaluate(() => window.opener), null);
     const cardEnded = slideshow.waitForEvent('close');
-    await cardPad.getByRole('button', {name:'End presentation', exact:true}).click();
+    await cardPad.getByRole('button', {name:'End presentation', exact:true}).click().catch(error => {
+      if (!cardPad.isClosed() || !/Target page, context or browser has been closed/.test(error.message)) throw error;
+    });
     await cardEnded;
     await page.waitForFunction(() => document.activeElement?.matches('[data-act="study-slideshow-preview"]'));
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();

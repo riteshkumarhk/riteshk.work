@@ -78,8 +78,8 @@ export function IconLibrary({ onPick, onClose, embedded = false }) {
         <label>Icon description<textarea autoFocus rows={3} value={description} maxLength={1000} disabled={working} onChange={event => { generated.current = null; setPreview(null); setGenerationError(""); setDescription(event.target.value); }} /></label>
         {preview && <div className="merge-icon-preview"><img src={preview.url} alt={`Generated icon preview: ${preview.name}`} /><span>{preview.name}</span></div>}
         {generationError && <p role="alert">{generationError}</p>}
-        <div className="merge-icon-composer-actions"><button type="button" onClick={cancelGeneration}>Cancel</button><button type="submit" disabled={working || !description.trim()}><Sparkles size={16} strokeWidth={1.75} />{working && !adding ? "Generating..." : preview ? "Regenerate" : "Generate"}</button></div>
         {preview && <div className="merge-icon-composer-actions"><button type="button" className="merge-icon-confirm" disabled={working} onClick={confirm}>{adding ? "Adding..." : generated.current?.name ? "Retry adding icon" : "Add icon"}</button></div>}
+        <div className="merge-icon-composer-actions"><button type="submit" disabled={working || !description.trim()}><Sparkles size={16} strokeWidth={1.75} />{working && !adding ? "Generating..." : preview ? "Regenerate" : "Generate"}</button><button type="button" onClick={cancelGeneration}>Cancel</button></div>
       </form> : <button ref={generateTrigger} type="button" disabled={loading} onClick={() => { setDescription(query); setGenerationError(""); setGenerating(true); }}><Sparkles size={16} strokeWidth={1.75} />Generate an icon</button>}
       {!embedded && <button type="button" onClick={onClose}>Close</button>}
     </footer>

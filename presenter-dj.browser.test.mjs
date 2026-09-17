@@ -792,10 +792,22 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
       assert.deepEqual(previewBounds,{inside:true,visible:true,overflow:false});
       const actions=await form.evaluate(element=>{
         const style=selector=>{const computed=getComputedStyle(element.querySelector(selector));return {background:computed.backgroundColor,border:computed.borderColor};};
-        return {cancel:style('button[type="button"]'),regenerate:style('button[type="submit"]'),confirm:style('.merge-icon-confirm')};
+        return {cancel:style('button[type="button"]:not(.merge-icon-confirm)'),regenerate:style('button[type="submit"]'),confirm:style('.merge-icon-confirm')};
       });
       assert.deepEqual(actions.regenerate,actions.cancel,'Regenerate is neutral like Cancel');
       assert.notDeepEqual(actions.confirm,actions.regenerate,'Only Add icon is primary when a preview exists');
+      assert.deepEqual(await form.locator('button').allTextContents(),['Add icon','Regenerate','Cancel']);
+      const confirmButton=form.getByRole('button',{name:'Add icon',exact:true});
+      const cancelButton=form.getByRole('button',{name:'Cancel',exact:true});
+      const confirmBox=await confirmButton.boundingBox(),regenerateBox=await regenerate.boundingBox(),cancelBox=await cancelButton.boundingBox();
+      assert.ok(confirmBox.y+confirmBox.height<=regenerateBox.y,'Add icon occupies the first row');
+      assert.ok(Math.abs(regenerateBox.y-cancelBox.y)<1,'Regenerate and Cancel share the second row');
+      assert.ok(regenerateBox.x+regenerateBox.width<=cancelBox.x,'Regenerate precedes Cancel');
+      await confirmButton.focus();
+      await page.keyboard.press('Tab');
+      assert.equal(await regenerate.evaluate(element=>element===document.activeElement),true);
+      await page.keyboard.press('Tab');
+      assert.equal(await cancelButton.evaluate(element=>element===document.activeElement),true);
       await page.screenshot({path:join(tmpdir(),`rk-icon-confirmation-${width}.png`)});
       await form.getByRole('button',{name:'Add icon',exact:true}).click();
       await trigger.waitFor();
