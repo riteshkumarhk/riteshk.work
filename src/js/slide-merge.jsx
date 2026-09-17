@@ -564,6 +564,7 @@ function Merger({ integration, controller }) {
     else applyLayout(id);
   }
   function saveSection(id, name) { return run(async () => { if (!live.current.editing) return; await save(); paint(setSlideSection(live.current.deck, id, name)); await save(); }); }
+  function renameSlide(id, title) { return run(async () => { if (!live.current.editing) return; await save(); paint({ ...live.current.deck, slides: live.current.deck.slides.map(slide => slide.id === id ? { ...slide, title } : slide) }); await save(); }); }
   function reorder(id, targetId, kind, edge) { return run(async () => { if (!live.current.editing) return; await save(); paint(reorderSlides(live.current.deck, id, targetId, kind, edge)); await save(); }); }
   async function prepareSection(block, resources) {
     const plan = sectionComponentPlan(block, sectionPlainText, crypto.randomUUID(), resources);
@@ -979,7 +980,7 @@ function Merger({ integration, controller }) {
         onPointerMove={event => { if (resize.current) setPaneWidth(slidePaneWidth(resize.current.width + event.clientX - resize.current.x, innerWidth)); }}
         onPointerUp={finishResize} onPointerCancel={event => finishResize(event, true)} onLostPointerCapture={() => { resize.current = null; setResizing(false); }}
         onDoubleClick={() => storePaneWidth(200)} onKeyDown={event => { if (["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) { event.preventDefault(); storePaneWidth(event.key === "Home" ? 200 : paneWidth + (event.key === "ArrowRight" ? 16 : -16)); } }} />
-      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={removeSlide} pick={kind => openPane(kind, false)} section={saveSection} /></aside>
+      <SlideNavigator deck={deck} thumbnails={thumbnails} busy={busy} editing={editing} choose={choose} modify={modify} reorder={reorder} add={add} remove={removeSlide} pick={kind => openPane(kind, false)} section={saveSection} rename={renameSlide} /></aside>
     <div className="merge-inspector"><div className="merge-section-head merge-insert-head"><h2>{pane ? PANE_LABELS[pane] || "Library" : hasSelection ? "Object" : "Slide"}</h2>{pane && <button className="merge-nav-action" title="Close panel" aria-label="Close panel" onClick={() => openPane(null, false)}><ToolIcon name="close" /></button>}</div></div>
     <section className="merge-editor" ref={editor}>
       <main className={`merge-workspace ${hasSelection ? "has-selection" : ""}`} data-empty={!!deck && !current} ref={host} onDropCapture={receive} onPasteCapture={receive} onDragOverCapture={event => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.stopPropagation(); } }}>

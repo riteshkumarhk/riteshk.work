@@ -23,27 +23,44 @@ function InsertGap({ index, busy, add, section }) {
     {open && <div className="merge-gap-choices" role="group" aria-label="Insert here"><button disabled={busy} onClick={() => { setOpen(false); add(); }}><ToolIcon name="add" />Add slide</button><button disabled={busy} onClick={() => { setOpen(false); section(); }}><ToolIcon name="section" />Start section</button></div>}
   </div>;
 }
-function SectionName({ value, onSave, onClose }) {
+function SectionName({ value, onSave, onClose, label = "Section name" }) {
   const [name, setName] = useState(value || ""), input = useRef(null), finished = useRef(false);
   useEffect(() => { input.current.focus(); input.current.select(); input.current.scrollIntoView({ block:"nearest" }); }, []);
-  function finish(cancel = false) {
+  function finish(cancel = false, restoreFocus = false) {
     if (finished.current) return;
     finished.current = true;
     if (!cancel && name.trim() && name.trim() !== value) onSave(name.trim());
-    onClose();
+    onClose(restoreFocus);
   }
-  return <input ref={input} className="merge-section-name" aria-label="Section name" placeholder="Section name" maxLength={120} value={name} onChange={event => setName(event.target.value)} onBlur={() => finish()} onKeyDown={event => { event.stopPropagation(); if (event.key === "Enter" || event.key === "Escape") { event.preventDefault(); finish(event.key === "Escape"); } }} />;
+  return <input ref={input} type="text" className="merge-section-name" aria-label={label} placeholder={label} maxLength={120} value={name} onChange={event => setName(event.target.value)} onBlur={() => finish()} onKeyDown={event => { event.stopPropagation(); if (event.nativeEvent.isComposing) return; if (event.key === "Enter" || event.key === "Escape") { event.preventDefault(); finish(event.key === "Escape", true); } }} />;
 }
 export function SlideAddActions({ add, pick, busy }) {
   return <><button data-close disabled={busy} onClick={() => add("blank")}><ToolIcon name="add" />Add blank</button><button data-close disabled={busy} onClick={() => add("cover")}><LayoutTemplate size={18} strokeWidth={1.75} />Add cover</button><button data-close disabled={busy} onClick={() => pick("layout")}><LayoutTemplate size={18} strokeWidth={1.75} />Add a layout...</button><button data-close disabled={busy} onClick={() => pick("source")}><ToolIcon name="section" />Add sections as slides</button><button data-close disabled={busy} onClick={() => pick("draft")}><Sparkles size={18} strokeWidth={1.75} />Draft entire deck with AI</button></>;
 }
-export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, remove, reorder }) {
-  const [naming, setNaming] = useState(null);
-  useEffect(() => { if (!editing) setNaming(null); }, [editing]);
+export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose, modify, add, pick, section, rename, remove, reorder }) {
+  const [naming, setNaming] = useState(null), [renaming, setRenaming] = useState(null), nameCard = useRef(null), restoreNameFocus = useRef(false);
+  useEffect(() => { if (!editing) { setNaming(null); setRenaming(null); } }, [editing]);
+  useEffect(() => {
+    if (busy || renaming !== null || !restoreNameFocus.current) return;
+    const frame = requestAnimationFrame(() => { nameCard.current?.querySelector(".merge-slide")?.focus(); restoreNameFocus.current = false; });
+    return () => cancelAnimationFrame(frame);
+  }, [busy, renaming]);
+  function startRename(event, id) {
+    if (busy || !editing) return;
+    event.preventDefault(); event.stopPropagation();
+    nameCard.current = event.currentTarget.closest(".merge-slide-card");
+    setNaming(null); setRenaming(id);
+  }
+  function finishRename(restoreFocus) {
+    restoreNameFocus.current = restoreFocus;
+    setRenaming(null);
+  }
   const menu = () => <SlideAddActions add={add} pick={pick} busy={busy} />;
   return <>
     <div className="merge-section-head"><h2>Slides <span>{deck?.slides.length || 0}</span></h2>{editing && <div className="merge-navigator-actions"><Action icon="section" label="Start a section here" disabled={busy || !deck?.slides.length} onClick={() => setNaming(deck.selected)} /><ToolMenu icon="add" label="Add a slide" disabled={busy || !deck?.slides.length}>{menu()}</ToolMenu></div>}</div>
-    <NavigatorDragList deck={deck} thumbnails={thumbnails} disabled={busy || !editing || naming !== null} reorder={reorder}>{deck?.slides.map((slide, index) => <NavigatorDragEntry key={slide.id} slide={slide} index={index}>{({ slideDrag, sectionHandle }) => <>
+    <NavigatorDragList deck={deck} thumbnails={thumbnails} disabled={busy || !editing || naming !== null || renaming !== null} reorder={reorder}>{deck?.slides.map((slide, index) => <NavigatorDragEntry key={slide.id} slide={slide} index={index}>{({ slideDrag, sectionHandle }) => {
+      const editingName = editing && renaming === slide.id, SlideControl = editingName ? "div" : "button";
+      return <>
       {(slide.section || naming === slide.id) && <div className="merge-section-row">
       {editing && slide.section && sectionHandle}
         {naming === slide.id && editing ? <SectionName key={slide.id} value={slide.section} onSave={name => section(slide.id, name)} onClose={() => setNaming(null)} /> : <button className="merge-section-label" title={editing ? "Rename section" : "Section"} onClick={() => setNaming(slide.id)} disabled={busy || !editing}><ToolIcon name="section" /><span>{slide.section}</span></button>}
@@ -51,7 +68,7 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
       </div>}
       {editing && <InsertGap index={index} busy={busy} add={() => add("blank", slide.id)} section={() => setNaming(slide.id)} />}
       <article data-slide-delete-id={slide.id} className={`merge-slide-card ${deck.selected === slide.id ? "is-active" : ""} ${slide.hidden ? "is-skipped" : ""}`}>
-        <button {...slideDrag} className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={busy} onClick={() => choose(slide.id)}><span className="merge-thumbnail" aria-hidden="true">{thumbnails[slide.id]}</span><span><small>{String(index + 1).padStart(2, "0")}</small>{slide.title || "Untitled slide"}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</button>
+        <SlideControl {...slideDrag} className={`merge-slide ${deck.selected === slide.id ? "is-active" : ""}`} aria-label={`Slide ${index + 1}: ${slide.title}`} aria-current={deck.selected === slide.id ? "true" : undefined} disabled={editingName ? undefined : busy} onClick={() => { if (!editingName) choose(slide.id); }} onKeyDown={event => { if (event.key === "F2" && editing && !busy) startRename(event, slide.id); else slideDrag.onKeyDown?.(event); }}><span className="merge-thumbnail" aria-hidden="true">{thumbnails[slide.id]}</span><span className="merge-slide-caption"><small>{String(index + 1).padStart(2, "0")}</small>{editingName ? <SectionName key={slide.id} label="Slide name" value={slide.title} onSave={name => rename(slide.id, name)} onClose={finishRename} /> : <span className="merge-slide-title" title={editing ? "Rename slide" : undefined} onMouseDown={event => { if (editing) event.stopPropagation(); }} onTouchStart={event => { if (editing) event.stopPropagation(); }} onClick={event => { if (editing) event.stopPropagation(); }} onDoubleClick={event => startRename(event, slide.id)}>{slide.title || "Untitled slide"}</span>}</span>{slide.hidden && <em className="merge-skipped-label">Skipped</em>}</SlideControl>
         {editing && <div className="merge-thumb-actions" aria-label={`Actions for slide ${index + 1}`}>
           <Action icon="up" label="Move slide up" disabled={busy || index === 0} onClick={() => modify("up", slide.id)} />
           <Action icon="down" label="Move slide down" disabled={busy || index === deck.slides.length - 1} onClick={() => modify("down", slide.id)} />
@@ -61,7 +78,7 @@ export function SlideNavigator({ deck, thumbnails, busy, editing = true, choose,
           <Action icon="trash" label="Delete slide" disabled={busy} onClick={() => remove(slide.id)} />
         </div>}
       </article>
-    </>}</NavigatorDragEntry>)}</NavigatorDragList>
+    </>}}</NavigatorDragEntry>)}</NavigatorDragList>
   </>;
 }
 

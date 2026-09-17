@@ -416,6 +416,63 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
   } finally { await browser.close(); }
 });
 
+test('slide names edit inline without selection changes and preserve history and reload', { timeout:60000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  try {
+    for (const width of [1440,390]) {
+      const page = await browser.newPage({viewport:{width,height:1000}}), errors=[];
+      page.on('pageerror',error=>errors.push(error.message));
+      await page.goto(base+'/studio/slide-merge-lab/');
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      const ready=()=>page.waitForFunction(()=>!document.querySelector('.merge-layout-toggle').disabled);
+      const before=await page.evaluate(()=>window.__slideMerge.deck());
+      const target=before.slides.find(slide=>slide.id!==before.selected);
+      const card=page.locator(`[data-slide-delete-id="${target.id}"]`), title=card.locator('.merge-slide-title');
+      if (!await title.isVisible()) await page.getByRole('button',{name:'Toggle slides',exact:true}).click();
+      await title.dblclick();
+      const input=page.getByRole('textbox',{name:'Slide name',exact:true});
+      assert.equal(await input.inputValue(),target.title);
+      assert.equal(await input.evaluate(element=>element.selectionStart===0&&element.selectionEnd===element.value.length),true);
+      assert.equal(await input.evaluate(element=>!!element.closest('button')),false,'The input is not nested inside a button');
+      assert.equal(await page.evaluate(()=>window.__slideMerge.deck().selected),before.selected);
+      const renamed='A clearer slide name';
+      await input.fill(renamed);
+      const bounds=await input.evaluate(element=>{const box=element.getBoundingClientRect(),card=element.closest('.merge-slide-card').getBoundingClientRect();return {inside:box.left>=card.left&&box.right<=card.right+1,visible:box.top>=0&&box.bottom<=innerHeight};});
+      assert.deepEqual(bounds,{inside:true,visible:true});
+      await page.screenshot({path:join(tmpdir(),`rk-slide-name-${width}.png`)});
+      await input.press('Enter');
+      await ready();
+      await page.waitForFunction(({id,title})=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).title===title,{id:target.id,title:renamed});
+      await page.waitForFunction(id=>document.activeElement?.closest('[data-slide-delete-id]')?.dataset.slideDeleteId===id,target.id);
+      const retained=await page.evaluate(()=>window.__slideMerge.deck());
+      assert.equal(retained.selected,before.selected);
+      assert.deepEqual(retained.slides.map(({title,...slide})=>slide),before.slides.map(({title,...slide})=>slide));
+      assert.deepEqual(retained.slides.filter(slide=>slide.id!==target.id),before.slides.filter(slide=>slide.id!==target.id));
+      await page.getByRole('button',{name:'Undo',exact:true}).click(); await ready();
+      assert.equal(await title.innerText(),target.title);
+      await page.getByRole('button',{name:'Redo',exact:true}).click(); await ready();
+      assert.equal(await title.innerText(),renamed);
+      await title.dblclick(); await input.fill('Discard this'); await input.press('Escape');
+      assert.equal(await title.innerText(),renamed);
+      await page.waitForFunction(id=>document.activeElement?.closest('[data-slide-delete-id]')?.dataset.slideDeleteId===id,target.id);
+      await card.locator('.merge-slide').press('F2'); await input.fill('   '); await input.press('Enter');
+      assert.equal(await title.innerText(),renamed,'Blank edits retain the previous name');
+      await title.dblclick(); await input.fill('Saved on blur');
+      await page.getByRole('textbox',{name:'Deck title',exact:true}).focus(); await ready();
+      assert.equal(await title.innerText(),'Saved on blur');
+      await page.reload();
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).title,target.id),'Saved on blur');
+      if (!await title.isVisible()) await page.getByRole('button',{name:'Toggle slides',exact:true}).click();
+      await page.getByRole('button',{name:'Editing on',exact:true}).click();
+      await title.dblclick();
+      assert.equal(await input.count(),0,'View mode does not offer renaming');
+      assert.deepEqual(errors,[]);
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('rich notes and full deck history preserve formatting, reordering and slide additions', { timeout:60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   const page = await browser.newPage({ viewport:{width:1440,height:900} });

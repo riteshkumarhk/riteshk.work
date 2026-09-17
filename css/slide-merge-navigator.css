@@ -17,6 +17,10 @@
 .merge-slide-entry{position:relative;min-width:0}
 .merge-slide-card{position:relative}
 .merge-slide-card .merge-slide{margin:0}
+.merge-shell .merge-slide>.merge-slide-caption{display:flex;align-items:center;gap:8px;min-height:22px;margin-top:8px;white-space:normal}
+.merge-slide-title{min-width:0;overflow-wrap:anywhere}
+.merge-slide-title[title]{cursor:text}
+.merge-shell .merge-slide input.merge-section-name{flex:1;height:22px;padding:2px 6px;font-size:11px}
 .merge-thumb-actions{display:flex;justify-content:space-between;height:28px;margin-top:3px;background:transparent;opacity:0;pointer-events:none}
 .merge-slide-card:hover .merge-thumb-actions,.merge-slide-card:focus-within .merge-thumb-actions,.merge-slide-card.is-active .merge-thumb-actions{opacity:1;pointer-events:auto}
 .merge-nav-action{display:grid;place-items:center;width:28px;min-width:20px;height:28px;padding:0;border:1px solid transparent;border-radius:4px;color:var(--merge-muted);background:transparent}
