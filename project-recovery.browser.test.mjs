@@ -787,11 +787,17 @@ test("built case study retries protected sections without restarting Figma and r
       assert.equal(protectedReads, 2);
       const protectedTools = protectedFrame.locator("..").locator(".pjb__frame-tools");
       await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button").click();
+      await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button", { name: "Prototype step 2", exact: true }).waitFor();
       await page.context().setOffline(true);
       await page.waitForFunction(() => document.querySelector('iframe[src*="synthetic-protected"]').parentElement.querySelector("[data-embed-state]").textContent === "Offline");
       await page.context().setOffline(false);
       assert.equal(loads, 2, "Reconnection must not reload either prototype");
+      const reloaded = page.waitForResponse(response => {
+        const url = new URL(response.url());
+        return url.searchParams.get("url")?.includes("synthetic-protected") && response.request().isNavigationRequest();
+      });
       await protectedTools.locator("[data-embed-retry]").click();
+      await reloaded;
       await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button", { name: "Prototype step 1" }).waitFor();
       assert.equal(loads, 3);
       assert.equal(await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").innerText(), "Prototype step 2");
