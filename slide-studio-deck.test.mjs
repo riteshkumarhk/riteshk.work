@@ -3784,6 +3784,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       publicUploads.push(request.postDataBuffer());
       return route.fulfill({ contentType: "application/json", body: '{"ok":true}' });
     }
+    if (url.pathname === "/admin/presenter-metadata") return route.fulfill({ status: 503, json: { error: "Synthetic private sync offline" } });
     if (url.hostname === "rk-ai-proxy.riteshkumarhk.workers.dev") return route.fulfill({ contentType: "application/json", body: url.pathname.includes("publish") ? '{"enabled":false}' : "{}" });
     if (!["127.0.0.1", "localhost"].includes(url.hostname) && !["GET", "HEAD"].includes(request.method())) return route.abort();
     return route.continue();
@@ -3944,7 +3945,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
       const note = mounted ? 'Host presenter with editor' : 'Host presenter without editor';
       await presenter.locator('[data-pp-notes]').fill(note);
       await presenter.locator('[data-pp-notes]').press('Tab');
-      await presenter.waitForFunction(() => document.querySelector('[data-pp-save]')?.textContent.includes('Saved to deck'));
+      await presenter.waitForFunction(() => document.querySelector('[data-pp-save]')?.textContent.includes('Saved on this device.'));
       await Promise.all([
         presenter.waitForEvent('close'),
         presenter.locator('[data-pp="exit"]').click().catch(error => {
