@@ -425,10 +425,11 @@ test('slide names edit inline without selection changes and preserve history and
       await page.goto(base+'/studio/slide-merge-lab/');
       await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
       const ready=()=>page.waitForFunction(()=>!document.querySelector('.merge-layout-toggle').disabled);
-      const before=await page.evaluate(()=>window.__slideMerge.deck());
-      const target=before.slides.find(slide=>slide.id!==before.selected);
+      const initial=await page.evaluate(()=>window.__slideMerge.deck());
+      const target=initial.slides.find(slide=>slide.id!==initial.selected);
       const card=page.locator(`[data-slide-delete-id="${target.id}"]`), title=card.locator('.merge-slide-title');
       if (!await title.isVisible()) await page.getByRole('button',{name:'Toggle slides',exact:true}).click();
+      const before=await page.evaluate(async()=>{await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));await window.__slideMerge.save();return window.__slideMerge.deck();});
       await title.dblclick();
       const input=page.getByRole('textbox',{name:'Slide name',exact:true});
       assert.equal(await input.inputValue(),target.title);
