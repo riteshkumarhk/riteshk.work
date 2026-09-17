@@ -23,6 +23,16 @@
 .merge-embed-error a { color:var(--accent);display:flex;align-items:center;gap:8px; }
 .merge-icon-generate { display:flex;gap:8px;position:sticky;bottom:0;padding-top:10px;background:var(--merge-bg); }
 .merge-icon-generate>button { display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:34px;padding:6px 8px;border:1px solid var(--merge-line);border-radius:6px;background:transparent;color:var(--merge-text);font:12px var(--sans);cursor:pointer; }
+.merge-icon-composer { display:grid;gap:8px;width:100%;min-width:0;border-top:1px solid var(--merge-line);padding-top:10px; }
+.merge-icon-composer label { display:grid;gap:6px;font:12px var(--sans);color:var(--merge-text); }
+.merge-icon-composer textarea { box-sizing:border-box;width:100%;min-width:0;min-height:66px;max-height:160px;resize:vertical;padding:8px;border:1px solid var(--merge-line);border-radius:4px;background:var(--bg-2);color:var(--merge-text);font:14px/1.4 var(--sans); }
+.merge-icon-composer textarea:focus-visible { outline:1px solid var(--merge-accent); }
+.merge-icon-composer-actions { display:flex;gap:6px; }
+.merge-icon-composer-actions button { display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--merge-line);border-radius:4px;background:transparent;color:var(--merge-text);font:12px var(--sans);cursor:pointer; }
+.merge-icon-composer-actions button[type="submit"] { flex:1;background:var(--ui-selected);border-color:var(--merge-accent); }
+.merge-icon-composer-actions svg { flex:none; }
+.merge-icon-composer-actions button:disabled { opacity:.45;cursor:default; }
+.merge-icon-composer p { margin:0;color:var(--ui-danger);font:12px/1.4 var(--sans);overflow-wrap:anywhere; }
 .merge-shell .merge-notes textarea { min-height:0; height:100%; box-sizing:border-box; }
 .merge-notes-resizer { position:absolute; z-index:8; top:-6px; left:0; right:0; height:12px; cursor:ns-resize; touch-action:none; outline:none; }
 .merge-notes-resizer::after { content:""; position:absolute; left:50%; top:5px; width:40px; height:3px; transform:translateX(-50%); border-radius:2px; background:var(--merge-muted); opacity:.55; }

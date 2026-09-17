@@ -48,7 +48,7 @@ export function cornerEnginePlugin() {
         ['const handled = colorPickerKeyNavHandler({', 'if (event.target.closest(".lab-rich-color") && event.key !== "Escape" || event.key === "Tab" && event.target.tagName === "INPUT") return;\n        const handled = colorPickerKeyNavHandler({'],
         ['children: colorInputJSX\n', 'children: jsxs11("div", { className: "lab-color-detail", children: [colorInputJSX, jsx21(LabRichColor, { color, onChange })] })\n'],
         ['!!customColors.length && /* @__PURE__ */ jsxs8("div", { children: [', 'jsx16(LabStrokeLink, { type }),\n        !!customColors.length && /* @__PURE__ */ jsxs8("div", { children: ['],
-        ['showFillIcons && renderAction("changeFillStyle"),', 'jsx70(LabTextColorControls, { NativePicker: ColorPicker, palette: DEFAULT_ELEMENT_STROKE_COLOR_PALETTE, topPicks: DEFAULT_ELEMENT_STROKE_PICKS, appState }),\n    showFillIcons && renderAction("changeFillStyle"),'],
+        ['showFillIcons && renderAction("changeFillStyle"),', 'jsx70(LabTextColorControls, { NativePicker: ColorPicker, palette: DEFAULT_ELEMENT_STROKE_COLOR_PALETTE, topPicks: DEFAULT_ELEMENT_STROKE_PICKS, appState }),\n    jsx70(LabIconColorControls, { NativePicker: ColorPicker, palette: DEFAULT_ELEMENT_STROKE_COLOR_PALETTE, topPicks: DEFAULT_ELEMENT_STROKE_PICKS, appState, newElementWith, captureUpdate: CaptureUpdateAction.IMMEDIATELY }),\n    showFillIcons && renderAction("changeFillStyle"),'],
         ['elementStroke: "strokeColor"\n', 'elementStroke: "strokeColor",\n    labText: "strokeColor"\n']
       ];
       for (const [before, after] of edits) {
@@ -60,6 +60,7 @@ export function cornerEnginePlugin() {
       source = source.replace('value: FONT_FAMILY.Nunito,\n    icon: FontFamilyNormalIcon,\n    text: t("labels.normal")', 'value: FONT_FAMILY.Inter,\n    icon: FontFamilyNormalIcon,\n    text: "Inter"');
       source = source.replace('value: FONT_FAMILY["Comic Shanns"],\n    icon: FontFamilyCodeIcon,\n    text: t("labels.code")', 'value: FONT_FAMILY["JetBrains Mono"],\n    icon: FontFamilyCodeIcon,\n    text: "JetBrains Mono"');
       source = patchTextFormatting(patchTypography(patchSelectionBounds(patchFontPicker(source), "renderer")), "renderer");
+      source = `import { IconColorControls as LabIconColorControls } from ${JSON.stringify(resolve("src/js/slide-icon-color.jsx").replaceAll("\\", "/"))};\n` + source;
       source = `import { TextFormatControls as LabTextFormatControls } from ${JSON.stringify(resolve("src/js/slide-text-format.jsx").replaceAll("\\", "/"))};\nimport { textFormat as labTextFormat, textDecoration as labTextDecoration, formatTextLines as labFormatTextLines } from ${JSON.stringify(resolve("src/js/slide-text-format.mjs").replaceAll("\\", "/"))};\n` + source;
       source = `import { FontSizePicker as LabFontSizePicker, FontLibraryIcon as LabFontLibraryIcon } from ${JSON.stringify(resolve("src/js/slide-font-size.jsx").replaceAll("\\", "/"))};\n` + source;
       source = `import { cornerPath as labCornerPath } from ${JSON.stringify(resolve("src/js/slide-lab-corners.mjs").replaceAll("\\", "/"))};\n` + source;

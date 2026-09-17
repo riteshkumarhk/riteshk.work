@@ -262,3 +262,17 @@ test("public cover depth remaps original image bytes without project links or ov
   delete scene.files["private-depth"];
   assert.throws(() => publicDeckPayload(deck, { reviewedSources: true }), /Depth map/);
 });
+
+test("public icon colour retains only the editable boolean and exact SVG bytes", () => {
+  const deck = fixture(), scene = deck.slides[0].scene;
+  scene.elements[1].customData.studioIcon = true;
+  scene.elements[2].customData = { studioIcon: true, iconSource: "PRIVATE" };
+  scene.elements[2].strokeColor = "#e03131";
+  scene.files["source-file"] = { id: "source-file", mimeType: "image/svg+xml", dataURL: "data:image/svg+xml;base64," + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#e03131"><path d="M4 4h16v16H4Z"/></svg>').toString("base64") };
+  const before = structuredClone(deck), result = publicDeckPayload(deck, { reviewedSources: true }).slides[0].scene;
+  assert.deepEqual(result.elements[2].customData, { studioIcon: true });
+  assert.equal(result.elements[1].customData.studioIcon, undefined);
+  assert.equal(result.elements[2].strokeColor, "#e03131");
+  assert.equal(result.files[result.elements[2].fileId].dataURL, scene.files["source-file"].dataURL);
+  assert.deepEqual(deck, before);
+});

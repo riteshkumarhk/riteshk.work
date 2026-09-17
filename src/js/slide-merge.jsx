@@ -9,6 +9,7 @@ import { FRAME_ID, fixtureSkeleton, packScene, originalImage, selectedLabels, la
 import { createScreenshot } from "./slide-lab-fixtures.mjs";
 import { DEFAULT_SLIDE_FONT, platformText, loadPlatformFonts, registerStudioFonts } from "./slide-platform-fonts.mjs";
 import { LabTextColorContext } from "./slide-lab-text-color.jsx";
+import { IconColorContext } from "./slide-icon-color.jsx";
 import { CornerControls } from "./slide-lab-corner-controls.jsx";
 import { normalizeHex } from "./slide-lab-color.mjs";
 import { CanvasToolbar, ToolMenu, ToolIcon } from "./slide-merge-toolbar.jsx";
@@ -821,6 +822,7 @@ function Merger({ integration, controller }) {
     const placeholder=!placeholderTarget.current&&!studioIcon&&elements.find(element=>!element.isDeleted&&!element.locked&&selected[element.id]&&element.customData?.slidePlaceholder?.kind==="media");
     const scale=placeholder?Math.min(placeholder.width/image.width,placeholder.height/image.height):width/image.width;
     const element = restoreElements(convertToExcalidrawElements([{ type: "image", fileId: image.id, x: placeholder?placeholder.x+(placeholder.width-image.width*scale)/2:160, y: placeholder?placeholder.y+(placeholder.height-image.height*scale)/2:160, width:image.width*scale, height:image.height*scale, scale: [1, 1], frameId: FRAME_ID }]), null, { repairBindings:true })[0];
+    if (studioIcon) { element.customData = { ...element.customData, studioIcon: true }; element.strokeColor = "#27343a"; sectionSelection.current = { selectedElementIds: { [element.id]: true }, selectedGroupIds: {} }; }
     api.updateScene({ elements: placeholderTarget.current ? insertIntoPlaceholder([element]) : [...elements.map(item=>item.id===placeholder?.id?changed(item,{isDeleted:true}):item), element], appState: { selectedElementIds: { [element.id]: true } }, captureUpdate: CaptureUpdateAction.IMMEDIATELY }); api.addFiles([image]);
     await save();
     return true;
@@ -990,7 +992,7 @@ function Merger({ integration, controller }) {
           </ToolMenu></div>
         </CanvasToolbar>
         <div className="lab-canvas"><CanvasBackdrop api={api} /><CanvasGuides api={api} {...view} guides={settings.guides||[]} onGuides={guides=>commitSettings({guides})} disabled={busy||present!==null} /><CanvasVideo api={api} /><LabTextColorContext.Provider value={{ api, labels, linked: labels.every(label => label.linked), busy, changeLabelColor: color => { if (color && color !== "unlink" && color !== "transparent") { color = normalizeHex(color); if (!color) return; } const elements = api.getSceneElementsIncludingDeleted(); const targets = selectedLabels(elements, api.getAppState().selectedElementIds); api.updateScene({ elements: labelColorUpdate(elements, targets.map(element => element.id), color), captureUpdate: CaptureUpdateAction.IMMEDIATELY }); } }}>
-          <Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={integration ? location.href : location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!current || !editing || busy || present !== null || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
+          <IconColorContext.Provider value={{ api, disabled: busy || !editing || present !== null || !!deckDialog }}><Excalidraw excalidrawAPI={setApi} theme={canvasTheme(api?.getSceneElements() || [],appearance)} onChange={onChange} onScrollChange={() => { if (!live.current.editing) fit(); }} onLibraryChange={library.onChange} libraryReturnUrl={integration ? location.href : location.origin + "/studio/slide-merge-lab/"} viewModeEnabled={!current || !editing || busy || present !== null || !!deckDialog || slideView === "all"} aiEnabled={false} handleKeyboardGlobally={false} initialData={{ appState: { theme: appearance, currentItemFontFamily: DEFAULT_SLIDE_FONT, currentItemRoughness: 0, viewBackgroundColor: sceneBackground() } }} UIOptions={engineOptions} renderEmbeddable={element => <Embed element={element} />} validateEmbeddable={validEmbed}>
             <HistoryControls target={historyTarget} api={api} activity={activity} history={deckHistory.current} pending={live.current.revision !== live.current.savedRevision} onHistory={restoreHistory} disabled={busy || present !== null || !!deckDialog} />
             <MainMenu />
             <DefaultSidebar docked={false} onDock={false} onStateChange={state => setLibraryOpen(state?.name === "default" && state?.tab === "library")}>
@@ -1000,7 +1002,7 @@ function Merger({ integration, controller }) {
               {api && <LayerPanel api={api} disabled={busy||present!==null||!!deckDialog} onClose={() => openPane(null, false)} onAdd={kind => { if (kind === "media") openPane("media", false); else if (kind === "text") { finishPaneInsert(); insertContent("body"); } else { openPane(null, false); api.setActiveTool({ type:"rectangle" }); } }} />}
             </ContentPane>
             {!hasSelection&&current&&<SlideProperties key={current.id} settings={settings} elements={api?.getSceneElements()||[]} disabled={busy||present!==null||!!deckDialog} layoutPicker={layoutPicker} onSaveLayout={() => { setLayoutSaveError(""); openDeckDialog({ kind: "save-layout" }); }} onLayout={chooseLayout} onBackground={setBackground} onMedia={() => openPane("media", false, null, "background")} onCover={updateCover} onCoverMedia={key => openPane("media", false, null, `cover-${key}`)} onLayers={() => openPane("layers", false)} onTransition={transition=>commitSettings({transition})} coverSource={!!integration?.coverSource} onCoverSource={refreshCoverSource} onEditCoverSource={tab=>integration.editCoverSource(tab).catch(fail)} coverSourceError={coverSourceError} />}
-          </Excalidraw>
+          </Excalidraw></IconColorContext.Provider>
           <NativeSections api={api} interactive={!editing && !busy && present === null && !deckDialog} depthHover={!busy && present === null && !deckDialog} />
           <SectionVisibilityMenu api={api} host={host} disabled={busy || !editing || present !== null || !!deckDialog} />
           <EmbedComposer api={api} onCommit={commitEmbed} onCancel={cancelEmbed} disabled={busy || !editing || present !== null} />

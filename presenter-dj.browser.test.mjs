@@ -616,6 +616,150 @@ test('before-after sections render inside picker cards, navigator and slideshow'
   } finally { await browser.close(); }
 });
 
+test('inserted icon colour uses native properties and preserves geometry originals history and reload', { timeout:90000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  try {
+    for (const width of [1440,390]) {
+      const page = await browser.newPage({viewport:{width,height:1000}}), errors=[];
+      page.on('pageerror',error=>errors.push(error.message));
+      await page.addInitScript(()=>{
+        if(window!==window.top)return;
+        if(!localStorage.getItem('rk:content:draft'))localStorage.setItem('rk:content:draft',JSON.stringify({work:[],customIcons:{'colour-fixture':'<path d="M4 4h16v16H4Z" stroke="#001122"/><circle cx="12" cy="12" r="2" fill="#001122" stroke="none"/>'}}));
+      });
+      await page.goto(base+'/studio/slide-merge-lab/');
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await page.getByRole('button',{name:'Icons',exact:true}).click();
+      await page.getByRole('button',{name:'Insert colour-fixture icon',exact:true}).click();
+      await page.waitForFunction(()=>window.__slideMerge.api.getSceneElements().some(element=>element.customData?.studioIcon));
+      const original=await page.evaluate(()=>{
+        const api=window.__slideMerge.api, element=api.getSceneElements().find(element=>element.customData?.studioIcon);
+        api.updateScene({elements:[...api.getSceneElementsIncludingDeleted(),{...element,id:'icon-copy',x:400},{...element,id:'ordinary-image',x:600,customData:{}}]});
+        return {element,file:api.getFiles()[element.fileId],draft:localStorage.getItem('rk:content:draft')};
+      });
+      await page.getByRole('button',{name:'Close panel',exact:true}).click();
+      if(width===390)await page.getByRole('button',{name:'Open properties',exact:true}).click();
+      const field=page.locator('.lab-icon-color');
+      assert.ok(await page.evaluate(()=>{const api=window.__slideMerge.api;return api.getSceneElements().some(element=>api.getAppState().selectedElementIds[element.id]&&element.customData?.studioIcon);}),JSON.stringify(await page.evaluate(()=>({selected:window.__slideMerge.api.getAppState().selectedElementIds,view:window.__slideMerge.api.getAppState().viewModeEnabled,heading:document.querySelector('.merge-inspector h2')?.textContent,fields:[...document.querySelectorAll('fieldset legend')].map(element=>element.textContent)}))));
+      await field.waitFor();
+      await field.getByTestId('color-top-pick-#e03131').click();
+      await page.waitForFunction(id=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).strokeColor==='#e03131',original.element.id);
+      const changed=await page.evaluate(async id=>{
+        const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id===id),file=api.getFiles()[element.fileId];
+        const image=new Image();image.src=file.dataURL;await image.decode();const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;const context=canvas.getContext('2d');context.drawImage(image,0,0,96,96);
+        const svg=new DOMParser().parseFromString(new TextDecoder().decode(Uint8Array.from(atob(file.dataURL.split(',')[1]),character=>character.charCodeAt(0))),'image/svg+xml');
+        return {element,file,stroke:[...context.getImageData(16,48,1,1).data],fill:[...context.getImageData(48,48,1,1).data],empty:[...context.getImageData(32,32,1,1).data],rootFill:svg.documentElement.getAttribute('fill'),circleStroke:svg.querySelector('circle').getAttribute('stroke'),copy:api.getSceneElements().find(element=>element.id==='icon-copy'),ordinary:api.getSceneElements().find(element=>element.id==='ordinary-image')};
+      },original.element.id);
+      assert.notEqual(changed.element.fileId,original.element.fileId);
+      for(const key of ['x','y','width','height','angle','scale','crop','opacity'])assert.deepEqual(changed.element[key],original.element[key],key);
+      assert.deepEqual(changed.stroke,[224,49,49,255]);assert.deepEqual(changed.fill,[224,49,49,255]);assert.equal(changed.empty[3],0);
+      assert.equal(changed.rootFill,'none');assert.equal(changed.circleStroke,'none');
+      assert.equal(changed.copy.fileId,original.element.fileId);assert.equal(changed.ordinary.fileId,original.element.fileId);
+      assert.deepEqual(await page.evaluate(id=>window.__slideMerge.api.getFiles()[id],original.element.fileId),original.file);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('rk:content:draft')),original.draft);
+      await page.waitForFunction(id=>{
+        const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id===id),state=api.getAppState(),canvas=document.querySelector('canvas.excalidraw__canvas.static'),box=canvas.getBoundingClientRect();
+        const left=(element.x+element.width/2+state.scrollX)*state.zoom.value*canvas.width/box.width,top=(element.y+element.height/2+state.scrollY)*state.zoom.value*canvas.height/box.height;
+        const pixel=canvas.getContext('2d').getImageData(Math.round(left),Math.round(top),1,1).data;
+        return pixel[0]===224&&pixel[1]===49&&pixel[2]===49;
+      },original.element.id);
+      await page.screenshot({path:join(tmpdir(),`rk-icon-colour-${width}.png`)});
+      if(width===390)await page.getByRole('button',{name:'Close panel',exact:true}).click();
+      await page.getByRole('button',{name:'Undo',exact:true}).click();
+      await page.waitForFunction(({id,fileId})=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).fileId===fileId,original.element);
+      await page.getByRole('button',{name:'Redo',exact:true}).click();
+      await page.waitForFunction(({id,fileId})=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).fileId===fileId,changed.element);
+      await page.getByRole('button',{name:'Icons',exact:true}).click();
+      await page.getByRole('button',{name:'Insert colour-fixture icon',exact:true}).click();
+      await page.getByRole('button',{name:'Close panel',exact:true}).click();
+      await page.reload();
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      assert.deepEqual(await page.evaluate(id=>{const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id===id);return {fileId:element.fileId,color:element.strokeColor,icon:element.customData.studioIcon,dataURL:api.getFiles()[element.fileId].dataURL};},original.element.id),{fileId:changed.element.fileId,color:'#e03131',icon:true,dataURL:changed.file.dataURL});
+      await page.evaluate(id=>window.__slideMerge.api.updateScene({appState:{selectedElementIds:{[id]:true}}}),original.element.id);
+      if(width===390)await page.getByRole('button',{name:'Open properties',exact:true}).click();
+      await field.waitFor();
+      await field.getByRole('button',{name:'Icon colour',exact:true}).click();
+      await page.locator('.color-picker-input').fill('123abc');
+      await page.waitForFunction(id=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).strokeColor==='#123abc',original.element.id);
+      await page.screenshot({path:join(tmpdir(),`rk-icon-colour-picker-${width}.png`)});
+      await page.locator('.color-picker-input').press('Escape');
+      await page.evaluate(()=>window.__slideMerge.api.updateScene({appState:{selectedElementIds:{'ordinary-image':true}}}));
+      await field.waitFor({state:'detached'});
+      await page.evaluate(id=>{const api=window.__slideMerge.api;api.updateScene({elements:api.getSceneElementsIncludingDeleted().map(element=>element.id===id?{...element,locked:true,version:element.version+1}:element),appState:{selectedElementIds:{[id]:true}}});},original.element.id);
+      assert.equal(await field.count(),0);
+      assert.deepEqual(errors,[]);
+      await page.close();
+    }
+  }finally{await browser.close();}
+});
+
+test('icon generation stays in the icon panel with cancellation retry and mobile controls', { timeout:90000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  try {
+    for (const width of [1440,390]) {
+      const page = await browser.newPage({viewport:{width,height:1000}});
+      await page.addInitScript(() => {
+        if (window !== window.top) return;
+        localStorage.setItem('rk:content:draft',JSON.stringify({work:[],customIcons:{},iconKeywords:{}}));
+        window.iconJobs = [];
+        window.__RKStudio = {draftSlides(){},generateIcon:(description,references,{signal})=>new Promise((resolve,reject)=>window.iconJobs.push({description,signal,resolve,reject}))};
+      });
+      await page.goto(base+'/studio/slide-merge-lab/');
+      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await page.getByRole('button',{name:'Icons',exact:true}).click();
+      const search = page.getByRole('searchbox',{name:'Search icons',exact:true});
+      await search.fill('square');
+      const trigger = page.getByRole('button',{name:'Generate an icon',exact:true});
+      await trigger.click();
+      const form = page.getByRole('form',{name:'Generate an icon',exact:true});
+      const description = form.getByRole('textbox',{name:'Icon description',exact:true});
+      assert.equal(await description.inputValue(),'square');
+      assert.equal(await description.evaluate(element=>element===document.activeElement),true);
+      assert.equal(await page.locator('dialog[open], .pass').count(),0,'Inline icon generation must not create a modal or backdrop');
+      assert.equal(await form.evaluate(element=>!!element.closest('.merge-icon-picker')),true);
+      const before = await page.evaluate(()=>JSON.stringify(window.__slideMerge.api.getSceneElements()));
+      await description.press('Escape');
+      await trigger.waitFor();
+      assert.equal(await trigger.evaluate(element=>element===document.activeElement),true);
+      assert.equal(await search.isVisible(),true,'Escape leaves the icon panel open on phones');
+      await trigger.click();
+      const submit = form.getByRole('button',{name:'Generate and add',exact:true});
+      await description.fill(''); assert.equal(await submit.isDisabled(),true);
+      await description.fill('A minimal square mark');
+      await description.scrollIntoViewIfNeeded();
+      const geometry = await form.evaluate(element=>{
+        const panel=element.closest('.merge-pane-body').getBoundingClientRect(),box=element.getBoundingClientRect();
+        return {inside:box.left>=panel.left&&box.right<=panel.right+1,visible:box.top>=0&&box.bottom<=innerHeight,overflow:element.scrollWidth>element.clientWidth+1,controls:[...element.querySelectorAll('textarea,button')].every(control=>control.getBoundingClientRect().width>0&&control.scrollWidth<=control.clientWidth+1)};
+      });
+      assert.deepEqual(geometry,{inside:true,visible:true,overflow:false,controls:true});
+      await page.screenshot({path:join(tmpdir(),`rk-icon-inline-${width}.png`)});
+      await submit.click();
+      await page.waitForFunction(()=>window.iconJobs.length===1);
+      assert.equal(await description.isDisabled(),true);
+      assert.equal(await form.getByRole('button',{name:'Generating...',exact:true}).isDisabled(),true);
+      await form.getByRole('button',{name:'Cancel',exact:true}).click();
+      assert.equal(await page.evaluate(()=>window.iconJobs[0].signal.aborted),true);
+      await trigger.click(); await description.fill('A fresh square mark'); await submit.click();
+      await page.waitForFunction(()=>window.iconJobs.length===2);
+      await page.evaluate(()=>window.iconJobs[0].resolve({name:'discarded-mark',svg:'<path d="M4 4h16v16H4Z"/>',keywords:['discarded']}));
+      assert.equal(await form.getByRole('button',{name:'Generating...',exact:true}).isDisabled(),true);
+      await page.evaluate(()=>window.iconJobs[1].reject(new Error('Synthetic icon service failure. Try again.')));
+      await form.getByRole('alert').waitFor();
+      assert.match(await form.getByRole('alert').innerText(),/Synthetic icon service failure/);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.api.getSceneElements())),before);
+      assert.equal(await page.evaluate(()=>!!JSON.parse(localStorage.getItem('rk:content:draft')).customIcons?.['discarded-mark']),false);
+      await page.screenshot({path:join(tmpdir(),`rk-icon-inline-error-${width}.png`)});
+      await submit.click(); await page.waitForFunction(()=>window.iconJobs.length===3);
+      await page.evaluate(()=>window.iconJobs[2].resolve({name:'inline-mark',svg:'<path d="M4 4h16v16H4Z"/>',keywords:['inline']}));
+      await trigger.waitFor();
+      await page.getByRole('button',{name:'Insert inline-mark icon',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>window.iconJobs.length),3);
+      assert.equal(await page.evaluate(()=>!!JSON.parse(localStorage.getItem('rk:content:draft')).customIcons['inline-mark']),true);
+      await page.getByRole('button',{name:'Close panel',exact:true}).click();
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('partial speaker notes copy between slides strips browser clipboard wrappers', { timeout:60000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   const page = await browser.newPage();

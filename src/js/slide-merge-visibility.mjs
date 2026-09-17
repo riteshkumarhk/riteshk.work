@@ -171,6 +171,7 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
       if (element.type === "text") result.originalText = result.text;
       const custom = element.customData || {}, safe = {};
       if (element.type === "text" && custom.textFormat) safe.textFormat = textFormat(element);
+      if (element.type === "image" && custom.studioIcon === true) safe.studioIcon = true;
       if (custom.sectionReference) {
         if (!production) throw new Error("Protected references require the public component renderer");
         const reference = normalizeSectionReference(custom.sectionReference);
