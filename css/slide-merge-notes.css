@@ -30,6 +30,10 @@
 .merge-icon-composer-actions { display:flex;gap:6px; }
 .merge-icon-composer-actions button { display:flex;align-items:center;justify-content:center;gap:6px;min-width:0;min-height:34px;padding:6px 8px;border:1px solid var(--merge-line);border-radius:4px;background:transparent;color:var(--merge-text);font:12px var(--sans);cursor:pointer; }
 .merge-icon-composer-actions button[type="submit"] { flex:1;background:var(--ui-selected);border-color:var(--merge-accent); }
+.merge-icon-composer-actions .merge-icon-confirm { width:100%;background:var(--ui-selected);border-color:var(--merge-accent); }
+.merge-icon-preview { display:grid;justify-items:center;gap:6px;min-width:0;padding:8px 0; }
+.merge-icon-preview img { width:72px;height:72px;object-fit:contain; }
+.merge-icon-preview span { max-width:100%;font:12px/1.4 var(--sans);overflow-wrap:anywhere;text-align:center; }
 .merge-icon-composer-actions svg { flex:none; }
 .merge-icon-composer-actions button:disabled { opacity:.45;cursor:default; }
 .merge-icon-composer p { margin:0;color:var(--ui-danger);font:12px/1.4 var(--sans);overflow-wrap:anywhere; }

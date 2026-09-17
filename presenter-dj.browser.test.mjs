@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
+import { publicDeckPayload } from './src/js/slide-merge-visibility.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : chromium.executablePath());
 test('DJ pad can use the original tab without exposing notes or opening a second window', { timeout:30000 }, async () => {
@@ -566,7 +567,10 @@ test('embed links, text improvement and generated draft icons integrate with sli
     await page.getByRole('button',{name:'Generate an icon',exact:true}).click();
     await page.getByRole('textbox',{name:'Icon description',exact:true}).fill('A clear square mark');
     const count=await page.evaluate(()=>window.__slideMerge.api.getSceneElements().filter(element=>element.type==='image').length);
-    await page.getByRole('button',{name:'Generate and add',exact:true}).click();
+    await page.getByRole('button',{name:'Generate',exact:true}).click();
+    await page.getByRole('img',{name:'Generated icon preview: generated-mark',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__slideMerge.api.getSceneElements().filter(element=>element.type==='image').length),count);
+    await page.getByRole('button',{name:'Add icon',exact:true}).click();
     await page.waitForFunction(count=>window.__slideMerge.api.getSceneElements().filter(element=>element.type==='image').length===count+1,count);
     await page.getByRole('button',{name:'Insert generated-mark icon',exact:true}).waitFor();
     assert.ok(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).customIcons['generated-mark']));
@@ -655,6 +659,10 @@ test('inserted icon colour uses native properties and preserves geometry origina
       assert.equal(changed.rootFill,'none');assert.equal(changed.circleStroke,'none');
       assert.equal(changed.copy.fileId,original.element.fileId);assert.equal(changed.ordinary.fileId,original.element.fileId);
       assert.deepEqual(await page.evaluate(id=>window.__slideMerge.api.getFiles()[id],original.element.fileId),original.file);
+      const published=publicDeckPayload(await page.evaluate(()=>{const api=window.__slideMerge.api;return {slidesPublic:true,slides:[{scene:{elements:api.getSceneElements(),files:api.getFiles()}}]};}),{reviewedSources:true});
+      const publishedScene=published.slides[0].scene, publishedIcon=publishedScene.elements.find(element=>element.customData?.studioIcon&&element.strokeColor==='#e03131');
+      assert.equal(publishedScene.files[publishedIcon.fileId].dataURL,changed.file.dataURL);
+      assert.equal(publishedScene.files[publishedIcon.fileId].originalDataURL,original.file.originalDataURL);
       assert.equal(await page.evaluate(()=>localStorage.getItem('rk:content:draft')),original.draft);
       await page.waitForFunction(id=>{
         const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id===id),state=api.getAppState(),canvas=document.querySelector('canvas.excalidraw__canvas.static'),box=canvas.getBoundingClientRect();
@@ -719,10 +727,11 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
       const before = await page.evaluate(()=>JSON.stringify(window.__slideMerge.api.getSceneElements()));
       await description.press('Escape');
       await trigger.waitFor();
+      await page.waitForFunction(()=>document.activeElement?.textContent==='Generate an icon');
       assert.equal(await trigger.evaluate(element=>element===document.activeElement),true);
       assert.equal(await search.isVisible(),true,'Escape leaves the icon panel open on phones');
       await trigger.click();
-      const submit = form.getByRole('button',{name:'Generate and add',exact:true});
+      const submit = form.getByRole('button',{name:'Generate',exact:true});
       await description.fill(''); assert.equal(await submit.isDisabled(),true);
       await description.fill('A minimal square mark');
       await description.scrollIntoViewIfNeeded();
@@ -750,10 +759,39 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
       await page.screenshot({path:join(tmpdir(),`rk-icon-inline-error-${width}.png`)});
       await submit.click(); await page.waitForFunction(()=>window.iconJobs.length===3);
       await page.evaluate(()=>window.iconJobs[2].resolve({name:'inline-mark',svg:'<path d="M4 4h16v16H4Z"/>',keywords:['inline']}));
+      const preview = form.getByRole('img');
+      await preview.waitFor();
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.api.getSceneElements())),before);
+      assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).customIcons),{});
+      assert.equal(await page.getByRole('button',{name:'Insert inline-mark icon',exact:true}).count(),0);
+      await form.getByRole('button',{name:'Cancel',exact:true}).click();
+      await trigger.click(); await description.fill('A confirmed circle mark'); await submit.click();
+      await page.waitForFunction(()=>window.iconJobs.length===4);
+      await page.evaluate(()=>window.iconJobs[3].resolve({name:'first-preview',svg:'<path d="M4 4h16v16H4Z"/>',keywords:['first']}));
+      await preview.waitFor();
+      const firstPreview = await preview.getAttribute('src');
+      const regenerate = form.getByRole('button',{name:'Regenerate',exact:true});
+      await regenerate.click(); await page.waitForFunction(()=>window.iconJobs.length===5);
+      assert.equal(await form.getByRole('button',{name:'Add icon',exact:true}).isDisabled(),true);
+      await page.evaluate(()=>window.iconJobs[4].reject(new Error('Synthetic regeneration failed')));
+      await form.getByRole('alert').waitFor();
+      assert.equal(await preview.getAttribute('src'),firstPreview,'A failed regeneration keeps the prior preview');
+      await regenerate.click(); await page.waitForFunction(()=>window.iconJobs.length===6);
+      await page.evaluate(()=>window.iconJobs[5].resolve({name:'confirmed-mark',svg:'<circle cx="12" cy="12" r="8"/>',keywords:['confirmed']}));
+      await page.getByRole('img',{name:'Generated icon preview: confirmed-mark',exact:true}).waitFor();
+      assert.notEqual(await preview.getAttribute('src'),firstPreview);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__slideMerge.api.getSceneElements())),before);
+      assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).customIcons),{});
+      assert.equal(await preview.evaluate(async image=>{await image.decode();const canvas=document.createElement('canvas');canvas.width=72;canvas.height=72;const context=canvas.getContext('2d');context.drawImage(image,0,0,72,72);return context.getImageData(0,0,72,72).data.some((value,index)=>index%4===3&&value>0);}),true);
+      const previewBounds=await form.evaluate(element=>{const box=element.getBoundingClientRect(),panel=element.closest('.merge-pane-body').getBoundingClientRect();return {inside:box.left>=panel.left&&box.right<=panel.right+1,visible:box.top>=0&&box.bottom<=innerHeight,overflow:element.scrollWidth>element.clientWidth+1};});
+      assert.deepEqual(previewBounds,{inside:true,visible:true,overflow:false});
+      await page.screenshot({path:join(tmpdir(),`rk-icon-confirmation-${width}.png`)});
+      await form.getByRole('button',{name:'Add icon',exact:true}).click();
       await trigger.waitFor();
-      await page.getByRole('button',{name:'Insert inline-mark icon',exact:true}).waitFor();
-      assert.equal(await page.evaluate(()=>window.iconJobs.length),3);
-      assert.equal(await page.evaluate(()=>!!JSON.parse(localStorage.getItem('rk:content:draft')).customIcons['inline-mark']),true);
+      await page.getByRole('button',{name:'Insert confirmed-mark icon',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>window.iconJobs.length),6);
+      assert.deepEqual(await page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem('rk:content:draft')).customIcons)),['confirmed-mark']);
+      assert.equal(await page.evaluate(()=>window.__slideMerge.api.getSceneElements().filter(element=>element.customData?.studioIcon).length),1);
       await page.getByRole('button',{name:'Close panel',exact:true}).click();
       await page.close();
     }
@@ -832,6 +870,7 @@ test('partial speaker notes copy between slides strips browser clipboard wrapper
     assert.doesNotMatch(await notes.innerHTML(), /StartFragment|EndFragment|&lt;(?:html|body|span)|style=/);
     for (const width of [1440,390]) {
       await page.setViewportSize({width,height:1000});
+      await page.waitForFunction(width=>!!document.querySelector('.merge-mobile-canvas-controls')===(width<=900),width);
       const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});
       if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
       await notes.scrollIntoViewIfNeeded();
@@ -906,6 +945,7 @@ test('speaker note clipboard paragraphs do not accumulate spacing during seriali
     assert.ok(heights.every(height=>height===heights[0]), 'Reopening and saving cannot grow note height');
     for (const width of [1440,390]) {
       await page.setViewportSize({width,height:1000});
+      await page.waitForFunction(width=>!!document.querySelector('.merge-mobile-canvas-controls')===(width<=900),width);
       const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});
       if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
       await notes.scrollIntoViewIfNeeded();
@@ -1007,7 +1047,10 @@ test('real Studio AI service improves notes and sanitizes generated icons withou
     await page.getByRole('button',{name:'Icons',exact:true}).click();
     await page.getByRole('button',{name:'Generate an icon',exact:true}).click();
     await page.getByRole('textbox',{name:'Icon description',exact:true}).fill('A simple square mark');
-    await page.getByRole('button',{name:'Generate and add',exact:true}).click();
+    await page.getByRole('button',{name:'Generate',exact:true}).click();
+    await page.getByRole('img',{name:'Generated icon preview: service-mark',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Insert service-mark icon',exact:true}).count(),0);
+    await page.getByRole('button',{name:'Add icon',exact:true}).click();
     await page.getByRole('button',{name:'Insert service-mark icon',exact:true}).waitFor();
     const icon=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:content:draft')).customIcons['service-mark']);
     assert.match(icon,/<path/);assert.doesNotMatch(icon,/script|image|onclick|href/);
