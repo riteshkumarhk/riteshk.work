@@ -60,6 +60,7 @@ lucide-react/dist/esm/icons/layout-grid.mjs:
 lucide-react/dist/esm/icons/layout-template.mjs:
 lucide-react/dist/esm/icons/link.mjs:
 lucide-react/dist/esm/icons/list-indent-decrease.mjs:
+lucide-react/dist/esm/icons/list-filter.mjs:
 lucide-react/dist/esm/icons/list-indent-increase.mjs:
 lucide-react/dist/esm/icons/list-ordered.mjs:
 lucide-react/dist/esm/icons/list-x.mjs:

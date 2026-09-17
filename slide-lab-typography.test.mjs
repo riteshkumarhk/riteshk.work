@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { patchTypography, patchTextFormatting } from "./slide-lab-typography.mjs";
-import { textFormat, textFontPrefix, formatTextLines } from "./src/js/slide-text-format.mjs";
+import { textFormat, textFontPrefix, formatTextLines, textListLine } from "./src/js/slide-text-format.mjs";
 import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
 
 const source = readFileSync(new URL("./node_modules/@excalidraw/excalidraw/dist/dev/index.js", import.meta.url), "utf8");
@@ -29,6 +29,20 @@ test("bullets and indents round trip multiline text without rewriting blank line
   assert.equal(formatTextLines(formatTextLines(bulleted, "indent"), "outdent"), bulleted);
   assert.equal(formatTextLines("Plain\n One\n\tTwo", "outdent"), "Plain\nOne\nTwo");
   assert.equal(formatTextLines("\n  ", "bullets"), "\n  ");
+});
+
+test("dot number alphabet and dash list styles preserve content and indentation across conversions", () => {
+  const plain = "First\n\n  Second\nThird";
+  const expected = { dot: "\u2022 First\n\n  \u2022 Second\n\u2022 Third", number: "1. First\n\n  2. Second\n3. Third", alphabet: "a. First\n\n  b. Second\nc. Third", dash: "- First\n\n  - Second\n- Third" };
+  for (const [style, text] of Object.entries(expected)) {
+    assert.equal(formatTextLines(plain, "bullet-style", style), text);
+    assert.equal(formatTextLines(text, "bullets", false), plain);
+    assert.equal(textListLine(text.split("\n")[0]).style, style);
+    for (const [nextStyle, nextText] of Object.entries(expected)) assert.equal(formatTextLines(text, "bullet-style", nextStyle), nextText);
+  }
+  assert.equal(formatTextLines(Array.from({ length: 28 }, () => "Item").join("\n"), "bullet-style", "alphabet").split("\n").slice(-3).join("\n"), "z. Item\naa. Item\nab. Item");
+  assert.equal(formatTextLines("Design. Keep this wording\n-1 is negative", "bullets", false), "Design. Keep this wording\n-1 is negative");
+  assert.equal(formatTextLines(plain, "bullet-style", "unsupported"), plain);
 });
 
 test("typography adapter preserves native mutation, bound-text and mixed-selection resolution", () => {

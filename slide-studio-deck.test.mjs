@@ -90,6 +90,7 @@ test("native text styles bullets and indents retain editing history exports and 
     const button = name => controls.getByRole('button', { name, exact: true });
     const readText = () => page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first'));
     await button('Bold').waitFor();
+    assert.equal(await button('Bullet style').count(), 0);
     const before = await readText();
     for (const name of ['Bold', 'Italic', 'Underline', 'Strikethrough']) {
       await button(name).click();
@@ -105,12 +106,29 @@ test("native text styles bullets and indents retain editing history exports and 
     await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
     await button('Bullets').click();
     assert.equal((await readText()).originalText, '\u2022 Formatting example\n\u2022 Second paragraph');
+    const markers = [['Number', '1.', '2.'], ['Alphabet', 'a.', 'b.'], ['Dash', '-', '-'], ['Dot', '\u2022', '\u2022']];
+    let previousStyle = 'Dot';
+    for (const [style, first, second] of markers) {
+      await button('Bullet style').click();
+      const menu = page.getByRole('menu', { name: 'Bullet styles' });
+      assert.equal(await menu.getByRole('menuitemradio', { name: previousStyle, exact: true }).getAttribute('aria-checked'), 'true');
+      await menu.getByRole('menuitemradio', { name: style, exact: true }).click();
+      assert.equal((await readText()).originalText, `${first} Formatting example\n${second} Second paragraph`);
+      assert.equal(await button('Bullets').getAttribute('aria-pressed'), 'true');
+      previousStyle = style;
+    }
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first').originalText.startsWith('- '));
+    await page.getByRole('button', { name: 'Redo', exact: true }).click();
+    await page.waitForFunction(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-first').originalText.startsWith('\u2022 '));
+    await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
     await button('Increase indent').click();
     assert.equal((await readText()).originalText, '  \u2022 Formatting example\n  \u2022 Second paragraph');
     assert.ok((await readText()).text.startsWith('  \u2022 Formatting example'));
     await button('Decrease indent').click();
     await button('Bullets').click();
     assert.equal((await readText()).originalText, before.originalText);
+    assert.equal(await button('Bullet style').count(), 0);
     assert.equal(await button('Decrease indent').isDisabled(), true);
     await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true, 'format-second': true, 'format-locked': true } } }));
     assert.equal(await button('Bold').getAttribute('aria-pressed'), 'mixed');
@@ -118,6 +136,9 @@ test("native text styles bullets and indents retain editing history exports and 
     assert.equal(await button('Bold').getAttribute('aria-pressed'), 'true');
     assert.equal(await page.evaluate(() => window.__slideMerge.api.getSceneElements().find(element => element.id === 'format-locked').customData.textFormat), undefined);
     await button('Bullets').click();
+    await button('Bullet style').click();
+    await page.getByRole('menuitemradio', { name: 'Alphabet', exact: true }).click();
+    assert.ok((await readText()).originalText.startsWith('a. '));
     await page.evaluate(async () => { await window.__slideMerge.save(); });
     const saved = await readText();
     await page.reload();
@@ -134,8 +155,12 @@ test("native text styles bullets and indents retain editing history exports and 
     const editingStyle = await editable.evaluate(element => { const style = getComputedStyle(element); return { weight: style.fontWeight, style: style.fontStyle, decoration: style.textDecorationLine }; });
     assert.deepEqual(editingStyle, { weight: '700', style: 'italic', decoration: 'underline line-through' });
     await editable.fill('\u2022 Formatting example edited\n\u2022 Second paragraph');
+    await button('Bullet style').click();
+    await page.getByRole('menuitemradio', { name: 'Number', exact: true }).click();
+    assert.equal((await readText()).originalText, '1. Formatting example edited\n2. Second paragraph');
     await button('Bullets').click();
-    assert.equal(await editable.inputValue(), 'Formatting example edited\nSecond paragraph');
+    assert.equal((await readText()).originalText, 'Formatting example edited\nSecond paragraph');
+    if (await editable.count()) assert.equal(await editable.inputValue(), 'Formatting example edited\nSecond paragraph');
     await page.keyboard.press('Escape');
     await page.evaluate(async () => { await window.__slideMerge.save(); window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }); });
     for (const appearance of ['day', 'night']) {
@@ -152,12 +177,33 @@ test("native text styles bullets and indents retain editing history exports and 
         if (width === 390) await page.getByRole('button', { name: 'Open properties', exact: true }).click();
         await button('Bold').scrollIntoViewIfNeeded();
         assert.equal(await button('Bold').getAttribute('aria-pressed'), 'true');
+        if (await button('Bullets').getAttribute('aria-pressed') !== 'true') await button('Bullets').click();
+        const triggerBox = await button('Bullet style').boundingBox(), indentBox = await button('Increase indent').boundingBox();
+        assert.ok(triggerBox.x > indentBox.x + indentBox.width, 'Style picker is the rightmost list control');
         for (const fieldset of await controls.all()) {
           const bounds = await fieldset.evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth, children: [...element.querySelectorAll('button')].map(button => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })) }));
           assert.ok(bounds.scrollWidth <= bounds.width + 1);
           assert.ok(bounds.children.every(button => button.width >= 28 && button.height >= 28));
         }
         await page.screenshot({ path: join(tmpdir(), `rk-slide-text-format-${appearance}-${width}.png`) });
+        await button('Bullet style').click();
+        const popup = page.locator('.lab-bullet-picker');
+        const popupBounds = await popup.boundingBox();
+        assert.ok(popupBounds.x >= 0 && popupBounds.x + popupBounds.width <= width + 1);
+        assert.ok(popupBounds.y >= 0 && popupBounds.y + popupBounds.height <= page.viewportSize().height + 1);
+        assert.equal(await page.getByRole('menu', { name: 'Bullet styles' }).getByRole('menuitemradio').count(), 4);
+        await page.screenshot({ path: join(tmpdir(), `rk-slide-bullet-picker-${appearance}-${width}.png`) });
+        await page.getByRole('menuitemradio', { name: 'Dot', exact: true }).focus();
+        await page.keyboard.press('End');
+        assert.equal(await page.getByRole('menuitemradio', { name: 'Dash', exact: true }).evaluate(element => element === document.activeElement), true);
+        await page.keyboard.press('Home');
+        assert.equal(await page.getByRole('menuitemradio', { name: 'Dot', exact: true }).evaluate(element => element === document.activeElement), true);
+        await page.keyboard.press('Escape');
+        await popup.waitFor({ state: 'detached' });
+        await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Bullet style');
+        assert.equal(await button('Bullet style').evaluate(element => element === document.activeElement), true);
+        if (width === 390) assert.equal(await page.locator('.merge-sheet-head').isVisible(), true, 'Escape closes the picker without dismissing properties');
+        await page.evaluate(() => window.__slideMerge.save());
       }
     }
     assert.deepEqual(errors, []);

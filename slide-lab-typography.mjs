@@ -27,14 +27,15 @@ export function patchTypography(source) {
 
 export function patchTextFormatting(source, target) {
   const edits = target === "renderer" ? [
-    ['        "data-testid": testId,\n        className: clsx3(className, { standalone, active }),', '        "data-testid": testId,\n        "aria-label": props["aria-label"],\n        "aria-pressed": props["aria-pressed"],\n        disabled: props.disabled,\n        onPointerDown: props.onPointerDown,\n        className: clsx3(className, { standalone, active }),'],
+    ['        "data-testid": testId,\n        className: clsx3(className, { standalone, active }),', '        "data-testid": testId,\n        "aria-label": props["aria-label"],\n        "aria-pressed": props["aria-pressed"],\n        "aria-haspopup": props["aria-haspopup"],\n        "aria-expanded": props["aria-expanded"],\n        "aria-controls": props["aria-controls"],\n        disabled: props.disabled,\n        onPointerDown: props.onPointerDown,\n        className: clsx3(className, { standalone, active }),'],
     ['      renderAction("changeFontSize"),', '      renderAction("changeFontSize"),\n      renderAction("labTextFormat"),'],
     ['        lineHeight: updatedTextElement.lineHeight,', '        lineHeight: updatedTextElement.lineHeight,\n        textDecoration: labTextDecoration(updatedTextElement),'],
     ['    const { textAlign, verticalAlign } = updatedTextElement;', '    if (editable.value !== updatedTextElement.originalText) {\n      const start = editable.selectionStart, end = editable.selectionEnd, direction = editable.selectionDirection;\n      editable.value = updatedTextElement.originalText;\n      editable.setSelectionRange(Math.min(start, editable.value.length), Math.min(end, editable.value.length), direction);\n    }\n    const { textAlign, verticalAlign } = updatedTextElement;'],
     ['var actionChangeTextAlign = register({', `var actionLabTextFormat = register({
   name: "labTextFormat", label: "Text style", trackEvent: false,
   perform: (elements, appState, value, app) => {
-    if (appState.viewModeEnabled || !["bold", "italic", "underline", "strikethrough", "bullets", "indent", "outdent"].includes(value?.action)) return false;
+    if (appState.viewModeEnabled || !["bold", "italic", "underline", "strikethrough", "bullets", "bullet-style", "indent", "outdent"].includes(value?.action)) return false;
+    if (value.action === "bullet-style" && !["dot", "number", "alphabet", "dash"].includes(value.value)) return false;
     return {
       elements: changeProperty(elements, appState, element => {
         if (!isTextElement(element) || element.locked || app.scene.getContainerElement(element)?.locked) return element;
@@ -49,7 +50,7 @@ export function patchTextFormatting(source, target) {
   },
   PanelComponent: ({ elements, appState, updateData, app }) => jsx34(LabTextFormatControls, {
     elements: getTargetElements(app.scene.getNonDeletedElementsMap(), appState).filter(element => isTextElement(element) && !element.locked && !app.scene.getContainerElement(element)?.locked),
-    onChange: updateData, Button: ButtonIcon
+    onChange: updateData, Button: ButtonIcon, Content: PropertiesPopover, useContainer: useExcalidrawContainer
   })
 });
 var actionChangeTextAlign = register({`]

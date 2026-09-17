@@ -33,7 +33,7 @@ export function useMobilePanels(api) {
     document.querySelector(".merge-sheet-close")?.focus();
     const key = event => {
       if (api.getAppState().openDialog) return;
-      if (document.querySelector('.color-picker-content, .font-picker-content, .merge-tool-pop:popover-open')) return;
+      if (document.querySelector('.color-picker-content, .font-picker-content, .lab-bullet-picker, .merge-tool-pop:popover-open')) return;
       if (panel === "notes") {
         if (event.key === "Escape" && !event.target.closest(".merge-time-budget")) { event.preventDefault(); open(null); }
         return;
