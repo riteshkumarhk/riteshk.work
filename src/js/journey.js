@@ -140,7 +140,11 @@ import { journeyRows } from "./journey-core.mjs";
     editorPreview = !!options.preview && previewFrame;
     render(window.RK?.data);
     window.__rkShowPage?.("about", { push: !options.silent, scroll: false });
-    if (!options.silent) document.getElementById("sec-path")?.scrollIntoView({ behavior: reduced() ? "instant" : "smooth", block: "start" });
+    const selected = allStories().find(story => story.chapterIndex === options.chapterIndex && story.entryIndex === options.entryIndex);
+    if (selected) {
+      expand(selected.key, false);
+      if (options.scroll) document.getElementById("journey-detail")?.scrollIntoView({ behavior: "instant", block: "start" });
+    } else if (!options.silent || options.scroll) document.getElementById("sec-path")?.scrollIntoView({ behavior: reduced() ? "instant" : "smooth", block: "start" });
   }
 
   function onClick(event) {

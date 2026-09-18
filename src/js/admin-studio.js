@@ -55,7 +55,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
 import { boundedResumeCompletion } from "./resume-review.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
 import { resumeSignature } from "./resume-workspace.mjs";
-import { journeyRoleKey } from "./journey-core.mjs";
+import { journeyRoleKey, journeyRoleIndex } from "./journey-core.mjs";
 
 (function () {
   "use strict";
@@ -11115,16 +11115,16 @@ import { journeyRoleKey } from "./journey-core.mjs";
       '<div class="jrncard__row"><button class="btn btn--primary" data-act="journey-edit">Edit journey \u2192</button>' +
       '<span class="jrncard__meta">' + (chaps ? (chaps + " chapter" + (chaps > 1 ? "s" : "") + " \u00b7 " + entries + " entr" + (entries === 1 ? "y" : "ies")) : "No chapters yet") + "</span></div></div>";
   }
-  function previewJourney() {
+  function previewJourney(selection) {
     var w = frameWin();
     if (!(w && w.RK && w.RK.openJourney)) return;
     try { w.RK.data = resolvePreviewData(data); } catch (e) {}
-    try { w.RK.openJourney({ preview: true, silent: true }); } catch (e) {}
+    try { w.RK.openJourney(Object.assign({ preview: true, silent: true }, selection)); } catch (e) {}
   }
-  function refreshJourneyPreview() {
+  function refreshJourneyPreview(selection) {
     if (!journeyOpen) return;
     clearTimeout(jrnPreviewTimer);
-    jrnPreviewTimer = setTimeout(function () { if (journeyOpen) previewJourney(); }, 180);
+    jrnPreviewTimer = setTimeout(function () { if (journeyOpen) previewJourney(selection); }, 180);
   }
   function setL2BackLabel(txt) {
     var bk = root && root.querySelector(".adm__l2-back");
@@ -11145,7 +11145,7 @@ import { journeyRoleKey } from "./journey-core.mjs";
     requestAnimationFrame(function () { l2.classList.add("is-open"); });
     var ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0;
     saveDraft();
-    previewJourney();
+    previewJourney({ scroll: true });
     l2PreviewApply();
   }
   function renderJourneyEditor() {
@@ -11184,11 +11184,25 @@ import { journeyRoleKey } from "./journey-core.mjs";
     var L = [["auto", "Auto \u2014 flowing columns"], ["grid", "Grid \u2014 even 4:3 tiles"], ["showcase", "Showcase \u2014 hero + thumbnails"], ["stack", "Stack \u2014 one per row"]];
     return L.map(function (o) { return '<option value="' + o[0] + '"' + ((sel || "auto") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
   }
-  function journeyPlacementOptions(value) {
-    var options = [["", "Automatic"], ["separate", "Separate row"]];
-    (data.path || []).forEach(function (role) { options.push([journeyRoleKey(role), role.role || role.org || "Role"]); });
+  function journeyPlacementOptions(value, chapter, entry) {
+    var paths = data.path || [];
+    var automatic = journeyRoleIndex(paths, chapter, Object.assign({}, entry, { pathId: "" }));
+    function label(role) { return (role.role || role.org || "Role") + (role.years ? " (" + role.years + ")" : ""); }
+    var options = [["", "Automatic: " + (automatic >= 0 ? label(paths[automatic]) : "Separate row")], ["separate", "Separate row"]];
+    paths.forEach(function (role) { options.push([journeyRoleKey(role), label(role)]); });
     if (value && !options.some(function (option) { return option[0] === value; })) options.push([value, "Unavailable role (separate row)"]);
     return options.map(function (option) { return '<option value="' + escAttr(option[0]) + '"' + ((value || "") === option[0] ? " selected" : "") + '>' + escHtml(option[1]) + '</option>'; }).join("");
+  }
+  function journeyPlacementOverview() {
+    return '<div class="l2grp jmap"><div class="l2grp__head">Story placement</div>' + journeyData().chapters.map(function (chapter, chapterIndex) {
+      return (chapter.entries || []).map(function (entry, entryIndex) {
+        var identity = ' data-jc="' + chapterIndex + '" data-je="' + entryIndex + '"';
+        var title = entry.title || entry.period || "Untitled story";
+        return '<div class="jmap__row"><div class="jmap__head"><div><strong data-jmap-title' + identity + '>' + escHtml(title) + '</strong><span>' + escHtml(chapter.name || "Chapter") + '</span></div>' +
+          '<button type="button" class="iconbtn" data-act="jentry-edit"' + identity + ' title="Edit story" aria-label="Edit ' + escAttr(title) + '">' + IC.edit + '</button></div>' +
+          '<div class="af"><label class="af__label" for="jmap-' + chapterIndex + '-' + entryIndex + '">Timeline role</label><select id="jmap-' + chapterIndex + '-' + entryIndex + '" data-jsel="pathId"' + identity + '>' + journeyPlacementOptions(entry.pathId, chapter, entry) + '</select></div></div>';
+      }).join("");
+    }).join("") + '</div>';
   }
   function journeyImageRow(c, e, k, im) {
     var src = (im && im.src) || "";
@@ -11213,7 +11227,7 @@ import { journeyRoleKey } from "./journey-core.mjs";
       "</div>" +
       richJourney(c, e, entry.body) +
       '<div class="af__row">' +
-      '<div class="af"><label class="af__label">Timeline role</label><select aria-label="Timeline role" data-jsel="pathId" data-jc="' + c + '" data-je="' + e + '">' + journeyPlacementOptions(entry.pathId) + "</select></div>" +
+      '<div class="af"><label class="af__label">Timeline role</label><select aria-label="Timeline role" data-jsel="pathId" data-jc="' + c + '" data-je="' + e + '">' + journeyPlacementOptions(entry.pathId, journeyData().chapters[c], entry) + "</select></div>" +
       '<div class="af"><label class="af__label">Visibility</label><select aria-label="Story visibility" data-jsel="visibility" data-jc="' + c + '" data-je="' + e + '"><option value="presenter"' + (entry.visibility !== "public" ? " selected" : "") + '>Present mode</option><option value="public"' + (entry.visibility === "public" ? " selected" : "") + '>Public</option></select></div></div>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Link to a case study</label><select data-jsel="workId" data-jc="' + c + '" data-je="' + e + '">' + journeyWorkOptions(entry.workId) + "</select></div>" +
@@ -11243,7 +11257,7 @@ import { journeyRoleKey } from "./journey-core.mjs";
   function journeyEditor() {
     var j = journeyData();
     var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
-    return '<div class="l2grp">' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
+    return journeyPlacementOverview() + '<div class="l2grp">' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
       '<div class="l2grp"><div class="l2grp__head">Stories <span>Grouped by company or era. Visibility controls display, not encryption; existing journey data is not encrypted.</span></div>' +
       (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
       '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
@@ -11257,7 +11271,12 @@ import { journeyRoleKey } from "./journey-core.mjs";
     if (t.dataset.jname !== undefined) { chap.name = t.value; saveDraft(); refreshJourneyPreview(); return; }
     var ent = chap.entries && chap.entries[+t.dataset.je];
     if (!ent) return;
-    if (t.dataset.jfield !== undefined) { ent[t.dataset.jfield] = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    if (t.dataset.jfield !== undefined) {
+      ent[t.dataset.jfield] = t.value; saveDraft(); refreshJourneyPreview();
+      var summaryTitle = l2body.querySelector('[data-jmap-title][data-jc="' + t.dataset.jc + '"][data-je="' + t.dataset.je + '"]');
+      if (summaryTitle) summaryTitle.textContent = ent.title || ent.period || "Untitled story";
+      return;
+    }
     if (t.dataset.jsel !== undefined) {
       var value = t.value;
       if (t.dataset.jsel === "pathId" && value && value !== "separate") {
@@ -11265,7 +11284,12 @@ import { journeyRoleKey } from "./journey-core.mjs";
         if (role) { if (!role.id) role.id = "jr-" + crypto.randomUUID(); value = role.id; }
       }
       ent[t.dataset.jsel] = value; saveDraft();
-      if (t.dataset.jsel === "pathId") renderJourneyEditor(); else refreshJourneyPreview();
+      if (t.dataset.jsel === "pathId") {
+        var selector = (t.closest(".jmap") ? ".jmap " : ".jentry ") + '[data-jsel="pathId"][data-jc="' + t.dataset.jc + '"][data-je="' + t.dataset.je + '"]';
+        renderJourneyEditor();
+        l2body.querySelector(selector)?.focus({ preventScroll: true });
+        refreshJourneyPreview({ chapterIndex: +t.dataset.jc, entryIndex: +t.dataset.je, scroll: true });
+      } else refreshJourneyPreview();
       return;
     }
     if (t.dataset.jimg !== undefined) { var im = ent.images && ent.images[+t.dataset.jk]; if (im) { im[t.dataset.jimg] = t.value; saveDraft(); refreshJourneyPreview(); } }
@@ -12443,6 +12467,14 @@ import { journeyRoleKey } from "./journey-core.mjs";
     if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
+    if (act === "jentry-edit") {
+      openJC = +b.dataset.jc;
+      var storyIndex = b.dataset.je;
+      renderJourneyEditor();
+      l2body.querySelector('[data-jfield="title"][data-jc="' + openJC + '"][data-je="' + storyIndex + '"]')?.focus();
+      refreshJourneyPreview({ chapterIndex: openJC, entryIndex: +storyIndex, scroll: true });
+      return;
+    }
     if (act === "journey-chaptoggle") {
       if (e.target.closest("input, button, [data-grip], .card__ops")) return;
       var jtc = +b.dataset.jc;

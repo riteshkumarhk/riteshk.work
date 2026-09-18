@@ -1052,10 +1052,14 @@ test('Journey Studio saves placement and visibility in one editor without changi
     const open=async()=>{await page.locator('.adm__tab[data-tab="aboutpage"]').click();await page.locator('[data-act="journey-edit"]').click();await page.locator('[data-act="journey-chaptoggle"][data-jc="0"] .study__block-chev').click();};
     await open();
     assert.equal(await page.locator('.adm__l2 [data-list="path"][data-field="role"]').count(),2);
+    assert.equal(await page.locator('.jmap__row').count(),6);
+    assert.match(await page.locator('#jmap-0-0 option[value=""]').textContent(),/Automatic:.*Edge/);
     const visibility=page.locator('[data-jsel="visibility"][data-jc="0"][data-je="4"]');
     assert.equal(await visibility.inputValue(),'presenter');
     await visibility.selectOption('public');
-    const placement=page.locator('[data-jsel="pathId"][data-jc="0"][data-je="4"]');
+    const placement=page.locator('#jmap-0-4');
+    await placement.selectOption('separate');
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[4].pathId==='separate');
     const option=await placement.locator('option').filter({hasText:'Automotive HMI'}).getAttribute('value');
     await placement.selectOption(option);
     await page.waitForFunction(()=>window.__RKStudio.getDraft().path[1].id?.startsWith('jr-'));
@@ -1064,6 +1068,15 @@ test('Journey Studio saves placement and visibility in one editor without changi
     assert.equal(after.journey.chapters[0].entries[4].visibility,'public');
     assert.deepEqual(after.journey.chapters[0].entries[4].images,original.journey.chapters[0].entries[4].images);
     assert.deepEqual(after.work,original.work);
+    assert.equal(await placement.evaluate(select=>document.activeElement===select),true);
+    await page.locator('.jmap [data-act="jentry-edit"][data-jc="0"][data-je="4"]').click();
+    const storyTitle=page.locator('[data-jfield="title"][data-jc="0"][data-je="4"]');
+    assert.equal(await storyTitle.evaluate(input=>document.activeElement===input),true);
+    const editingPreview=page.frames().find(frame=>frame.url().includes('preview'));
+    await editingPreview.waitForFunction(()=>document.querySelector('#journey-detail')?.closest('.tl')?.querySelector('h3')?.textContent.includes('Automotive'));
+    await storyTitle.fill('Configured story');
+    await page.locator('[data-jfield="period"][data-jc="0"][data-je="4"]').fill('2015 - 2018');
+    await page.locator('.adm__l2 [data-list="path"][data-field="role"][data-index="1"]').fill('Automotive experience');
     await page.locator('.adm__l2 [data-act="up"][data-list="path"][data-index="1"]').click();
     await page.waitForFunction(()=>window.__RKStudio.getDraft().path[0].role.includes('Automotive'));
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft')||'null')?.journey?.chapters?.[0]?.entries?.[4]?.visibility==='public');
@@ -1071,6 +1084,9 @@ test('Journey Studio saves placement and visibility in one editor without changi
     const restored=await page.evaluate(()=>window.__RKStudio.getDraft());
     assert.equal(restored.journey.chapters[0].entries[4].pathId,restored.path[0].id);
     assert.equal(restored.journey.chapters[0].entries[4].visibility,'public');
+    assert.equal(restored.journey.chapters[0].entries[4].title,'Configured story');
+    assert.equal(restored.journey.chapters[0].entries[4].period,'2015 - 2018');
+    assert.equal(restored.path[0].role,'Automotive experience');
     assert.deepEqual(restored.journey.chapters[0].entries[4].images,original.journey.chapters[0].entries[4].images);
     await open();
     const preview=page.frames().find(frame=>frame.url().includes('preview'));
@@ -1078,6 +1094,14 @@ test('Journey Studio saves placement and visibility in one editor without changi
     await preview.locator('[data-jstory]').first().waitFor();
     assert.equal(await preview.locator('.jrn[role="dialog"]').count(),0);
     assert.equal(await preview.locator('[data-jstory]').count(),6);
+    assert.match(await placement.locator('option:checked').textContent(),/Automotive experience/);
+    for(const width of [1440,390]) {
+      await page.setViewportSize({width,height:1000});
+      await page.locator('.jmap__row').first().scrollIntoViewIfNeeded();
+      assert.equal(await page.locator('.jmap').evaluate(element=>[...element.querySelectorAll('select,button')].every(control=>{const bounds=control.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth;})),true);
+      assert.equal(await page.locator('.jmap select').evaluateAll(controls=>controls.every(control=>control.scrollWidth<=control.clientWidth+1)),true);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-studio-'+width+'.png')});
+    }
   } finally {await browser.close();}
 });
 

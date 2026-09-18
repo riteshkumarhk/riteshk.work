@@ -2670,6 +2670,14 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .jrncard__chk { margin: .3rem 0 .9rem; }
 .jrncard__row { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .jrncard__meta { font-family: var(--mono); font-size: .66rem; letter-spacing: .04em; color: var(--text-faint); }
+.jmap__row { padding: .8rem 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.jmap__head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .6rem; }
+.jmap__head > div { min-width: 0; }
+.jmap__head strong { display: block; font-size: .85rem; font-weight: 500; overflow-wrap: anywhere; }
+.jmap__head span { display: block; margin-top: .2rem; font: .65rem/1.5 var(--mono); color: var(--text-dim); }
+.jmap__head .iconbtn { flex: 0 0 auto; }
+.jmap .af { margin-bottom: 0; }
+.jmap select { min-width: 0; min-height: 38px; height: auto; white-space: normal; overflow-wrap: anywhere; }
 .jchap { padding: 0; overflow: hidden; }
 .jchap__head { display: flex; align-items: center; gap: .5rem; padding: .55rem .6rem; cursor: pointer; }
 .jchap__head:hover { background: rgba(216, 166, 87, .04); }
