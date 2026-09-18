@@ -1076,6 +1076,7 @@ test('Journey thumbnails stay compact and reveal bounded hover and keyboard prev
     await page.goto(baseURL+'/?view=about');
     await page.waitForFunction(()=>!!window.RK?.renderJourney);
     const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+    const firstTile=page.locator('.jrn-tile').filter({has:first});
     const row=page.locator('.jrn-stories').first();
     const geometry=()=>page.locator('#timeline > .tl').evaluateAll(roles=>roles.map(role=>{const rect=role.getBoundingClientRect();return {top:rect.top+scrollY,height:rect.height};}));
     for(const width of [1440,800,390,320]) {
@@ -1089,7 +1090,7 @@ test('Journey thumbnails stay compact and reveal bounded hover and keyboard prev
       assert.equal(await first.locator('img').getAttribute('src'),original.journey.chapters[0].entries[0].images[0].src);
       const baseline=await geometry();
       await page.screenshot({path:join(tmpdir(),'rk-journey-compact-'+width+'.png')});
-      for(const tile of [first,row.locator('.jrn-tile').last()]) {
+      for(const tile of [firstTile,row.locator('.jrn-tile').last()]) {
         await tile.hover();
         await page.waitForFunction(()=>{const preview=document.querySelector('.is-peeking .jrn-tile__preview');return preview && preview.getAnimations().every(animation=>animation.playState==='finished');});
         const peek=tile.locator('.jrn-tile__preview');
@@ -1133,6 +1134,74 @@ test('Journey thumbnails stay compact and reveal bounded hover and keyboard prev
     await touch.getByRole('button',{name:'Close chapter',exact:true}).tap();
     assert.equal(await touch.locator('#journey-detail').count(),0);
     assert.equal(await touch.locator('.is-peeking').count(),0);
+    assert.deepEqual(published,original);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
+test('Journey expanded thumbnail links open available cases directly and return to About', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+    const published=await journeyFixture(page), original=structuredClone(published);
+    await page.goto(baseURL+'/?view=about');
+    await page.waitForFunction(()=>!!window.RK?.renderJourney);
+    const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+    const tile=page.locator('.jrn-tile').filter({has:first});
+    const link=tile.getByRole('link',{name:'View case study',exact:false});
+    assert.equal(await page.locator('.jrn-tile button a,.jrn-tile a button').count(),0);
+    assert.equal(await page.locator('[data-jpeek-work]').count(),1);
+    assert.equal(await link.isVisible(),false);
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await first.scrollIntoViewIfNeeded();
+      await first.hover();
+      await link.waitFor({state:'visible'});
+      const bounds=await link.boundingBox();
+      assert.ok(bounds.x>=16 && bounds.x+bounds.width<=width-16);
+      assert.equal(await link.getAttribute('href'),'/work/journey-case');
+      const craft=await tile.evaluate(element=>{
+        const preview=element.querySelector('.jrn-tile__preview'), image=element.querySelector('.jrn-tile__image'), details=element.querySelector('.jrn-tile__details'), link=element.querySelector('.jrn-tile__case');
+        return {imageBorder:getComputedStyle(image).borderTopWidth,detailsInset:getComputedStyle(details).paddingLeft,linkInset:getComputedStyle(link).paddingLeft,linkDivider:getComputedStyle(link).borderTopWidth,linkWidth:link.getBoundingClientRect().width,previewWidth:preview.getBoundingClientRect().width};
+      });
+      assert.equal(craft.imageBorder,'0px');
+      assert.equal(craft.detailsInset,'16px');
+      assert.equal(craft.linkInset,'16px');
+      assert.equal(craft.linkDivider,'1px');
+      assert.ok(Math.abs(craft.linkWidth-craft.previewWidth)<1);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-case-link-'+width+'.png')});
+      const returnY=await page.evaluate(()=>scrollY);
+      await link.click();
+      await page.locator('.pj.is-open').waitFor();
+      assert.equal(await page.locator('#journey-detail').count(),0);
+      await page.getByText('Linked case content',{exact:true}).waitFor();
+      await page.locator('.pj.is-open [data-pj="close"]').click();
+      await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
+      assert.equal(new URL(page.url()).pathname,'/about');
+      assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      await page.waitForFunction(expected=>Math.abs(scrollY-expected)<2,returnY);
+      const returnedY=await page.evaluate(()=>scrollY);
+      assert.ok(Math.abs(returnedY-returnY)<2,JSON.stringify({width,returnY,returnedY}));
+    }
+    await page.keyboard.press('Tab');
+    await first.focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await link.evaluate(element=>element===document.activeElement),true);
+    await page.mouse.move(0,0);
+    assert.equal(await link.isVisible(),true);
+    await page.keyboard.press('Enter');
+    await page.locator('.pj.is-open').waitFor();
+    await page.goBack();
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
+    assert.equal(new URL(page.url()).pathname,'/about');
+    assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+    for(const patch of [{hidden:true},{encWork:'synthetic'},{id:'unmatched'}]) {
+      await page.evaluate(patch=>{const copy=structuredClone(RK.data);Object.assign(copy.work[0],patch);RK.renderJourney(copy);},patch);
+      assert.equal(await page.locator('[data-jpeek-work]').count(),0);
+    }
+    await page.evaluate(()=>RK.renderJourney(RK.data));
+    assert.equal(await page.locator('[data-jpeek-work]').count(),1);
     assert.deepEqual(published,original);
     assert.deepEqual(errors,[]);
   } finally {await browser.close();}
@@ -1405,13 +1474,13 @@ test('Journey Studio picks configured stories and preserves case links through e
     assert.equal(await storyTitle.evaluate(input=>document.activeElement===input),true);
     const editingPreview=page.frames().find(frame=>frame.url().includes('preview'));
     await editingPreview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Edge onboarding');
-    assert.equal(await editingPreview.locator('.jrn-case').getAttribute('data-jwork'),'journey-case');
+    assert.equal(await editingPreview.locator('#journey-detail .jrn-case').getAttribute('data-jwork'),'journey-case');
     const caseLink=page.locator('[data-jsel="workId"][data-jc="0"][data-je="0"]');
     assert.equal(await caseLink.inputValue(),'journey-case');
     await caseLink.selectOption('');
     await editingPreview.waitForFunction(()=>!document.querySelector('.jrn-case'));
     await caseLink.selectOption('journey-case');
-    await editingPreview.locator('.jrn-case').waitFor();
+    await editingPreview.locator('#journey-detail .jrn-case').waitFor();
     await storyTitle.fill('Configured story');
     await page.locator('[data-jfield="period"][data-jc="0"][data-je="0"]').fill('2015 - 2018');
     await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="4"]').first().click();
@@ -1441,7 +1510,7 @@ test('Journey Studio picks configured stories and preserves case links through e
     assert.equal(await preview.locator('.jrn[role="dialog"]').count(),0);
     assert.equal(await preview.locator('[data-jstory]').count(),6);
     await page.locator('[data-act="jentry-edit"][data-jc="0"][data-je="0"]').click();
-    await preview.locator('.jrn-case').click();
+    await preview.locator('#journey-detail .jrn-case').click();
     await preview.getByText('Linked case content',{exact:true}).waitFor();
     await page.getByRole('tab',{name:'Journey',exact:true}).click();
     for(const width of [1440,390]) {

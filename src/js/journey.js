@@ -44,10 +44,17 @@ import { journeyRows } from "./journey-core.mjs";
     const entry = story.entry;
     const identity = story.chapterIndex + "-" + story.entryIndex;
     const label = entry.title || story.chapter.name || "Chapter";
-    return '<button type="button" class="jrn-tile" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '">' +
-      '<span class="jrn-tile__preview"><span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
+    const work = linkedWork(story);
+    return '<div class="jrn-tile"><div class="jrn-tile__preview"><button type="button" class="jrn-tile__story" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '">' +
+      '<span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
       (entry.period ? '<span class="jrn-tile__period">' + esc(entry.period) + '</span>' : '') +
-      '<span class="jrn-tile__title">' + md(label) + '</span></span></span></button>';
+      '<span class="jrn-tile__title">' + md(label) + '</span></span></button>' +
+      (work ? '<a class="jrn-case jrn-tile__case" data-jpeek-work="' + esc(work.id) + '" href="/work/' + encodeURIComponent(work.id) + '">View case study <span aria-hidden="true">&#8599;</span></a>' : '') + '</div></div>';
+  }
+
+  function linkedWork(story) {
+    const work = (currentData.work || []).find(item => item.id === story?.entry.workId);
+    return work && !work.encWork && (!work.hidden || window.RK?.isOwnerPresentation?.() || editorPreview && previewFrame) ? work : null;
   }
 
   function closePeek() {
@@ -121,7 +128,7 @@ import { journeyRows } from "./journey-core.mjs";
     activeKey = null;
     mediaIndex = 0;
     if (saved) window.scrollTo(saved.x, saved.y);
-    if (focus) trigger?.focus({ preventScroll: true });
+    if (focus) { trigger?.focus({ preventScroll: true }); closePeek(); }
   }
 
   function expand(key, focus = true) {
@@ -133,8 +140,7 @@ import { journeyRows } from "./journey-core.mjs";
     if (!story || !trigger) { activeKey = null; return; }
     if (!openingKey) openingKey = key;
     trigger.setAttribute("aria-expanded", "true");
-    const work = (currentData.work || []).find(item => item.id === story.entry.workId);
-    const canLink = work && !work.encWork && (!work.hidden || window.RK?.isOwnerPresentation?.() || editorPreview && previewFrame);
+    const work = linkedWork(story);
     const panel = document.createElement("section");
     panel.id = "journey-detail";
     panel.className = "jrn jrn-detail";
@@ -149,7 +155,7 @@ import { journeyRows } from "./journey-core.mjs";
       (story.entry.period ? '<span class="jrn-tile__period">' + esc(story.entry.period) + '</span>' : '') +
       '<h4 id="journey-detail-title" tabindex="-1">' + md(story.entry.title || story.chapter.name || "Chapter") + '</h4></div></header>' +
       '<div class="jrn-detail__copy">' + prose(story.entry.body) +
-      (canLink ? '<button type="button" class="jrn-case" data-jwork="' + esc(work.id) + '">View case study <span aria-hidden="true">&#8599;</span></button>' : '') +
+      (work ? '<button type="button" class="jrn-case" data-jwork="' + esc(work.id) + '">View case study <span aria-hidden="true">&#8599;</span></button>' : '') +
       '</div></div></div>';
     document.body.append(panel);
     lockBackground(true);
@@ -190,10 +196,22 @@ import { journeyRows } from "./journey-core.mjs";
   }
 
   function onClick(event) {
-    const target = event.target.closest("button");
+    const target = event.target.closest("button, a[data-jpeek-work]");
     if (!target) return;
     if (target.hasAttribute("data-journey-open")) { open(); return; }
     if (!timeline()?.contains(target) && !document.getElementById("journey-detail")?.contains(target)) return;
+    if (target.hasAttribute("data-jpeek-work")) {
+      const trigger = target.closest(".jrn-tile").querySelector("[data-jstory]");
+      const work = linkedWork(allStories().find(story => story.key === trigger.dataset.jstory));
+      if (!work) { event.preventDefault(); return; }
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      caseReturn = { path: location.pathname + location.search + location.hash, title: document.title, key: trigger.dataset.jstory };
+      trigger.focus({ preventScroll: true });
+      closePeek();
+      window.RK?.openProject?.(work.id, { push: true });
+      return;
+    }
     if (target.hasAttribute("data-jstory")) { target.dataset.jstory === activeKey ? close() : expand(target.dataset.jstory); return; }
     if (target.hasAttribute("data-jchapter")) { expand(target.dataset.jchapter); return; }
     if (target.hasAttribute("data-jclose")) { close(); return; }
@@ -228,11 +246,11 @@ import { journeyRows } from "./journey-core.mjs";
       if (event.pointerType === "mouse" && matchMedia("(hover: hover) and (pointer: fine)").matches && !tile?.contains(event.relatedTarget)) peek(tile);
     });
     document.addEventListener("pointerout", event => {
-      if (peekTile?.contains(event.target) && !peekTile.contains(event.relatedTarget)) closePeek();
+      if (peekTile?.contains(event.target) && !peekTile.contains(event.relatedTarget) && !peekTile.querySelector(":focus-visible")) closePeek();
     });
     document.addEventListener("focusin", event => {
       const tile = event.target.closest?.(".jrn-tile");
-      if (tile?.matches(":focus-visible")) peek(tile);
+      if (tile && event.target.matches(":focus-visible")) peek(tile);
     });
     document.addEventListener("focusout", event => {
       if (peekTile?.contains(event.target) && !peekTile.contains(event.relatedTarget)) closePeek();
@@ -272,9 +290,11 @@ import { journeyRows } from "./journey-core.mjs";
       if (!caseReturn || document.querySelector(".pj.is-open") || /^\/work\//.test(location.pathname)) return;
       history.replaceState({ rkPage: "about" }, "", caseReturn.path);
       document.title = caseReturn.title;
+      const returnKey = caseReturn.key;
       caseReturn = null;
       const panel = document.getElementById("journey-detail");
       if (panel) { panel.hidden = false; lockBackground(true); panel.querySelector('[data-jwork]')?.focus({ preventScroll: true }); }
+      else if (returnKey) { triggerFor(returnKey)?.focus({ preventScroll: true }); closePeek(); }
     });
     if (window.__siteRendered) render(window.RK?.data);
   }
