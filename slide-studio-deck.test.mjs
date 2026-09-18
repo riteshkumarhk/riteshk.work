@@ -1939,7 +1939,12 @@ test("Sections header dragging respects clicks, editing and protected positions"
     await page.mouse.move(source.x+20,source.y+source.height/2);
     await page.mouse.down();
     await page.mouse.move(source.x+20,target.y+target.height-2,{steps:12});
+    const held=page.locator('.adm__sort-preview');
+    assert.equal(await held.textContent(),'First');
+    assert.equal(await held.evaluate(element=>getComputedStyle(element).pointerEvents),'none');
+    assert.match(await rows.last().evaluate(element=>getComputedStyle(element).boxShadow),/inset/);
     await page.keyboard.press('Escape');
+    assert.equal(await held.count(),0);
     await page.mouse.up();
     assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.map(block=>block.encStub?'Protected':block.heading)),['First','Protected','Third','Fourth']);
     await page.mouse.move(source.x+20,source.y+source.height/2);
@@ -1958,7 +1963,11 @@ test("Sections header dragging respects clicks, editing and protected positions"
     await page.mouse.move(sealedHead.x+20,sealedHead.y+sealedHead.height/2);
     await page.mouse.down();
     await page.mouse.move(sealedHead.x+20,end.y+end.height-2,{steps:12});
+    assert.match(await held.textContent(),/encrypted at rest/);
+    assert.equal(await held.locator('input,textarea,iframe,video,button').count(),0);
+    await page.screenshot({path:join(tmpdir(),'rk-held-protected-section.png')});
     await page.mouse.up();
+    assert.equal(await held.count(),0);
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft().work[0].study.blocks[3])),sealedBefore);
     await context.close();
   } finally { await browser.close(); }
@@ -1981,8 +1990,13 @@ test("Sections touch header hold reorders while swipes scroll", {timeout:60000},
     await touch('touchStart',source.x+20,source.y+source.height/2);
     await page.waitForFunction(()=>document.body.classList.contains('adm-sorting'));
     await touch('touchMove',source.x+20,target.y+target.height-2);
+    assert.equal(await page.locator('.adm__sort-preview').textContent(),'Section 0');
+    const heldBounds=await page.locator('.adm__sort-preview').boundingBox();
+    assert.ok(heldBounds.x>=8 && heldBounds.x+heldBounds.width<=382 && heldBounds.y>=8 && heldBounds.y+heldBounds.height<=836);
+    await page.screenshot({path:join(tmpdir(),'rk-held-touch-section.png')});
     await touch('touchEnd');
     await page.waitForFunction(()=>!document.body.classList.contains('adm-sorting'));
+    assert.equal(await page.locator('.adm__sort-preview').count(),0);
     assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work[0].study.blocks.slice(0,3).map(block=>block.heading)),['Section 1','Section 2','Section 0']);
     assert.equal(await page.locator('.study-sections .study__block.is-open').count(),0);
     await rows.nth(4).scrollIntoViewIfNeeded();

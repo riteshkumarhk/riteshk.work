@@ -4645,7 +4645,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function sectionDragKey(event) {
     if (event.key !== 'Escape') return;
     sectionDragClear();
-    if (sortState && sortState.headerDrag) { event.preventDefault(); sortEnd({type:'pointercancel'}); }
+    if (sortState) { event.preventDefault(); event.stopImmediatePropagation(); sortCancel(); }
   }
   function sectionDragActivate(event) {
     var pending = sectionDragPending;
@@ -4689,19 +4689,52 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (e.pointerType === "mouse" && e.button !== 0) return;
     sortBegin(e, grip);
   }
+  function sortCard(row, index) {
+    var preview = document.createElement('div');
+    preview.className = 'adm__sort-preview';
+    preview.setAttribute('aria-hidden', 'true');
+    preview.setAttribute('popover', 'manual');
+    var summary = row.querySelector(':scope > .study__block-head, :scope > .adm__lsec-head, :scope > .rep__bar, :scope > .cellrow__bar, :scope > .card__bar') || row;
+    var title = summary.querySelector('.jedit__select strong, [data-jmap-title], .study__block-label, .adm__lsec-title, .story__item-label, .rep__itemlabel, strong, h3, h4');
+    var field = summary.querySelector('input[type="text"]') || [].slice.call(row.querySelectorAll('input[type="text"], textarea')).find(function (input) { return input.value.trim() && !/^(?:https?:|data:|blob:|<)/i.test(input.value.trim()); });
+    var fallback = summary.querySelector('.rep__n, .cellrow__n, .card__idx');
+    var label = document.createElement('span');
+    label.textContent = (title ? title.matches('[data-jmap-title]') ? title.firstChild?.textContent : title.textContent : field?.value) || fallback?.textContent || row.getAttribute('aria-label') || 'Item ' + (index + 1);
+    var source = row.querySelector('img');
+    if (source?.complete && source.naturalWidth) {
+      var image = document.createElement('img');
+      image.src = source.currentSrc; image.alt = ''; image.draggable = false;
+      preview.appendChild(image);
+    }
+    preview.appendChild(label);
+    preview.style.width = Math.min(240, row.getBoundingClientRect().width, innerWidth - 16) + 'px';
+    root.appendChild(preview);
+    if (typeof preview.showPopover === 'function') preview.showPopover();
+    return preview;
+  }
+  function sortPosition(x, y) {
+    var preview = sortState?.preview; if (!preview) return;
+    var bounds = preview.getBoundingClientRect();
+    preview.style.left = Math.max(8, Math.min(x + 16, innerWidth - bounds.width - 8)) + 'px';
+    preview.style.top = Math.max(8, Math.min(y + 16, innerHeight - bounds.height - 8)) + 'px';
+  }
+  function sortCancel() { sortEnd({type:'pointercancel'}); }
   function sortBegin(e, grip) {
     var key = grip.getAttribute("data-sortkey"); if (!key) return;
     var row = grip.closest(SORT_ROW_SEL); if (!row) return;
     var rows = sortRowsFor(key); if (rows.length < 2) return;
     var from = rows.indexOf(row); if (from < 0) return;
     e.preventDefault();
-    sortState = { key: key, rows: rows, row: row, from: from, to: from, y: e.clientY, scrollEl: root.querySelector(".adm__editor"), raf: 0, isBlock: key.split(":")[0] === "block", pv: -1 };
+    sortState = { key: key, rows: rows, row: row, from: from, to: from, y: e.clientY, pointerId: e.pointerId, preview: sortCard(row, from), scrollEl: root.querySelector(".adm__editor"), raf: 0, isBlock: key.split(":")[0] === "block", pv: -1 };
     row.classList.add("is-sortdrag");
     document.body.classList.add("adm-sorting");
+    sortPosition(e.clientX, e.clientY);
     sortMark(e.clientY);
     document.addEventListener("pointermove", sortMove, true);
     document.addEventListener("pointerup", sortEnd, true);
     document.addEventListener("pointercancel", sortEnd, true);
+    document.addEventListener('keydown', sectionDragKey, true);
+    window.addEventListener('blur', sortCancel);
     sortState.raf = requestAnimationFrame(sortLoop);
   }
   function sortMark(y) {
@@ -4720,9 +4753,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function sortPreview(idx) {
     try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlock", index: idx }, "*"); } catch (e) {}
   }
-  function sortMove(e) { if (!sortState || (sortState.headerDrag && e.pointerId !== sortState.pointerId)) return; if (sortState.headerDrag && e.cancelable) e.preventDefault(); sortState.y = e.clientY; sortMark(e.clientY); }
+  function sortMove(e) { if (!sortState || e.pointerId !== sortState.pointerId) return; if (e.cancelable) e.preventDefault(); sortState.y = e.clientY; sortPosition(e.clientX, e.clientY); sortMark(e.clientY); }
   function sortLoop() {
     var s = sortState; if (!s) return;
+    if (!s.row.isConnected) { sortCancel(); return; }
     var el = s.scrollEl;
     if (el) {
       var b = el.getBoundingClientRect(), y = s.y, edge = 54, sp = 0;
@@ -4734,6 +4768,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   function sortEnd(event) {
     var s = sortState; if (!s) return;
+    if (event?.pointerId !== undefined && event.pointerId !== s.pointerId) return;
     sortState = null;
     if (s.headerDrag) {
       sectionDragSuppressUntil = Date.now() + 400;
@@ -4743,11 +4778,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     document.removeEventListener("pointermove", sortMove, true);
     document.removeEventListener("pointerup", sortEnd, true);
     document.removeEventListener("pointercancel", sortEnd, true);
+    document.removeEventListener('keydown', sectionDragKey, true);
+    window.removeEventListener('blur', sortCancel);
+    s.preview.remove();
     if (s.raf) cancelAnimationFrame(s.raf);
     s.rows.forEach(function (r) { r.classList.remove("is-drop-above", "is-drop-below", "is-sortdrag"); });
     document.body.classList.remove("adm-sorting");
     if (s.isBlock) { try { var fw = frameWin(); if (fw) fw.postMessage({ __rk: "dragBlockEnd" }, "*"); } catch (e) {} }
-    if (s.to !== s.from && !(s.headerDrag && event && event.type === 'pointercancel')) sortApply(s.key, s.from, s.to);
+    if (s.to !== s.from && event?.type !== 'pointercancel') sortApply(s.key, s.from, s.to);
   }
   function sortApply(key, from, to) {
     var p = key.split(":"), arr = null, after = null;
