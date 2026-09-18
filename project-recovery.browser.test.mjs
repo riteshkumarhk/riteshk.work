@@ -1066,6 +1066,78 @@ test('Journey L2 preserves About tiles, original media and return position acros
   } finally {await browser.close();}
 });
 
+test('Journey thumbnails stay compact and reveal bounded hover and keyboard previews without layout shifts', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+    const published=await journeyFixture(page);
+    const original=structuredClone(published);
+    await page.goto(baseURL+'/?view=about');
+    await page.waitForFunction(()=>!!window.RK?.renderJourney);
+    const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+    const row=page.locator('.jrn-stories').first();
+    const geometry=()=>page.locator('#timeline > .tl').evaluateAll(roles=>roles.map(role=>{const rect=role.getBoundingClientRect();return {top:rect.top+scrollY,height:rect.height};}));
+    for(const width of [1440,800,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.emulateMedia({reducedMotion:width===800?'no-preference':'reduce'});
+      await page.mouse.move(0,0);
+      await first.scrollIntoViewIfNeeded();
+      const resting=await first.boundingBox();
+      assert.ok(resting.width<=112 && resting.height<=84,JSON.stringify(resting));
+      assert.equal(await first.locator('.jrn-tile__details').isVisible(),false);
+      assert.equal(await first.locator('img').getAttribute('src'),original.journey.chapters[0].entries[0].images[0].src);
+      const baseline=await geometry();
+      await page.screenshot({path:join(tmpdir(),'rk-journey-compact-'+width+'.png')});
+      for(const tile of [first,row.locator('.jrn-tile').last()]) {
+        await tile.hover();
+        await page.waitForFunction(()=>{const preview=document.querySelector('.is-peeking .jrn-tile__preview');return preview && preview.getAnimations().every(animation=>animation.playState==='finished');});
+        const peek=tile.locator('.jrn-tile__preview');
+        const bounds=await peek.boundingBox();
+        const host=await row.boundingBox();
+        const columns=width>1000?3:width>600?2:1;
+        assert.ok(Math.abs(bounds.width-(host.width-(columns-1)*20)/columns)<1);
+        assert.ok(bounds.width>resting.width && bounds.x>=15);
+        assert.ok(bounds.x+bounds.width<=width-15 && bounds.y>=15 && bounds.y+bounds.height<=985,JSON.stringify(bounds));
+        assert.equal(await tile.locator('.jrn-tile__title').isVisible(),true);
+        assert.equal(await tile.locator('img').evaluate(image=>{const box=image.getBoundingClientRect(),host=image.parentElement.getBoundingClientRect();return getComputedStyle(image).objectFit==='contain' && box.width<=host.width+1 && box.height<=host.height+1;}),true);
+        assert.deepEqual(await geometry(),baseline);
+        await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height-10);
+        assert.equal(await tile.evaluate(element=>element.classList.contains('is-peeking')),true);
+        await page.screenshot({path:join(tmpdir(),'rk-journey-hover-'+width+'.png')});
+        await page.keyboard.press('Escape');
+        assert.equal(await tile.locator('.jrn-tile__details').isVisible(),false);
+        await page.mouse.move(0,0);
+      }
+      await page.keyboard.press('Tab');
+      await first.focus();
+      assert.equal(await first.locator('.jrn-tile__details').isVisible(),true);
+      await page.keyboard.press('Escape');
+      assert.equal(await first.locator('.jrn-tile__details').isVisible(),false);
+      await page.keyboard.press('Enter');
+      await page.locator('#journey-detail').waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      await page.keyboard.press('Escape');
+      await page.evaluate(()=>document.activeElement?.blur());
+      assert.deepEqual(await geometry(),baseline);
+    }
+    const touch=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});
+    await journeyFixture(touch);
+    await touch.goto(baseURL+'/?view=about');
+    await touch.waitForFunction(()=>!!window.RK?.renderJourney);
+    const touchTile=touch.getByRole('button',{name:'Edge onboarding',exact:true});
+    await touchTile.tap();
+    await touch.locator('#journey-detail').waitFor();
+    assert.equal(await touch.locator('.is-peeking').count(),0);
+    await touch.getByRole('button',{name:'Close chapter',exact:true}).tap();
+    assert.equal(await touch.locator('#journey-detail').count(),0);
+    assert.equal(await touch.locator('.is-peeking').count(),0);
+    assert.deepEqual(published,original);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
 test('Journey editor tabs preserve the draft and support keyboard navigation', {skip:!baseURL,timeout:30000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {

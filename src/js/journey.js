@@ -6,6 +6,7 @@ import { journeyRows } from "./journey-core.mjs";
   const previewFrame = new URLSearchParams(location.search).has("preview") && window.parent !== window;
   let currentData, rows = [], activeKey = null, mediaIndex = 0, editorPreview = false, caseReturn = null;
   let background = null, openingKey = null;
+  let peekTile = null;
   const timeline = () => document.getElementById("timeline");
   const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
   const md = value => window.RK?.md ? window.RK.md(value) : esc(value);
@@ -44,12 +45,36 @@ import { journeyRows } from "./journey-core.mjs";
     const identity = story.chapterIndex + "-" + story.entryIndex;
     const label = entry.title || story.chapter.name || "Chapter";
     return '<button type="button" class="jrn-tile" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '">' +
-      '<span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span>' +
+      '<span class="jrn-tile__preview"><span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
       (entry.period ? '<span class="jrn-tile__period">' + esc(entry.period) + '</span>' : '') +
-      '<span class="jrn-tile__title">' + md(label) + '</span></button>';
+      '<span class="jrn-tile__title">' + md(label) + '</span></span></span></button>';
+  }
+
+  function closePeek() {
+    peekTile?.classList.remove("is-peeking");
+    peekTile = null;
+  }
+
+  function peek(tile) {
+    if (!tile || activeKey || tile === peekTile) return;
+    closePeek();
+    const bounds = tile.getBoundingClientRect(), host = tile.parentElement.getBoundingClientRect();
+    const columns = innerWidth > 1000 ? 3 : innerWidth > 600 ? 2 : 1;
+    const width = Math.min(innerWidth - 32, (host.width - (columns - 1) * 20) / columns);
+    const left = Math.max(16 - bounds.left, Math.min(0, host.right - bounds.left - width));
+    tile.style.setProperty("--jrn-peek-width", width + "px");
+    tile.style.setProperty("--jrn-peek-left", left + "px");
+    tile.style.setProperty("--jrn-peek-scale", Math.min(1, bounds.width / width));
+    tile.style.setProperty("--jrn-peek-top", "0px");
+    tile.classList.add("is-peeking");
+    const preview = tile.querySelector(".jrn-tile__preview");
+    const height = Math.min(preview.scrollHeight, innerHeight - 32);
+    tile.style.setProperty("--jrn-peek-top", Math.max(16 - bounds.top, Math.min(0, innerHeight - 16 - bounds.top - height)) + "px");
+    peekTile = tile;
   }
 
   function render(data, options = {}) {
+    closePeek();
     currentData = data || window.RK?.data;
     if (!currentData || !timeline()) return;
     rows = journeyRows(currentData, { owner: options.owner ?? !!window.RK?.isOwnerPresentation?.(), preview: editorPreview && previewFrame });
@@ -100,6 +125,7 @@ import { journeyRows } from "./journey-core.mjs";
   }
 
   function expand(key, focus = true) {
+    closePeek();
     if (key !== activeKey) mediaIndex = 0;
     removeDetail();
     activeKey = key;
@@ -197,6 +223,21 @@ import { journeyRows } from "./journey-core.mjs";
   function init() {
     window.RK = Object.assign(window.RK || {}, { openJourney: open, closeJourney: () => { editorPreview = false; close(false); render(window.RK?.data); }, renderJourney: render, journeyHasContent: () => allStories().length > 0 });
     document.addEventListener("click", onClick);
+    document.addEventListener("pointerover", event => {
+      const tile = event.target.closest?.(".jrn-tile");
+      if (event.pointerType === "mouse" && matchMedia("(hover: hover) and (pointer: fine)").matches && !tile?.contains(event.relatedTarget)) peek(tile);
+    });
+    document.addEventListener("pointerout", event => {
+      if (peekTile?.contains(event.target) && !peekTile.contains(event.relatedTarget)) closePeek();
+    });
+    document.addEventListener("focusin", event => {
+      const tile = event.target.closest?.(".jrn-tile");
+      if (tile?.matches(":focus-visible")) peek(tile);
+    });
+    document.addEventListener("focusout", event => {
+      if (peekTile?.contains(event.target) && !peekTile.contains(event.relatedTarget)) closePeek();
+    });
+    window.addEventListener("resize", closePeek);
     document.addEventListener("error", event => {
       const stage = event.target.closest?.(".jrn-gallery__stage");
       if (!stage || !activeStory()) return;
@@ -205,6 +246,7 @@ import { journeyRows } from "./journey-core.mjs";
         (image ? '<a class="jrn-case" href="' + esc(mediaUrl(image.src)) + '" target="_blank" rel="noopener noreferrer">Open original <span aria-hidden="true">&#8599;</span></a>' : '') + '</div>';
     }, true);
     document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && peekTile) { closePeek(); event.preventDefault(); return; }
       const panel = document.getElementById("journey-detail");
       if (!panel || panel.hidden || event.defaultPrevented || document.querySelector('.pjx.is-open, .pj.is-open')) return;
       if (event.key === "Escape" && panel.contains(event.target)) { event.preventDefault(); event.stopPropagation(); close(); return; }
