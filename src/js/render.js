@@ -1172,7 +1172,7 @@ import { contentRevision } from "./content-revision.mjs";
     b.className = "sv-banner present-banner";
     b.innerHTML =
       '<span class="sv-banner__dot"></span>' +
-      '<span class="sv-banner__txt">Presenting all work \u2014 fully unlocked</span>' +
+      '<span class="sv-banner__txt">Present mode on - every case study is unlocked. Click any project to present.</span>' +
       '<button class="sv-banner__exit" type="button">Exit \u2715</button>';
     b.querySelector(".sv-banner__exit").addEventListener("click", exitPresent);
     document.body.appendChild(b);

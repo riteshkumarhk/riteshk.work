@@ -9770,12 +9770,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     },
     capabilities() {
       const list = data.capabilities || [];
-      let html = secHead("Skills", "Drives the Skills list AND the scrolling reel.") + addBar("capabilities", "Add skill");
-      list.forEach((c, i) => {
-        html += '<div class="card"><div class="card__bar" style="margin-bottom:.5rem"><span class="sortgrip" data-grip data-sortkey="list:capabilities" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + '</span><span class="card__idx">' + (i + 1) + "</span>" + ops("capabilities", i, list.length) + "</div>" +
-          '<input type="text" data-list="capabilities" data-index="' + i + '" data-scalar="1" value="' + escAttr(c) + '" /></div>';
-      });
-      return html;
+      return secHead("Skills", "") + '<div class="af"><textarea data-skills aria-label="Skills separated by |" rows="3" placeholder="Product strategy | Product design | Complex workflows">' + escHtml(list.join(" | ")) + '</textarea></div>';
     },
     work() {
       const list = data.work || [];
@@ -10672,8 +10667,8 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       addBar(list, "Add " + name.toLowerCase());
     items.forEach((a, i) => {
       html += '<div class="card">' + cardHead(name + " " + (i + 1), list, i, items.length) +
-        itemField(list, i, "title", "Title") + itemField(list, i, "meta", "Meta / date") +
-        iconField(list, i, a) + "</div>";
+        itemField(list, i, "title", "Title") + '<div class="af__row adm__meta-row">' + itemField(list, i, "meta", "Meta / date") +
+        iconField(list, i, a) + "</div></div>";
     });
     return html;
   }
@@ -11955,6 +11950,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (t.dataset.freehex !== undefined) { var _hb = freeBlk(t); if (_hb) { var _hx = String(t.value || "").trim().replace(/^#/, ""); if (/^([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(_hx)) { _hb[t.dataset.freehex] = "#" + _hx; saveDraft(); freePvRefresh(+t.dataset.fi, +t.dataset.fk); sfbcSyncUI(t, "#" + _hx); } } return; }
     if (t.dataset.slidebgcolor !== undefined) { var _sbi = +t.dataset.sbi, _sbk = +t.dataset.sbk, _sbst = data.work[_sbi] && data.work[_sbi].study, _sbs = _sbst && _sbst.slides && _sbst.slides[_sbk]; if (_sbs) { _sbs.background = { type: "color", value: t.value }; saveDraft(); freePvRefresh(_sbi, _sbk); } return; }
     if (t.dataset.path) { setPath(data, t.dataset.path, t.value); apply(); return; }
+    if (t.dataset.skills !== undefined) { data.capabilities = t.value.split("|").map(skill => skill.trim()).filter(Boolean); apply(); return; }
     if (t.dataset.sv !== undefined && t.dataset.field) { onSvInput(t); return; }
     if (t.dataset.list && t.dataset.scalar) { data[t.dataset.list][+t.dataset.index] = t.value; apply(); return; }
     if (t.dataset.list && t.dataset.field) {

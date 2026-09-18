@@ -1216,7 +1216,6 @@ import {
     modal.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
   }
   function presentArrived(res) {
-    flash("Present mode on - every case study is unlocked. Click any project to present.");
     const el = document.getElementById("work");
     if (el && el.scrollIntoView) requestAnimationFrame(function () { try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
   }

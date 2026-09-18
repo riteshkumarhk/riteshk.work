@@ -659,6 +659,8 @@ html.adm-lock, body.adm-lock { overflow: hidden !important; }
 .adm__iconf-prev svg { width: 18px; height: 18px; }
 .adm__iconf-none { color: var(--text-faint); font-size: .9rem; }
 .adm__iconf-row select { flex: 1 1 auto; min-width: 0; }
+.adm__meta-row { flex-wrap: wrap; align-items: flex-start; }
+.adm__meta-row > .af { flex: 1 1 240px; margin-top: .6rem; }
 
 /* ---------- about-page photo grid editor ---------- */
 .adm__gal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; margin: .3rem 0 .7rem; }
@@ -979,6 +981,16 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
   transition: opacity .3s, transform .3s; max-width: calc(100vw - 24px); text-align: center;
 }
 .rk-flash.is-on { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 600px) {
+  .sv-banner, .rk-flash { box-sizing: border-box; width: calc(100% - 32px); max-width: none; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 12px; corner-shape: squircle; padding: 12px; line-height: 1.6; }
+  .sv-banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 12px; }
+  .sv-banner__txt { white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; }
+  .sv-banner__exp { grid-column: 2; grid-row: 2; border-left: 0; padding-left: 0; white-space: normal; overflow-wrap: anywhere; }
+  .sv-banner__exit { grid-column: 3; grid-row: 1 / span 2; min-height: 36px; }
+  .sv-banner:not(:has(.sv-banner__exp)) .sv-banner__exit { grid-row: 1; }
+  .rk-flash { overflow-wrap: anywhere; text-align: left; }
+  body.has-sv .rk-flash { bottom: auto; top: calc(16px + env(safe-area-inset-top, 0px)); }
+}
 
 /* ---------- top "sound on" toast (shows when audio starts) ---------- */
 .soundtoast {

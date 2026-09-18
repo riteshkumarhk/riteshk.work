@@ -1163,6 +1163,15 @@ test('Journey L2 preserves About tiles, original media and return position acros
     await page.keyboard.press('Escape');
     assert.equal((await page.evaluate(value=>RK.presentAll(value),'wrong synthetic phrase')).ok,false);
     assert.equal((await page.evaluate(value=>RK.presentAll(value),recovery)).ok,true);
+    for(const width of [390,320]) {
+      await page.setViewportSize({width,height:844});
+      const banner=page.locator('.present-banner');
+      assert.equal(await banner.locator('.sv-banner__txt').textContent(),'Present mode on - every case study is unlocked. Click any project to present.');
+      assert.equal(await banner.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=16 && bounds.right<=innerWidth-16 && Array.from(element.children).every(child=>{const rect=child.getBoundingClientRect();return rect.left>=bounds.left && rect.right<=bounds.right && rect.top>=bounds.top && rect.bottom<=bounds.bottom;});}),true);
+      assert.equal(await page.locator('.rk-flash.is-on').count(),0);
+      await banner.screenshot({path:join(tmpdir(),'rk-mobile-present-banner-'+width+'.png')});
+    }
+    await page.setViewportSize({width:1440,height:1000});
     await page.getByRole('button',{name:'Presentation-only story',exact:true}).click();
     assert.equal(await page.locator('.jrn__prose').textContent(),'Presenter detail retained');
     assert.deepEqual(await page.evaluate(()=>({path:RK.data.path,journey:RK.data.journey})),{path:original.path,journey:original.journey});
@@ -1966,6 +1975,93 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
   } finally {await browser.close();}
 });
 
+test('Mobile banners wrap text and keep actions and expiry inside one surface', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
+    await journeyFixture(page);
+    await page.goto(baseURL+'/about');
+    await page.waitForFunction(()=>!!window.RK?.data);
+    for(const width of [390,320]) {
+      await page.setViewportSize({width,height:844});
+      for(const appearance of ['dark','light']) {
+        await page.evaluate(appearance=>document.documentElement.dataset.appearance=appearance,appearance);
+        for(const variant of ['curated','preview','loading','toast']) {
+          await page.evaluate(variant=>{
+            document.querySelectorAll('[data-banner-fixture]').forEach(element=>element.remove());
+            const banner=document.createElement('div');banner.dataset.bannerFixture='';
+            banner.className=variant==='toast'?'rk-flash is-on':'sv-banner '+(variant==='preview'?'preview-banner':'');
+            if(variant==='toast') banner.textContent='Changes could not be saved. Your draft is still available; try again when your connection returns.';
+            else {
+              const indicator=document.createElement('span');indicator.className=variant==='loading'?'sv-banner__spin':'sv-banner__dot';banner.append(indicator);
+              const text=document.createElement('span');text.className='sv-banner__txt';text.textContent=variant==='preview'?'Preview - unpublished draft - how your site looks once you publish':variant==='loading'?'Unlocking your protected projects and original media...':'Curated view - ALongUnbrokenAudienceNameThatMustNeverPushTheExitButtonOutsideTheBanner';banner.append(text);
+              if(variant==='curated') {const expiry=document.createElement('span');expiry.className='sv-banner__exp';expiry.textContent='Expires in 14 days';banner.append(expiry);}
+              if(variant!=='loading') {const exit=document.createElement('button');exit.className='sv-banner__exit';exit.textContent=variant==='preview'?'Dismiss':'Exit';exit.onclick=()=>banner.remove();banner.append(exit);}
+            }
+            document.body.append(banner);
+          },variant);
+          const banner=page.locator('[data-banner-fixture]');
+          assert.equal(await banner.evaluate(element=>{const bounds=element.getBoundingClientRect(),text=element.querySelector('.sv-banner__txt'),exit=element.querySelector('button');return bounds.left>=16 && bounds.right<=innerWidth-16 && bounds.bottom<=innerHeight-16 && element.scrollWidth<=element.clientWidth && (!text || text.scrollWidth<=text.clientWidth) && (!exit || text.getBoundingClientRect().right<=exit.getBoundingClientRect().left) && Array.from(element.children).every(child=>{const rect=child.getBoundingClientRect();return rect.width>0 && rect.left>=bounds.left && rect.right<=bounds.right && rect.bottom<=bounds.bottom;});}),true,variant+' '+width+' '+appearance);
+          await banner.screenshot({path:join(tmpdir(),'rk-mobile-'+variant+'-'+width+'-'+appearance+'.png')});
+          if(await banner.locator('button').count()) {await banner.locator('button').click();assert.equal(await banner.count(),0);}
+        }
+      }
+    }
+    assert.doesNotMatch(readFileSync(new URL('./src/js/admin.js',import.meta.url),'utf8').match(/function presentArrived\(res\) \{[\s\S]*?\n  \}/)[0],/flash\(/);
+  } finally {await browser.close();}
+});
+
+test('Skills use pipe separated editing and recognition metadata shares an adaptive row', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const published=await journeyFixture(page);
+    published.recognition=[{title:'Design award',meta:'2025',icon:'award'}];
+    published.education=[{title:'Design degree',meta:'2010 - 2014',icon:''}];
+    published.capabilities=['Product strategy','Design systems','Research'];
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const open=async()=>{await page.locator('.adm__tab[data-tab="aboutpage"]').click();await page.getByRole('tab',{name:'More',exact:true}).click();};
+    await open();
+    const before=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const skills=page.getByRole('textbox',{name:'Skills separated by |',exact:true});
+    assert.equal(await skills.inputValue(),published.capabilities.join(' | '));
+    assert.equal(await page.locator('[data-about-editor="capabilities"] .card').count(),0);
+    await skills.fill('  Research | Product design || AI & UX | ');
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().capabilities),['Research','Product design','AI & UX']);
+    assert.equal(await skills.inputValue(),'  Research | Product design || AI & UX | ');
+    await skills.fill(' |  | ');
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().capabilities),[]);
+    await skills.fill('Research | AI & UX | Product design');
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      for(const list of ['recognition','education']) {
+        const row=page.locator('[data-about-editor="'+list+'"] .adm__meta-row').first();
+        await row.scrollIntoViewIfNeeded();
+        const boxes=await row.locator(':scope > .af').evaluateAll(fields=>fields.map(field=>field.getBoundingClientRect().toJSON()));
+        assert.ok(boxes.every(box=>box.width>0 && box.x>=0 && box.right<=width));
+        if(width===1440) {assert.equal(boxes[0].top,boxes[1].top);assert.ok(boxes[0].right<=boxes[1].left);}
+        else assert.ok(boxes[0].bottom<=boxes[1].top);
+        assert.equal(await row.locator('.adm__iconf-row').evaluate(element=>Array.from(element.children).every(child=>{const rect=child.getBoundingClientRect();return rect.width>0 && rect.left>=0 && rect.right<=innerWidth;})),true);
+      }
+      await page.locator('[data-about-editor="education"]').screenshot({path:join(tmpdir(),'rk-compact-education-'+width+'.png')});
+      await skills.scrollIntoViewIfNeeded();
+      assert.ok((await skills.boundingBox()).height<150);
+      await page.locator('[data-about-editor="capabilities"]').screenshot({path:join(tmpdir(),'rk-compact-skills-'+width+'.png')});
+    }
+    await page.locator('[data-list="recognition"][data-field="meta"]').fill('2026');
+    await page.locator('[data-iconpick="education"]').selectOption('award');
+    await page.waitForFunction(()=>{const saved=JSON.parse(localStorage.getItem('rk:content:draft'));return saved?.education[0].icon==='award' && saved?.recognition[0].meta==='2026' && saved?.capabilities.join('|')==='Research|AI & UX|Product design';});
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());await open();
+    assert.equal(await skills.inputValue(),'Research | AI & UX | Product design');
+    const after=await page.evaluate(()=>window.__RKStudio.getDraft());
+    assert.equal(after.education[0].icon,'award');assert.equal(after.recognition[0].meta,'2026');
+    assert.deepEqual(after.work,before.work);assert.deepEqual(after.journey,before.journey);assert.deepEqual(after.path,before.path);
+    assert.equal(after.recognition[0].title,before.recognition[0].title);assert.equal(after.recognition[0].icon,before.recognition[0].icon);
+  } finally {await browser.close();}
+});
+
 test('About overview preserves section order and visibility and routes Edit to the matching tab', {skip:!baseURL,timeout:60000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -2034,7 +2130,7 @@ test('About overview preserves section order and visibility and routes Edit to t
     await tabs.getByRole('tab',{name:'About',exact:true}).click();
     for(const [key,field] of [['recognition','title'],['education','title'],['capabilities',null]]) {
       await row(key).locator('[data-act="aboutsec-edit"]').click();
-      const input=page.locator('[data-about-editor="'+key+'"] [data-list="'+key+'"][data-index="0"]'+(field?'[data-field="'+field+'"]':'[data-scalar]'));
+      const input=page.locator('[data-about-editor="'+key+'"] '+(field?'[data-list="'+key+'"][data-index="0"][data-field="'+field+'"]':'[data-skills]'));
       await input.fill('Edited '+key);
       assert.equal(await page.evaluate(({key,field})=>field?window.__RKStudio.getDraft()[key][0][field]:window.__RKStudio.getDraft()[key][0],{key,field}),'Edited '+key);
       await tabs.getByRole('tab',{name:'About',exact:true}).click();
