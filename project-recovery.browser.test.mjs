@@ -1151,6 +1151,8 @@ test('Journey thumbnails expand into solo cards or bounded story strips without 
         assert.equal(await row.locator('.jrn-tile__details').evaluateAll(elements=>elements.every(element=>getComputedStyle(element).display==='grid')),true);
         assert.equal(await row.locator('.jrn-tile').nth(1).evaluate(element=>getComputedStyle(element).borderLeftWidth),'1px');
         assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).borderRadius),'0px');
+        assert.equal(await tile.locator('.jrn-tile__image').evaluate(element=>getComputedStyle(element).borderRadius),'8px');
+        assert.equal(await tile.locator('.jrn-tile__image').evaluate(element=>{if(!CSS.supports('corner-shape','squircle'))return true;return getComputedStyle(element).cornerShape===getComputedStyle(element.closest('.jrn-stories__preview')).cornerShape;}),true);
         await page.screenshot({path:join(tmpdir(),'rk-journey-hover-'+width+'.png')});
         await page.keyboard.press('Escape');
         assert.equal(await tile.locator('.jrn-tile__details').isVisible(),false);
@@ -1263,7 +1265,16 @@ test('Journey expanded thumbnail links open available cases directly and return 
       assert.equal(thumbnail.height,28);
       assert.equal(await cover.evaluate(image=>getComputedStyle(image).borderRadius),'7px');
       assert.equal(await cover.evaluate(image=>{if(!CSS.supports('corner-shape','squircle'))return true;const reference=document.createElement('div');reference.style.cornerShape='squircle';document.body.append(reference);const expected=getComputedStyle(reference).cornerShape;reference.remove();return getComputedStyle(image).cornerShape===expected;}),true);
-      assert.equal(await cover.evaluate(image=>getComputedStyle(image).objectFit),'contain');
+      assert.equal(await cover.evaluate(image=>getComputedStyle(image).objectFit),'cover');
+      assert.equal(await link.evaluate(element=>getComputedStyle(element).borderRadius),'8px');
+      assert.equal(await link.evaluate(element=>{if(!CSS.supports('corner-shape','squircle'))return true;return getComputedStyle(element).cornerShape===getComputedStyle(element.querySelector('img')).cornerShape;}),true);
+      const thumbnailPixels=await page.evaluate(async data=>{
+        const image=new Image(); image.src=data; await image.decode();
+        const canvas=document.createElement('canvas'); canvas.width=image.width; canvas.height=image.height;
+        const context=canvas.getContext('2d'); context.drawImage(image,0,0);
+        return [2,image.height-3].map(top=>[...context.getImageData(Math.floor(image.width/2),top,1,1).data]);
+      },'data:image/png;base64,'+(await cover.screenshot()).toString('base64'));
+      assert.deepEqual(thumbnailPixels,[[199,80,97,255],[199,80,97,255]],'Cover artwork must reach both square edges without letterboxing');
       assert.equal(await link.evaluate(element=>{const bounds=element.getBoundingClientRect();return [...element.children].every(child=>{const rect=child.getBoundingClientRect();return rect.x>=bounds.x && rect.right<=bounds.right && rect.y>=bounds.y && rect.bottom<=bounds.bottom;});}),true);
       await page.screenshot({path:join(tmpdir(),'rk-journey-case-link-'+width+'.png')});
       const returnY=await page.evaluate(()=>scrollY);
