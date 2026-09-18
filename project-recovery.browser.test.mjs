@@ -959,7 +959,7 @@ async function journeyFixture(page) {
   return published;
 }
 
-test('inline journey expands stories, preserves media and returns from evidence across desktop and mobile', {skip:!baseURL,timeout:90000}, async () => {
+test('Journey L2 preserves About tiles, original media and return position across desktop and mobile', {skip:!baseURL,timeout:90000}, async () => {
   const browser = await chromium.launch(launchOptions);
   try {
     const page = await browser.newPage({ viewport:{width:1440,height:1000}, reducedMotion:'reduce' });
@@ -978,10 +978,16 @@ test('inline journey expands stories, preserves media and returns from evidence 
     for (const width of [1440,800,390,320]) {
       await page.setViewportSize({width,height:1000});
       await page.emulateMedia({reducedMotion:width===800?'no-preference':'reduce'});
-      const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+      const first=page.getByRole('button',{name:'Edge onboarding',exact:true,includeHidden:true});
+      await first.scrollIntoViewIfNeeded();
+      const returnY=await page.evaluate(()=>scrollY);
       await first.click();
       assert.equal(await first.getAttribute('aria-expanded'),'true');
       assert.equal(await page.locator('#journey-detail').count(),1);
+      assert.equal(await page.locator('#journey-detail').getAttribute('role'),'dialog');
+      assert.equal(await page.locator('#journey-detail').getAttribute('aria-modal'),'true');
+      assert.equal(await page.locator('#timeline #journey-detail').count(),0);
+      assert.equal(await page.locator('.jrn-timeline [data-jchapter]').count(),5);
       assert.equal(await page.locator('#journey-detail h4').evaluate(element=>element===document.activeElement),true);
       assert.equal(await page.locator('.jrn__prose strong').textContent(),'Original story');
       await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
@@ -992,46 +998,66 @@ test('inline journey expands stories, preserves media and returns from evidence 
       await page.locator('.pjx.is-open').waitFor();
       await page.keyboard.press('Escape');
       await page.locator('.pjx.is-open').waitFor({state:'hidden'});
+      await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pjx')).opacity==='0');
       assert.equal(await page.locator('#journey-detail').count(),1);
       if (width===1440) {
         await page.getByRole('button',{name:'View case study',exact:false}).click();
         await page.locator('.pj.is-open').waitFor();
         await page.locator('.pj.is-open [data-pj="close"]').click();
         await page.locator('.pj.is-open').waitFor({state:'hidden'});
+        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
         assert.equal(new URL(page.url()).pathname,'/about');
-        assert.equal(await page.locator('[data-page="about"]').isVisible(),true);
+        assert.equal(await page.locator('#top').evaluate(element=>element.inert),true);
         assert.equal(await first.getAttribute('aria-expanded'),'true');
         assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 2');
+        await page.getByRole('button',{name:'View case study',exact:false}).click();
+        await page.locator('.pj.is-open').waitFor();
+        await page.goBack();
+        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
+        assert.equal(new URL(page.url()).pathname,'/about');
+        assert.equal(await page.locator('#journey-detail').isVisible(),true);
+        assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 2');
       }
-      const layout = await page.locator('#journey-detail').evaluate(panel=>({overflow:document.documentElement.scrollWidth>innerWidth,previous:panel.previousElementSibling?.getAttribute('aria-label'),media:panel.querySelector('.jrn-gallery__stage').getBoundingClientRect().width,columns:getComputedStyle(panel.parentElement).gridTemplateColumns.split(' ').length}));
-      assert.equal(layout.overflow,false); assert.ok(layout.media>100);
-      assert.equal(layout.columns,width>1000?3:width>600?2:1);
-      assert.equal(layout.previous,width>1000?'third chapter':width>600?'second chapter':'Edge onboarding');
+      await page.locator('.jrn__scroll').evaluate(element=>element.scrollTop=0);
+      const layout = await page.locator('#journey-detail').evaluate(panel=>({overflow:document.documentElement.scrollWidth>innerWidth,rect:panel.getBoundingClientRect().toJSON(),media:panel.querySelector('.jrn-gallery__stage').getBoundingClientRect().toJSON(),timeline:panel.querySelector('.jrn-timeline').getBoundingClientRect().toJSON(),details:panel.querySelector('.jrn-detail__body').getBoundingClientRect().toJSON(),inert:document.querySelector('main').inert}));
+      assert.equal(layout.overflow,false); assert.ok(layout.media.width>100); assert.ok(layout.media.height>=200);
+      assert.equal(layout.rect.width,width); assert.equal(layout.rect.height,1000); assert.equal(layout.inert,true);
+      assert.ok(layout.timeline.bottom<=layout.media.top); assert.ok(layout.details.top>=layout.media.bottom);
+      assert.equal(await page.locator('.jrn-gallery__stage').evaluate(stage=>{const image=stage.querySelector('img'),imageBox=image.getBoundingClientRect(),stageBox=stage.getBoundingClientRect();return imageBox.height<=stageBox.height+1 && imageBox.width<=stageBox.width+1 && getComputedStyle(image).objectFit==='contain';}),true);
       await page.evaluate(theme=>document.documentElement.setAttribute('data-theme',theme),width===390?'day':'night');
-      await page.screenshot({path:join(tmpdir(),'rk-inline-journey-'+width+'.png')});
+      await page.screenshot({path:join(tmpdir(),'rk-journey-l2-'+width+'.png')});
       await page.getByRole('button',{name:'Close chapter',exact:true}).click();
       assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      assert.ok(Math.abs(await page.evaluate(()=>scrollY)-returnY)<2);
+      assert.equal(await page.locator('#top').evaluate(element=>element.inert),false);
       await page.keyboard.press('Enter');
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('#journey-detail').count(),0);
     }
     await page.getByRole('button',{name:'fourth chapter',exact:true}).click();
     await page.setViewportSize({width:1440,height:1000});
-    await page.waitForFunction(()=>document.querySelector('#journey-detail')?.previousElementSibling?.getAttribute('aria-label')==='fourth chapter');
-    await page.getByRole('button',{name:'second chapter',exact:true}).click();
+    await page.getByRole('button',{name:'Open story: second chapter',exact:true}).click();
     assert.equal(await page.locator('#journey-detail').count(),1);
     await page.locator('.jrn-gallery__stage img').evaluate(image=>image.dispatchEvent(new Event('error')));
     await page.getByRole('button',{name:'Retry',exact:true}).click();
     await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
     assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[1].images[0].src);
-    await page.getByRole('button',{name:'Early explorations',exact:true}).click();
+    await page.locator('.jrn-timeline [aria-current]').focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('.jrn-timeline [aria-current]').getAttribute('aria-label'),'Open story: third chapter');
+    await page.keyboard.press('End');
     assert.equal(await page.locator('.jrn-gallery').isVisible(),false);
     assert.equal(await page.locator('.jrn__prose').textContent(),'No-image story');
+    await page.getByRole('button',{name:'Close chapter',exact:true}).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.locator('.jrn-timeline button').first().evaluate(element=>element===document.activeElement),true);
+    await page.keyboard.press('Escape');
     assert.equal((await page.evaluate(value=>RK.presentAll(value),'wrong synthetic phrase')).ok,false);
     assert.equal((await page.evaluate(value=>RK.presentAll(value),recovery)).ok,true);
     await page.getByRole('button',{name:'Presentation-only story',exact:true}).click();
     assert.equal(await page.locator('.jrn__prose').textContent(),'Presenter detail retained');
     assert.deepEqual(await page.evaluate(()=>({path:RK.data.path,journey:RK.data.journey})),{path:original.path,journey:original.journey});
+    await page.getByRole('button',{name:'Close chapter',exact:true}).click();
     await page.locator('.present-banner .sv-banner__exit').click();
     await page.waitForFunction(()=>!!window.RK?.renderJourney && typeof window.RK.isOwnerPresentation==='function' && !window.RK.isOwnerPresentation());
     assert.equal(await page.getByRole('button',{name:'Presentation-only story',exact:true}).count(),0);
@@ -1073,7 +1099,7 @@ test('Journey Studio saves placement and visibility in one editor without changi
     const storyTitle=page.locator('[data-jfield="title"][data-jc="0"][data-je="4"]');
     assert.equal(await storyTitle.evaluate(input=>document.activeElement===input),true);
     const editingPreview=page.frames().find(frame=>frame.url().includes('preview'));
-    await editingPreview.waitForFunction(()=>document.querySelector('#journey-detail')?.closest('.tl')?.querySelector('h3')?.textContent.includes('Automotive'));
+    await editingPreview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Presentation-only story');
     await storyTitle.fill('Configured story');
     await page.locator('[data-jfield="period"][data-jc="0"][data-je="4"]').fill('2015 - 2018');
     await page.locator('.adm__l2 [data-list="path"][data-field="role"][data-index="1"]').fill('Automotive experience');
