@@ -17,6 +17,38 @@ import { journeyRows } from "./journey-core.mjs";
   const media = story => (story.entry.images || []).filter(image => image?.src && mediaUrl(image.src));
   const video = image => image.kind === "video" || /^data:video\//i.test(image.src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(image.src);
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const ringPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  let ringFrame = 0, ringLast = 0, ringVisible = false;
+  let ringAngle = 0, ringSpeed = 12, ringStartSpeed = 12, ringTargetSpeed = 12, ringElapsed = 0, ringDuration = 0;
+
+  function animateRing(now) {
+    const delta = ringLast ? Math.min(50, now - ringLast) : 0;
+    ringLast = now;
+    if (ringElapsed >= ringDuration) {
+      ringStartSpeed = ringSpeed;
+      ringTargetSpeed = Math.random() < .16 ? 1.5 : 10 + Math.random() * 66;
+      ringDuration = 1400 + Math.random() * 2600;
+      ringElapsed = 0;
+    }
+    ringElapsed += delta;
+    const progress = Math.min(1, ringElapsed / ringDuration);
+    const blend = progress * progress * (3 - 2 * progress);
+    ringSpeed = ringStartSpeed + (ringTargetSpeed - ringStartSpeed) * blend;
+    ringAngle = (ringAngle + ringSpeed * delta / 1000) % 360;
+    timeline()?.style.setProperty('--jrn-ring-angle', ringAngle.toFixed(3) + 'deg');
+    ringFrame = requestAnimationFrame(animateRing);
+  }
+
+  function syncRingMotion() {
+    const host = timeline();
+    const enabled = ringVisible && !document.hidden && !ringPreference.matches && !activeKey &&
+      !/^\/work\//.test(location.pathname) && host?.offsetParent && host.querySelector('.is-case-unseen');
+    if (!enabled) {
+      cancelAnimationFrame(ringFrame);
+      ringFrame = 0;
+      ringLast = 0;
+    } else if (!ringFrame) ringFrame = requestAnimationFrame(animateRing);
+  }
 
   function readSeenCases() {
     try {
@@ -34,6 +66,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (unseen) trigger.setAttribute('aria-description', 'Linked case study not yet viewed');
       else trigger.removeAttribute('aria-description');
     });
+    syncRingMotion();
   }
 
   function rememberOpenCase() {
@@ -167,6 +200,7 @@ import { journeyRows } from "./journey-core.mjs";
         (row.stories.length > 1 ? '<button type="button" class="jrn-control jrn-stories__prev" data-jpeek-step="-1" aria-label="Previous stories" title="Previous stories">&#8249;</button><button type="button" class="jrn-control jrn-stories__next" data-jpeek-step="1" aria-label="Next stories" title="Next stories">&#8250;</button>' : '') + '</div></div>' : '') + '</div></li>').join('');
     if (activeStory()) expand(activeKey, false);
     else close(false);
+    syncRingMotion();
     requestAnimationFrame(rememberOpenCase);
   }
 
@@ -203,6 +237,7 @@ import { journeyRows } from "./journey-core.mjs";
     mediaIndex = 0;
     if (saved) window.scrollTo(saved.x, saved.y);
     if (focus) { trigger?.focus({ preventScroll: true }); closePeek(); }
+    syncRingMotion();
   }
 
   function expand(key, focus = true) {
@@ -210,6 +245,7 @@ import { journeyRows } from "./journey-core.mjs";
     if (key !== activeKey) mediaIndex = 0;
     removeDetail();
     activeKey = key;
+    syncRingMotion();
     const story = activeStory(), trigger = triggerFor(key);
     if (!story || !trigger) { activeKey = null; return; }
     if (!openingKey) openingKey = key;
@@ -365,6 +401,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (new URLSearchParams(location.search).has("journey")) open({ silent: true });
     });
     document.addEventListener("rk:route", () => {
+      syncRingMotion();
       requestAnimationFrame(rememberOpenCase);
       if (!caseReturn || document.querySelector(".pj.is-open") || /^\/work\//.test(location.pathname)) return;
       history.replaceState({ rkPage: "about" }, "", caseReturn.path);
@@ -380,6 +417,12 @@ import { journeyRows } from "./journey-core.mjs";
       seenCases = readSeenCases();
       refreshSeenCases();
     });
+    document.addEventListener('visibilitychange', syncRingMotion);
+    ringPreference.addEventListener('change', syncRingMotion);
+    if (timeline()) new IntersectionObserver(entries => {
+      ringVisible = entries.some(entry => entry.isIntersecting);
+      syncRingMotion();
+    }).observe(timeline());
     if (window.__siteRendered) render(window.RK?.data);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

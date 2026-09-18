@@ -1281,11 +1281,13 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),2);
     await page.evaluate(()=>{RK.openProject=window.__journeyOpen;delete window.__journeyOpen;});
     await page.mouse.move(0,0);
+    await page.evaluate(()=>{window.__nativeRingRandom=Math.random;const values=[.5,.2,.3,.5,.9,.7,.1,.4];let index=0;Math.random=()=>values[index++%values.length];});
     await page.emulateMedia({reducedMotion:'no-preference'});
     await first.scrollIntoViewIfNeeded();
     await page.evaluate(()=>document.activeElement.blur());
+    await page.waitForFunction(()=>!!document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
     const ringStyle=await ring.evaluate(element=>{const style=getComputedStyle(element,'::before');return {animation:style.animationName,mask:style.maskComposite,angle:parseFloat(style.getPropertyValue('--jrn-ring-angle'))};});
-    assert.equal(ringStyle.animation,'journey-ring');
+    assert.equal(ringStyle.animation,'none');
     assert.ok(ringStyle.mask.split(',').every(value=>value.trim()==='exclude'));
     const rect=await ring.boundingBox();
     const clip={x:rect.x-6,y:rect.y-6,width:rect.width+12,height:rect.height+12};
@@ -1293,6 +1295,21 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await page.waitForFunction(angle=>{const element=document.querySelector('.jrn-tile.is-case-unseen .jrn-tile__preview');const current=parseFloat(getComputedStyle(element,'::before').getPropertyValue('--jrn-ring-angle'));return (current-angle+360)%360>30;},ringStyle.angle);
     const afterMotion=await page.screenshot({clip,path:join(tmpdir(),'rk-journey-gradient-moving.png')});
     assert.notDeepEqual(afterMotion,beforeMotion,'Gradient must visibly move without rotating the card');
+    assert.deepEqual(await ring.boundingBox(),rect);
+    const speeds=await page.evaluate(()=>new Promise(resolve=>{
+      const host=document.querySelector('#timeline'),started=performance.now(),values=[];
+      let previous=started,angle=parseFloat(host.style.getPropertyValue('--jrn-ring-angle'));
+      function sample(now){
+        const current=parseFloat(host.style.getPropertyValue('--jrn-ring-angle')),delta=now-previous;
+        if(delta>0)values.push((current-angle+360)%360/Math.min(50,delta)*1000);
+        previous=now;angle=current;
+        if(now-started<7400)requestAnimationFrame(sample);else resolve(values);
+      }
+      requestAnimationFrame(sample);
+    }));
+    assert.ok(Math.max(...speeds)-Math.min(...speeds)>20,'Rotation must ease between noticeably different speeds');
+    assert.ok(speeds.every(speed=>speed>=0 && speed<80),'Rotation stays clockwise and bounded without jumps');
+    await page.evaluate(()=>{Math.random=window.__nativeRingRandom;delete window.__nativeRingRandom;});
     await page.evaluate(()=>window.scrollTo({top:document.querySelector('[data-jstory]').getBoundingClientRect().top+scrollY-400,behavior:'instant'}));
     await page.waitForFunction(()=>!!document.querySelector('.jrn-tile').style.getPropertyValue('--jrn-par-y'));
     const drift=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y'));
@@ -1301,10 +1318,22 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     assert.notEqual(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
     await first.hover();
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    assert.equal(await link.evaluate(element=>getComputedStyle(element,'::before').getPropertyValue('--jrn-ring-angle')===document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),true);
     await page.keyboard.press('Escape');
     await page.emulateMedia({reducedMotion:'reduce'});
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
     assert.equal(await ring.evaluate(element=>getComputedStyle(element,'::before').animationName),'none');
+    const frozen=await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.equal(await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),frozen);
+    await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+    await page.waitForFunction(()=>document.querySelector('#timeline').getBoundingClientRect().top>innerHeight);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    const offscreen=await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.equal(await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),offscreen);
+    await page.emulateMedia({reducedMotion:'reduce'});
     await first.click();
     assert.equal(await page.evaluate(()=>localStorage.getItem('rk:journey:seen-cases:v1')),null);
     await page.getByRole('button',{name:'View case study',exact:false}).click();
