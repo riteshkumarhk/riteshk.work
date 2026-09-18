@@ -1066,6 +1066,95 @@ test('Journey L2 preserves About tiles, original media and return position acros
   } finally {await browser.close();}
 });
 
+test('Journey editor tabs preserve the draft and support keyboard navigation', {skip:!baseURL,timeout:30000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    await journeyFixture(page);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    await page.locator('[data-act="journey-edit"]').click();
+    const before=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const tabs=page.getByRole('tablist',{name:'Journey editor',exact:true});
+    assert.deepEqual(await tabs.getByRole('tab').allTextContents(),['Journey','Stories']);
+    assert.equal(await page.locator('[data-journey-section="journey"] .jedit__body:visible').count(),0);
+    await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
+    assert.equal(await page.locator('[data-journey-section="journey"] .jedit__body:visible').count(),1);
+    const preview=page.frames().find(frame=>frame.url().includes('preview'));
+    await preview.locator('#timeline').waitFor();
+    assert.equal(await preview.locator('#journey-detail').count(),0);
+    assert.equal(await page.getByRole('tabpanel',{name:'Journey',exact:true}).isVisible(),true);
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
+    assert.equal(await page.getByRole('tabpanel',{name:'Stories',exact:true}).isVisible(),true);
+    assert.equal(await page.locator('[data-journey-section="journey"]').isVisible(),false);
+    await page.locator('.jchap__head[data-jc="0"] .study__block-chev').click();
+    assert.equal(await page.locator('.jentry .jedit__body:visible').count(),0);
+    await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="0"]').first().click();
+    assert.equal(await page.locator('.jentry .jedit__body:visible').count(),1);
+    await preview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Edge onboarding');
+    await page.locator('[data-jpreview="about"]').click();
+    await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
+    await page.locator('[data-jpreview="story"]').click();
+    await preview.locator('#journey-detail').waitFor();
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).focus();
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(()=>document.querySelector('[data-journey-tab="journey"]')?.getAttribute('aria-selected')==='true');
+    await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft()),before);
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
+    assert.equal(await page.locator('.jentry .jedit__body:visible').count(),1);
+    await page.locator('[data-act="jentry-add"][data-jc="0"]').click();
+    const newTitle=page.locator('[data-jfield="title"][data-jc="0"][data-je="5"]');
+    await newTitle.fill('Unassigned preview');
+    await preview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Unassigned preview');
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[5].pathId),'unassigned');
+    await page.locator('[data-jpreview="about"]').click();
+    await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
+    assert.equal(await preview.getByRole('button',{name:'Unassigned preview',exact:true}).count(),0);
+    const storyHead=index=>page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="'+index+'"]').first().locator('..');
+    await storyHead(0).getByLabel('Story actions',{exact:true}).click();
+    assert.equal(await storyHead(0).getByRole('button',{name:'Move up',exact:true}).isDisabled(),true);
+    await storyHead(0).getByRole('button',{name:'Duplicate',exact:true}).click();
+    let duplicate=await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[1]);
+    assert.equal(duplicate.pathId,'unassigned');
+    assert.equal(duplicate.workId,'journey-case');
+    assert.deepEqual(duplicate.images,before.journey.chapters[0].entries[0].images);
+    assert.notEqual(duplicate.id,before.journey.chapters[0].entries[0].id);
+    await storyHead(1).getByLabel('Story actions',{exact:true}).click();
+    await storyHead(1).getByRole('button',{name:'Move down',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[2].id),duplicate.id);
+    await storyHead(2).getByLabel('Story actions',{exact:true}).click();
+    await storyHead(2).getByRole('button',{name:'Rename',exact:true}).click();
+    assert.equal(await page.locator('[data-jfield="title"][data-jc="0"][data-je="2"]').evaluate(input=>document.activeElement===input),true);
+    await preview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Edge onboarding (copy)');
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="2"]').first().scrollIntoViewIfNeeded();
+      assert.equal(await page.locator('[data-l2tabs]').evaluate(element=>element.scrollWidth<=element.clientWidth+1),true);
+      assert.equal(await storyHead(2).evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth;}),true);
+      assert.equal(await storyHead(2).locator('.jedit__select').evaluate(element=>element.getBoundingClientRect().width>=120),true);
+      await storyHead(2).getByLabel('Story actions',{exact:true}).click();
+      await storyHead(2).locator('[popover]').waitFor({state:'visible'});
+      assert.equal(await storyHead(2).locator('[popover]').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth && bounds.bottom<=innerHeight;}),true);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-focused-'+width+'.png')});
+      await page.keyboard.press('Escape');
+    }
+    const beforeCancel=await page.evaluate(()=>window.__RKStudio.getDraft());
+    await storyHead(2).getByLabel('Story actions',{exact:true}).click();
+    await storyHead(2).getByRole('button',{name:'Remove',exact:true}).click();
+    await page.locator('.pass').getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft()),beforeCancel);
+    await storyHead(2).getByLabel('Story actions',{exact:true}).click();
+    await storyHead(2).getByRole('button',{name:'Remove',exact:true}).click();
+    await page.locator('.pass').getByRole('button',{name:'Remove story',exact:true}).click();
+    assert.equal(await page.evaluate(id=>window.__RKStudio.getDraft().journey.chapters[0].entries.some(entry=>entry.id===id),duplicate.id),false);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[0]),before.journey.chapters[0].entries[0]);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work),before.work);
+  } finally {await browser.close();}
+});
+
 test('Journey Studio picks configured stories and preserves case links through edits and reload', {skip:!baseURL,timeout:60000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -1080,6 +1169,7 @@ test('Journey Studio picks configured stories and preserves case links through e
     assert.deepEqual(await page.locator('[data-journey-section] > .l2grp__head').allTextContents(),['Journey','Stories']);
     assert.equal(await page.locator('.jmap,[data-jsel="pathId"]').count(),0);
     assert.equal(await page.locator('.adm__l2 [data-list="path"][data-field="role"]').count(),2);
+    await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
     const add=page.locator('[data-act="jstories-add"][data-index="1"]');
     const dialog=page.getByRole('dialog',{name:'Add stories',exact:true});
     const before=await page.evaluate(()=>window.__RKStudio.getDraft());
@@ -1130,8 +1220,11 @@ test('Journey Studio picks configured stories and preserves case links through e
     await editingPreview.locator('.jrn-case').waitFor();
     await storyTitle.fill('Configured story');
     await page.locator('[data-jfield="period"][data-jc="0"][data-je="0"]').fill('2015 - 2018');
+    await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="4"]').first().click();
     await page.locator('[data-jsel="visibility"][data-jc="0"][data-je="4"]').selectOption('public');
+    await page.getByRole('tab',{name:'Journey',exact:true}).click();
     await page.locator('.adm__l2 [data-list="path"][data-field="role"][data-index="1"]').fill('Automotive experience');
+    await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().locator('..').getByLabel('Role actions',{exact:true}).click();
     await page.locator('.adm__l2 [data-act="up"][data-list="path"][data-index="1"]').click();
     await page.waitForFunction(()=>window.__RKStudio.getDraft().path[0].role.includes('Automotive'));
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft')||'null')?.journey?.chapters?.[0]?.entries?.[4]?.visibility==='public');
@@ -1147,6 +1240,7 @@ test('Journey Studio picks configured stories and preserves case links through e
     assert.deepEqual(restored.journey.chapters[0].entries[0].images,original.journey.chapters[0].entries[0].images);
     assert.deepEqual(restored.work,original.work);
     await open();
+    await page.locator('[data-act="jrole-toggle"][data-index="0"]').first().click();
     const preview=page.frames().find(frame=>frame.url().includes('preview'));
     assert.ok(preview);
     await preview.locator('[data-jstory]').first().waitFor();
@@ -1155,6 +1249,7 @@ test('Journey Studio picks configured stories and preserves case links through e
     await page.locator('[data-act="jentry-edit"][data-jc="0"][data-je="0"]').click();
     await preview.locator('.jrn-case').click();
     await preview.getByText('Linked case content',{exact:true}).waitFor();
+    await page.getByRole('tab',{name:'Journey',exact:true}).click();
     for(const width of [1440,390]) {
       await page.setViewportSize({width,height:1000});
       const trigger=page.locator('[data-act="jstories-add"][data-index="0"]');
@@ -1169,10 +1264,12 @@ test('Journey Studio picks configured stories and preserves case links through e
       assert.equal(await trigger.evaluate(control=>document.activeElement===control),true);
       await page.screenshot({path:join(tmpdir(),'rk-journey-studio-'+width+'.png')});
     }
+    await page.getByRole('tab',{name:'Stories',exact:true}).click();
     await page.locator('[data-act="jentry-add"][data-jc="0"]').click();
     await page.locator('[data-jfield="title"][data-jc="0"][data-je="5"]').fill('New library story');
     await page.locator('[data-jsel="workId"][data-jc="0"][data-je="5"]').selectOption('journey-case');
     assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[5].pathId),'unassigned');
+    await page.getByRole('tab',{name:'Journey',exact:true}).click();
     await page.locator('[data-act="jstories-add"][data-index="0"]').click();
     await dialog.getByRole('textbox',{name:'Search stories'}).fill('New library story');
     assert.equal(await dialog.locator('[data-jstory-option]:not([hidden])').count(),1);

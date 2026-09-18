@@ -261,6 +261,11 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   var slideNotesOpen = false; // Slideshow: the speaker-notes panel is toggled from the insert bar
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
+  let journeyTab = "journey";
+  let journeyRole = null;
+  let journeyStory = null;
+  let journeyPreviewMode = "about";
+  const journeyScroll = { journey: 0, stories: 0 };
   let openJC = -1; // which journey chapter is expanded in the accordion
   let jrnPreviewTimer = 0;
   let musResumeOnExit = false; // was music playing when admin opened? → resume on exit
@@ -6729,8 +6734,11 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     var tb = root && root.querySelector("[data-l2tabs]");
     if (tb) {
       const focused = tb.contains(document.activeElement);
-      tb.innerHTML = show ? l2TabsHtml() : ""; tb.hidden = !show;
-      if (show) requestAnimationFrame(() => {
+      tb.innerHTML = journeyOpen ? ["journey", "stories"].map(function (tab) {
+        return '<button type="button" role="tab" aria-selected="' + (journeyTab === tab) + '" tabindex="' + (journeyTab === tab ? "0" : "-1") + '" class="l2tab' + (journeyTab === tab ? " is-on" : "") + '" data-act="journey-tab" data-journey-tab="' + tab + '">' + (tab === "journey" ? "Journey" : "Stories") + '</button>';
+      }).join("") : show ? l2TabsHtml() : ""; tb.hidden = !show && !journeyOpen;
+      tb.setAttribute("aria-label", journeyOpen ? "Journey editor" : "Project editor");
+      if (show || journeyOpen) requestAnimationFrame(() => {
         const selected = tb.querySelector('[aria-selected="true"]');
         if (!selected || tb.hidden) return;
         const bounds = tb.getBoundingClientRect(), active = selected.getBoundingClientRect();
@@ -9800,7 +9808,11 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       const list = data.path || [];
       let html = (journeyOpen ? "" : secHead("Journey", "Your experience timeline.")) + addBar("path", "Add experience");
       list.forEach((p, i) => {
-        html += '<div class="card">' + cardHead(p.role || "Role " + (i + 1), "path", i, list.length) +
+        var expanded = journeyRole === p;
+        html += '<div class="card' + (journeyOpen ? ' study__block jedit' + (expanded ? ' is-open' : '') : '') + '">' + (journeyOpen ?
+          '<div class="study__block-head"><span class="sortgrip study__block-grip" data-grip data-sortkey="list:path" title="Drag to reorder">' + GRIP_SVG + '</span>' +
+          '<button type="button" class="jedit__select" data-act="jrole-toggle" data-index="' + i + '" aria-expanded="' + expanded + '"><strong>' + escHtml(p.role || 'Untitled role') + '</strong><small>' + escHtml([p.org, p.years].filter(Boolean).join(' / ')) + '</small></button>' +
+          journeyRowMenu('role', i, null, list.length) + '<button type="button" class="iconbtn" data-act="jrole-toggle" data-index="' + i + '" aria-label="Edit ' + escAttr(p.role || 'role') + '" aria-expanded="' + expanded + '">' + IC.chevD + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' : cardHead(p.role || "Role " + (i + 1), "path", i, list.length)) +
           '<div class="af__row">' + itemField("path", i, "years", "Years") +
           '<div class="af"><label class="af__label">Present</label><label class="chk" style="padding-top:.4rem"><input type="checkbox" data-act="present" data-index="' + i + '"' + (p.present ? " checked" : "") + " /> I work here now</label></div>" +
           "</div>" +
@@ -9808,6 +9820,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
           itemField("path", i, "org", "Organisation") +
           itemField("path", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           (journeyOpen ? journeyRoleStories(i) : "") +
+          (journeyOpen ? '</div>' : '') +
           "</div>";
       });
       return html;
@@ -11119,8 +11132,24 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   function previewJourney(selection) {
     var w = frameWin();
     if (!(w && w.RK && w.RK.openJourney)) return;
-    try { w.RK.data = resolvePreviewData(data); } catch (e) {}
-    try { w.RK.openJourney(Object.assign({ preview: true, silent: true }, selection)); } catch (e) {}
+    try {
+      var previewData = resolvePreviewData(data);
+      var story = journeyStories().find(function (item) { return item.entry === journeyStory || (journeyStory?.id && item.entry.id === journeyStory.id); });
+      var selected = journeyPreviewMode === "story" && story;
+      if (selected && story.entry.pathId === "unassigned") {
+        previewData = Object.assign({}, previewData, { journey: Object.assign({}, previewData.journey, { chapters: previewData.journey.chapters.map(function (chapter, chapterIndex) {
+          return chapterIndex !== story.chapterIndex ? chapter : Object.assign({}, chapter, { entries: chapter.entries.map(function (entry, entryIndex) { return entryIndex === story.entryIndex ? Object.assign({}, entry, { pathId: "separate" }) : entry; }) });
+        }) }) });
+      }
+      if (w.document.querySelector('.pj.is-open')) w.RK.closeProject?.({ push: false });
+      if (!selected) w.RK.closeJourney?.();
+      w.RK.data = previewData;
+      w.RK.openJourney(Object.assign({ preview: true, silent: true }, selected ? { chapterIndex: story.chapterIndex, entryIndex: story.entryIndex } : {}, selection?.scroll ? { scroll: true } : {}));
+      if (!selected && selection?.scroll && journeyRole) {
+        var roleIndex = (data.path || []).indexOf(journeyRole);
+        w.document.querySelectorAll('#timeline > .tl')[roleIndex]?.scrollIntoView({ behavior: "instant", block: "center" });
+      }
+    } catch (e) {}
   }
   function refreshJourneyPreview(selection) {
     if (!journeyOpen) return;
@@ -11134,6 +11163,8 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   function openJourneyEditor() {
     journeyData();
     journeyOpen = true;
+    journeyTab = "journey";
+    journeyPreviewMode = "about";
     openStudy = -1;
     if (l2title) l2title.textContent = "Journey";
     setL2BackLabel("Back to About");
@@ -11189,6 +11220,16 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     return journeyData().chapters.flatMap(function (chapter, chapterIndex) {
       return (chapter.entries || []).map(function (entry, entryIndex) { return { chapter: chapter, chapterIndex: chapterIndex, entry: entry, entryIndex: entryIndex }; });
     });
+  }
+  function journeyRowMenu(kind, index, chapterIndex, length) {
+    var identity = kind === 'role' ? ' data-list="path" data-index="' + index + '"' : ' data-jc="' + chapterIndex + '" data-je="' + index + '"';
+    var actions = [['rename', 'Rename', IC.edit], ['up', 'Move up', IC.up, index === 0], ['down', 'Move down', IC.down, index === length - 1]];
+    if (kind === 'story') actions.push(['duplicate', 'Duplicate', IC.dup]);
+    actions.push(['remove', 'Remove', IC.trash]);
+    return '<details class="study__actions"><summary class="iconbtn" aria-label="' + (kind === 'role' ? 'Role' : 'Story') + ' actions" title="' + (kind === 'role' ? 'Role' : 'Story') + ' actions" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group">' + actions.map(function (action) {
+      var act = kind === 'role' && action[0] !== 'rename' ? action[0] : 'j' + kind + '-' + action[0];
+      return '<button type="button" data-act="' + act + '"' + identity + (action[3] ? ' disabled' : '') + '>' + action[2] + '<span>' + action[1] + '</span></button>';
+    }).join('') + '</div></details>';
   }
   function journeyRoleStories(roleIndex) {
     var stories = journeyStories().filter(function (story) { return journeyRoleIndex(data.path || [], story.chapter, story.entry) === roleIndex; });
@@ -11264,12 +11305,22 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '">Replace\u2026</button>' + mediaSizeTag(src) + "</div>" +
       '<input type="text" data-jimg="caption" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr((im && im.caption) || "") + '" placeholder="Caption (optional)" /></div>';
   }
+  function journeyStorySummary(c, entry) {
+    var roleIndex = journeyRoleIndex(data.path || [], journeyData().chapters[c], entry);
+    var roleLabel = roleIndex >= 0 ? data.path[roleIndex].role || data.path[roleIndex].org : roleIndex === -2 ? 'Unassigned' : 'Separate timeline';
+    var linkedCase = (data.work || []).find(function (work) { return work.id === entry.workId; });
+    return [entry.period, entry.visibility === 'public' ? 'Public' : 'Present mode', roleLabel, linkedCase ? 'Case: ' + (linkedCase.title || linkedCase.client || linkedCase.id) : entry.workId ? 'Case unavailable' : ''].filter(Boolean).join(' / ');
+  }
   function journeyEntryHtml(c, entry, e) {
     var imgRows = (entry.images || []).map(function (im, k) { return journeyImageRow(c, e, k, im); }).join("");
-    return '<div class="card jentry">' +
-      '<div class="card__bar"><span class="sortgrip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
-      '<span class="card__idx">' + escHtml(entry.title || entry.period || "Entry " + (e + 1)) + '</span>' +
-      '<div class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jentry-del" data-jc="' + c + '" data-je="' + e + '" title="Remove entry">' + IC.trash + '</button></div></div>' +
+    var expanded = journeyStory === entry;
+    var summary = journeyStorySummary(c, entry);
+    var cover = (entry.images || []).find(function (image) { return image.src; });
+    var thumbnail = cover ? (/^data:video\/|\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(cover.src) || cover.kind === 'video' ? '<span class="jedit__thumb" aria-hidden="true">' + IC.play + '</span>' : '<img class="jedit__thumb" src="' + escAttr(previewSrc(cover.src)) + '" alt="" loading="lazy" />') : '';
+    return '<div class="study__block jentry jedit' + (expanded ? ' is-open' : '') + '">' +
+      '<div class="study__block-head"><span class="sortgrip study__block-grip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' + thumbnail +
+      '<button type="button" class="jedit__select" data-act="jstory-toggle" data-jc="' + c + '" data-je="' + e + '" aria-expanded="' + expanded + '"><strong>' + escHtml(entry.title || 'Untitled story') + '</strong><small>' + escHtml(summary) + '</small></button>' +
+      journeyRowMenu('story', e, c, journeyData().chapters[c].entries.length) + '<button type="button" class="iconbtn" data-act="jstory-toggle" data-jc="' + c + '" data-je="' + e + '" aria-label="Edit ' + escAttr(entry.title || 'story') + '" aria-expanded="' + expanded + '">' + IC.chevD + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Period</label><input type="text" data-jfield="period" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.period || "") + '" placeholder="e.g. 2022 \u2014 2023" /></div>' +
       '<div class="af"><label class="af__label">Title</label><input type="text" data-jfield="title" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.title || "") + '" placeholder="What you worked on" /></div>' +
@@ -11281,7 +11332,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       '<div class="af"><label class="af__label">Link to a case study</label><select aria-label="Link to a case study" data-jsel="workId" data-jc="' + c + '" data-je="' + e + '">' + journeyWorkOptions(entry.workId) + "</select></div>" +
       "</div>" +
       '<div class="rep"><div class="rep__head"><span>Images</span><button class="btn btn--add rep__add" data-act="jimg-add" data-jc="' + c + '" data-je="' + e + '">+ Add images\u2026</button></div>' +
-      (imgRows || '<div class="rep__empty">No images yet.</div>') + "</div></div>";
+      (imgRows || '<div class="rep__empty">No images yet.</div>') + "</div></div></div>";
   }
   function journeyChapterHtml(chap, c) {
     var open = openJC === c;
@@ -11303,10 +11354,14 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       '<button class="btn btn--add" data-act="jentry-add" data-jc="' + c + '">+ Add story</button></div></div>';
   }
   function journeyEditor() {
+    journeyRole = (data.path || []).find(function (role) { return role === journeyRole || (journeyRole?.id && role.id === journeyRole.id); }) || null;
+    journeyStory = journeyStories().find(function (story) { return story.entry === journeyStory || (journeyStory?.id && story.entry.id === journeyStory.id); })?.entry || null;
     var j = journeyData();
     var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
-    return '<div class="l2grp" data-journey-section="journey"><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
-      '<div class="l2grp" data-journey-section="stories"><div class="l2grp__head">Stories</div>' +
+    return '<div class="jedit__preview-switch" role="group" aria-label="Preview content"><span>Preview</span>' + ['about', 'story'].map(function (mode) {
+      return '<button type="button" class="l2tab' + (journeyPreviewMode === mode ? ' is-on' : '') + '" data-act="journey-preview" data-jpreview="' + mode + '" aria-pressed="' + (journeyPreviewMode === mode) + '"' + (mode === 'story' && !journeyStory ? ' disabled' : '') + '>' + (mode === 'about' ? 'About' : 'Story') + '</button>';
+    }).join('') + '</div><div class="l2grp" data-journey-section="journey" role="tabpanel" aria-label="Journey"' + (journeyTab === "journey" ? '' : ' hidden') + '><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
+      '<div class="l2grp" data-journey-section="stories" role="tabpanel" aria-label="Stories"' + (journeyTab === "stories" ? '' : ' hidden') + '><div class="l2grp__head">Stories</div>' +
       (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
       '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
       '<div class="l2grp__foot"><button class="btn btn--primary" data-act="journey-close">Done</button></div>';
@@ -11319,8 +11374,15 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (t.dataset.jname !== undefined) { chap.name = t.value; saveDraft(); refreshJourneyPreview(); return; }
     var ent = chap.entries && chap.entries[+t.dataset.je];
     if (!ent) return;
+    if (t.dataset.jfield !== undefined || t.dataset.jsel !== undefined) {
+      ent[t.dataset.jfield ?? t.dataset.jsel] = t.value;
+      var rowSummary = t.closest('.jentry')?.querySelector('.jedit__select small');
+      if (rowSummary) rowSummary.textContent = journeyStorySummary(+t.dataset.jc, ent);
+    }
     if (t.dataset.jfield !== undefined) {
       ent[t.dataset.jfield] = t.value; saveDraft(); refreshJourneyPreview();
+      var rowTitle = t.closest('.jentry')?.querySelector('.jedit__select strong');
+      if (rowTitle) rowTitle.textContent = ent.title || 'Untitled story';
       var summaryTitle = l2body.querySelector('[data-jmap-title][data-jc="' + t.dataset.jc + '"][data-je="' + t.dataset.je + '"]');
       if (summaryTitle) summaryTitle.textContent = ent.title || ent.period || "Untitled story";
       return;
@@ -11798,6 +11860,13 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       }
       data[t.dataset.list][+t.dataset.index][t.dataset.field] = v;
       apply();
+      if (journeyOpen && t.dataset.list === "path") {
+        var roleTitle = t.closest('.jedit')?.querySelector('.jedit__select strong');
+        if (roleTitle) roleTitle.textContent = data.path[+t.dataset.index].role || 'Untitled role';
+        var roleSummary = t.closest('.jedit')?.querySelector('.jedit__select small');
+        if (roleSummary) roleSummary.textContent = [data.path[+t.dataset.index].org, data.path[+t.dataset.index].years].filter(Boolean).join(' / ');
+        refreshJourneyPreview();
+      }
     }
   }
 
@@ -12504,6 +12573,58 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
+    if (act === "jrole-toggle" || act === "jrole-rename") {
+      var selectedRole = data.path[+b.dataset.index];
+      journeyRole = act === "jrole-toggle" && journeyRole === selectedRole ? null : selectedRole;
+      journeyPreviewMode = "about";
+      renderJourneyEditor();
+      refreshJourneyPreview({ scroll: true });
+      l2body.querySelector(act === "jrole-rename" ? '[data-list="path"][data-field="role"][data-index="' + b.dataset.index + '"]' : '[data-act="jrole-toggle"][data-index="' + b.dataset.index + '"]')?.focus({ preventScroll: true });
+      return;
+    }
+    if (act === "jstory-toggle" || act === "jstory-rename") {
+      var selectedStory = journeyData().chapters[+b.dataset.jc]?.entries?.[+b.dataset.je];
+      journeyStory = act === "jstory-toggle" && journeyStory === selectedStory ? null : selectedStory;
+      journeyPreviewMode = journeyStory ? "story" : "about";
+      renderJourneyEditor();
+      l2body.querySelector((act === "jstory-rename" ? '[data-jfield="title"]' : '[data-act="jstory-toggle"]') + '[data-jc="' + b.dataset.jc + '"][data-je="' + b.dataset.je + '"]')?.focus({ preventScroll: true });
+      return;
+    }
+    if (["jstory-up", "jstory-down", "jstory-duplicate", "jstory-remove"].includes(act)) {
+      var storyChapter = journeyData().chapters[+b.dataset.jc], selectedIndex = +b.dataset.je;
+      var sourceStory = storyChapter?.entries?.[selectedIndex];
+      if (!sourceStory) return;
+      if (act === "jstory-remove") { confirmModal({ title: "Remove this story?", sub: "The story will also be removed from Journey. Its linked case study is unchanged.", cta: "Remove story" }).then(function (ok) {
+        var currentIndex = storyChapter.entries.indexOf(sourceStory);
+        if (!ok || currentIndex < 0) return;
+        storyChapter.entries.splice(currentIndex, 1); if (journeyStory === sourceStory) journeyStory = null;
+        saveDraft(true); renderJourneyEditor();
+      }); return; }
+      if (act === "jstory-duplicate") {
+        var copy = JSON.parse(JSON.stringify(sourceStory)); copy.id = "je-" + crypto.randomUUID(); copy.pathId = "unassigned"; copy.title = (copy.title || "Story") + " (copy)";
+        storyChapter.entries.splice(selectedIndex + 1, 0, copy); journeyStory = copy;
+      } else {
+        var nextIndex = selectedIndex + (act === "jstory-up" ? -1 : 1);
+        if (nextIndex < 0 || nextIndex >= storyChapter.entries.length) return;
+        storyChapter.entries.splice(selectedIndex, 1); storyChapter.entries.splice(nextIndex, 0, sourceStory);
+      }
+      saveDraft(true); renderJourneyEditor(); return;
+    }
+    if (act === "journey-tab") {
+      var journeyEditorPane = root.querySelector('.adm__editor');
+      journeyScroll[journeyTab] = journeyEditorPane.scrollTop;
+      journeyTab = b.dataset.journeyTab === "stories" ? "stories" : "journey";
+      journeyPreviewMode = journeyTab === "stories" && journeyStory ? "story" : "about";
+      renderJourneyEditor();
+      journeyEditorPane.scrollTop = journeyScroll[journeyTab];
+      return;
+    }
+    if (act === "journey-preview") {
+      journeyPreviewMode = b.dataset.jpreview === "story" && journeyStory ? "story" : "about";
+      l2body.querySelectorAll('[data-jpreview]').forEach(function (button) { var active = button.dataset.jpreview === journeyPreviewMode; button.classList.toggle('is-on', active); button.setAttribute('aria-pressed', String(active)); });
+      refreshJourneyPreview();
+      return;
+    }
     if (act === "jstories-add") { journeyStoryPicker(+b.dataset.index, b); return; }
     if (act === "jstory-unlink") {
       var unlinked = journeyData().chapters[+b.dataset.jc]?.entries?.[+b.dataset.je];
@@ -12514,8 +12635,12 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       return;
     }
     if (act === "jentry-edit") {
+      journeyScroll[journeyTab] = root.querySelector('.adm__editor').scrollTop;
+      journeyTab = "stories";
+      journeyPreviewMode = "story";
       openJC = +b.dataset.jc;
       var storyIndex = b.dataset.je;
+      journeyStory = journeyData().chapters[openJC]?.entries?.[+storyIndex] || null;
       renderJourneyEditor();
       l2body.querySelector('[data-jfield="title"][data-jc="' + openJC + '"][data-je="' + storyIndex + '"]')?.focus();
       refreshJourneyPreview({ chapterIndex: openJC, entryIndex: +storyIndex, scroll: true });
@@ -12539,7 +12664,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       });
       return;
     }
-    if (act === "jentry-add") { var jac = journeyData().chapters[+b.dataset.jc]; if (jac) { jac.entries = jac.entries || []; jac.entries.push(blankEntry()); openJC = +b.dataset.jc; saveDraft(true); renderJourneyEditor(); } return; }
+    if (act === "jentry-add") { var jac = journeyData().chapters[+b.dataset.jc]; if (jac) { jac.entries = jac.entries || []; journeyStory = blankEntry(); jac.entries.push(journeyStory); journeyPreviewMode = "story"; openJC = +b.dataset.jc; saveDraft(true); renderJourneyEditor(); l2body.querySelector('[data-jfield="title"][data-jc="' + openJC + '"][data-je="' + (jac.entries.length - 1) + '"]')?.focus(); } return; }
     if (act === "jentry-del") { var jec = journeyData().chapters[+b.dataset.jc]; if (jec && jec.entries) { jec.entries.splice(+b.dataset.je, 1); saveDraft(true); renderJourneyEditor(); } return; }
     if (act === "jimg-add") {
       var jic = journeyData().chapters[+b.dataset.jc], jie = jic && jic.entries[+b.dataset.je];
@@ -12804,7 +12929,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       } else insertCopy();
       return;
     }
-    if (act === "add") { data[list].unshift(blank(list)); apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
+    if (act === "add") { data[list].unshift(blank(list)); if (journeyOpen && list === "path") { journeyRole = data.path[0]; journeyPreviewMode = "about"; } apply(true); renderBody(); const ed = root.querySelector(".adm__editor"); if (ed) ed.scrollTop = 0; status("Added at the top \u2014 edit it right here.", true); }
     else if (act === "remove") {
       if (list === "work") {
         const w = data.work[i] || {};
