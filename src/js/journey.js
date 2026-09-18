@@ -103,20 +103,24 @@ import { journeyRows } from "./journey-core.mjs";
       : '<img src="' + src + '" alt="" loading="lazy" draggable="false" />';
   }
 
+  function caseContent(work, label) {
+    const cover = work.image ? mediaUrl(work.image) : '';
+    return (cover ? '<img class="jrn-tile__case-image" src="' + esc(cover) + '" alt="" loading="lazy" draggable="false" />' : '') +
+      '<span class="jrn-tile__case-label">' + label + '</span><span aria-hidden="true">&#8599;</span>';
+  }
+
   function tile(story) {
     const entry = story.entry;
     const identity = story.chapterIndex + "-" + story.entryIndex;
     const label = entry.title || story.chapter.name || "Chapter";
     const work = linkedWork(story);
-    const cover = work?.image ? mediaUrl(work.image) : '';
     const unseen = work && !seenCases.has(String(work.id));
     return '<div class="jrn-tile' + (unseen ? ' is-case-unseen' : '') + '"><div class="jrn-tile__preview"><button type="button" class="jrn-tile__story" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '"' + (unseen ? ' aria-description="Linked case study not yet viewed"' : '') + '>' +
       '<span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
       (entry.period ? '<span class="jrn-tile__period">' + esc(entry.period) + '</span>' : '') +
       '<span class="jrn-tile__title">' + md(label) + '</span></span></button>' +
       (work ? '<a class="jrn-case jrn-tile__case" data-jpeek-work="' + esc(work.id) + '" href="/work/' + encodeURIComponent(work.id) + '">' +
-        (cover ? '<img class="jrn-tile__case-image" src="' + esc(cover) + '" alt="" loading="lazy" draggable="false" />' : '') +
-        '<span class="jrn-tile__case-label">Case study available</span><span aria-hidden="true">&#8599;</span></a>' : '') + '</div></div>';
+        caseContent(work, 'Case study available') + '</a>' : '') + '</div></div>';
   }
 
   function linkedWork(story) {
@@ -240,9 +244,9 @@ import { journeyRows } from "./journey-core.mjs";
     syncRingMotion();
   }
 
-  function expand(key, focus = true) {
+  function expand(key, focus = true, startMediaIndex = 0) {
     closePeek();
-    if (key !== activeKey) mediaIndex = 0;
+    if (key !== activeKey) mediaIndex = startMediaIndex;
     removeDetail();
     activeKey = key;
     syncRingMotion();
@@ -265,7 +269,7 @@ import { journeyRows } from "./journey-core.mjs";
       (story.entry.period ? '<span class="jrn-tile__period">' + esc(story.entry.period) + '</span>' : '') +
       '<h4 id="journey-detail-title" tabindex="-1">' + md(story.entry.title || story.chapter.name || "Chapter") + '</h4></div></header>' +
       '<div class="jrn-detail__copy">' + prose(story.entry.body) +
-      (work ? '<button type="button" class="jrn-case" data-jwork="' + esc(work.id) + '">View case study <span aria-hidden="true">&#8599;</span></button>' : '') +
+      (work ? '<button type="button" class="jrn-case jrn-tile__case" data-jwork="' + esc(work.id) + '">' + caseContent(work, 'View case study') + '</button>' : '') +
       '</div></div></div>';
     document.body.append(panel);
     lockBackground(true);
@@ -281,20 +285,22 @@ import { journeyRows } from "./journey-core.mjs";
     if (!story || !gallery) return;
     gallery.querySelectorAll("video").forEach(element => element.pause());
     const images = media(story);
+    const stories = allStories(), storyIndex = stories.findIndex(item => item.key === activeKey);
     const controls = document.querySelector('#journey-detail .jrn-gallery__controls');
-    controls.hidden = images.length < 2;
-    controls.innerHTML = '';
+    controls.hidden = images.length < 2 && stories.length < 2;
+    mediaIndex = Math.max(0, Math.min(mediaIndex, images.length - 1));
+    const previousLabel = mediaIndex > 0 ? 'Previous image' : 'Previous story';
+    const nextLabel = mediaIndex < images.length - 1 ? 'Next image' : 'Next story';
+    controls.innerHTML = '<div class="jrn-gallery__bar"><button class="jrn-control" type="button" data-jstep="-1" aria-label="' + previousLabel + '" title="' + previousLabel + '"' + (mediaIndex === 0 && storyIndex === 0 ? ' disabled' : '') + '>&#8592;</button><span aria-live="polite"' + (!images.length ? ' aria-label="Story ' + (storyIndex + 1) + ' of ' + stories.length + '"' : '') + '>' + (images.length ? (mediaIndex + 1) + ' / ' + images.length : (storyIndex + 1) + ' / ' + stories.length) + '</span><button class="jrn-control" type="button" data-jstep="1" aria-label="' + nextLabel + '" title="' + nextLabel + '"' + (mediaIndex >= images.length - 1 && storyIndex === stories.length - 1 ? ' disabled' : '') + '>&#8594;</button></div>' +
+      (images.length > 1 ? '<div class="jrn-gallery__thumbs">' + images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div>' : '');
     gallery.hidden = !images.length;
     gallery.closest(".jrn-detail").classList.toggle("jrn-detail--text", !images.length);
     if (!images.length) { gallery.innerHTML = ''; return; }
-    mediaIndex = Math.max(0, Math.min(mediaIndex, images.length - 1));
     const image = images[mediaIndex], source = esc(mediaUrl(image.src));
     gallery.innerHTML = '<figure class="jrn-gallery__figure"><div class="jrn-gallery__stage">' +
       (video(image) ? '<video src="' + source + '" controls playsinline preload="metadata"></video>' :
         '<button type="button" data-jzoom aria-label="Enlarge image" title="Enlarge image"><img src="' + source + '" alt="' + esc(image.caption || story.entry.title || '') + '" /></button>') +
       '</div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>';
-    controls.innerHTML = images.length > 1 ? '<div class="jrn-gallery__bar"><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex - 1) + '" aria-label="Previous image" title="Previous image"' + (mediaIndex === 0 ? ' disabled' : '') + '>&#8592;</button><span aria-live="polite">' + (mediaIndex + 1) + ' / ' + images.length + '</span><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex + 1) + '" aria-label="Next image" title="Next image"' + (mediaIndex === images.length - 1 ? ' disabled' : '') + '>&#8594;</button></div><div class="jrn-gallery__thumbs">' +
-        images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div>' : '';
   }
 
   function open(options = {}) {
@@ -330,6 +336,22 @@ import { journeyRows } from "./journey-core.mjs";
     if (target.hasAttribute("data-jchapter")) { expand(target.dataset.jchapter); return; }
     if (target.hasAttribute("data-jclose")) { close(); return; }
     if (target.hasAttribute("data-jretry")) { renderMedia(); document.querySelector('.jrn-gallery__stage button, .jrn-gallery__stage video')?.focus({ preventScroll: true }); return; }
+    if (target.hasAttribute('data-jstep')) {
+      const direction = Number(target.dataset.jstep), images = media(activeStory());
+      const nextIndex = mediaIndex + direction;
+      if (nextIndex >= 0 && nextIndex < images.length) {
+        mediaIndex = nextIndex;
+        renderMedia();
+      } else {
+        const stories = allStories(), index = stories.findIndex(story => story.key === activeKey);
+        const nextStory = stories[index + direction];
+        if (!nextStory) return;
+        expand(nextStory.key, true, direction < 0 ? Math.max(0, media(nextStory).length - 1) : 0);
+      }
+      const panel = document.getElementById('journey-detail');
+      (panel.querySelector('[data-jstep="' + direction + '"]:not(:disabled)') || panel.querySelector('h4'))?.focus({ preventScroll: true });
+      return;
+    }
     if (target.hasAttribute("data-jmedia")) {
       const label = target.getAttribute("aria-label");
       mediaIndex = Number(target.dataset.jmedia);

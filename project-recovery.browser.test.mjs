@@ -1005,7 +1005,9 @@ test('Journey L2 preserves About tiles, original media and return position acros
     const page = await browser.newPage({ viewport:{width:1440,height:1000}, reducedMotion:'reduce' });
     page.setDefaultTimeout(12000);
     const errors=[]; page.on('pageerror', error=>errors.push(error.message));
-    const published = await journeyFixture(page), original = structuredClone(published);
+    const published = await journeyFixture(page);
+    published.work[0].image=published.journey.chapters[0].entries[0].images[2].src;
+    const original = structuredClone(published);
     const { rkNewSek, rkEncWithSek, rkWrapSek } = await import('./src/js/admin-core.js');
     const key = rkNewSek(), recovery = 'synthetic journey owner proof';
     published.work[0].study.slidesEnc = { ...await rkEncWithSek(key, []), wraps:{owner:await rkWrapSek(recovery,key)} };
@@ -1020,6 +1022,9 @@ test('Journey L2 preserves About tiles, original media and return position acros
       await page.emulateMedia({reducedMotion:width===800?'no-preference':'reduce'});
       const first=page.getByRole('button',{name:'Edge onboarding',exact:true,includeHidden:true});
       await first.scrollIntoViewIfNeeded();
+      await first.hover();
+      const ctaProperties=['paddingTop','paddingRight','borderTopWidth','borderRadius','cornerShape','color','fontFamily','fontSize','gap'];
+      const hoverStyle=await page.locator('[data-jpeek-work]').evaluate((element,properties)=>Object.fromEntries(properties.map(property=>[property,getComputedStyle(element)[property]])),ctaProperties);
       const returnY=await page.evaluate(()=>scrollY);
       await first.click();
       assert.equal(await first.getAttribute('aria-expanded'),'true');
@@ -1029,6 +1034,27 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(await page.locator('#timeline #journey-detail').count(),0);
       assert.equal(await page.locator('.jrn-timeline [data-jchapter]').count(),5);
       assert.equal(await page.locator('#journey-detail h4').evaluate(element=>element===document.activeElement),true);
+      assert.equal(await page.locator('.jrn-timeline__item').evaluateAll(elements=>elements.every(element=>getComputedStyle(element,'::before').content==='none')),true);
+      const viewerCta=page.locator('[data-jwork]');
+      assert.deepEqual(await viewerCta.evaluate((element,properties)=>Object.fromEntries(properties.map(property=>[property,getComputedStyle(element)[property]])),ctaProperties),hoverStyle);
+      const caseCover=viewerCta.locator('img');
+      await caseCover.evaluate(image=>image.decode());
+      assert.equal(await caseCover.getAttribute('src'),original.work[0].image);
+      assert.deepEqual(await caseCover.evaluate(image=>({width:image.getBoundingClientRect().width,height:image.getBoundingClientRect().height,radius:getComputedStyle(image).borderRadius,fit:getComputedStyle(image).objectFit})),{width:28,height:28,radius:'7px',fit:'cover'});
+      assert.equal(await viewerCta.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=16 && bounds.right<=innerWidth-16 && [...element.children].every(child=>{const rect=child.getBoundingClientRect();return rect.left>=bounds.left && rect.right<=bounds.right;});}),true);
+      assert.equal(await page.getByRole('button',{name:'Previous story',exact:true}).isDisabled(),true);
+      await page.getByRole('button',{name:'Media 3',exact:true}).click();
+      assert.equal(await page.getByRole('button',{name:'Next story',exact:true}).isEnabled(),true);
+      await page.getByRole('button',{name:'Next story',exact:true}).focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('#journey-detail h4').textContent(),'second chapter');
+      assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[1].images[0].src);
+      assert.equal(await page.locator('[data-jstep="1"]').evaluate(element=>element===document.activeElement),true);
+      await page.getByRole('button',{name:'Previous story',exact:true}).click();
+      assert.equal(await page.locator('#journey-detail h4').textContent(),'Edge onboarding');
+      assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 3');
+      assert.equal(await page.locator('.jrn-gallery__bar span').textContent(),'3 / 3');
+      await page.getByRole('button',{name:'Media 1',exact:true}).click();
       assert.equal(await page.locator('.jrn__prose strong').textContent(),'Original story');
       await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
       assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[0].images[0].src);
@@ -1045,7 +1071,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
         await page.locator('.pj.is-open').waitFor();
         await page.locator('.pj.is-open [data-pj="close"]').click();
         await page.locator('.pj.is-open').waitFor({state:'hidden'});
-        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
+        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).visibility==='hidden');
         assert.equal(new URL(page.url()).pathname,'/about');
         assert.equal(await page.locator('#top').evaluate(element=>element.inert),true);
         assert.equal(await first.getAttribute('aria-expanded'),'true');
@@ -1053,7 +1079,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
         await page.getByRole('button',{name:'View case study',exact:false}).click();
         await page.locator('.pj.is-open').waitFor();
         await page.goBack();
-        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
+        await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).visibility==='hidden');
         assert.equal(new URL(page.url()).pathname,'/about');
         assert.equal(await page.locator('#journey-detail').isVisible(),true);
         assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 2');
@@ -1076,7 +1102,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(regions.footer.bottom,1000);
       assert.ok(regions.bar.top>=regions.footer.top && regions.bar.bottom<regions.footer.bottom);
       assert.equal(regions.position,'50% 50%');
-      assert.ok(regions.cursors.every(cursor=>cursor==='auto'));
+      assert.ok(regions.cursors.every(cursor=>cursor==='auto'),JSON.stringify({width,regions}));
       assert.equal(regions.zoom,'zoom-in');
       assert.equal(await page.locator('.jrn-gallery__stage').evaluate(stage=>{const image=stage.querySelector('img'),imageBox=image.getBoundingClientRect(),stageBox=stage.getBoundingClientRect();return imageBox.height<=stageBox.height+1 && imageBox.width<=stageBox.width+1 && getComputedStyle(image).objectFit==='contain';}),true);
       await page.evaluate(theme=>document.documentElement.setAttribute('data-theme',theme),width===390?'day':'night');
@@ -1124,7 +1150,14 @@ test('Journey L2 preserves About tiles, original media and return position acros
     await page.keyboard.press('End');
     assert.equal(await page.locator('.jrn-gallery').isVisible(),false);
     assert.equal(await page.locator('.jrn__prose').textContent(),'No-image story');
+    assert.equal(await page.getByRole('button',{name:'Next story',exact:true}).isDisabled(),true);
+    await page.getByRole('button',{name:'Previous story',exact:true}).click();
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'fourth chapter');
+    await page.getByRole('button',{name:'Next story',exact:true}).click();
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'Early explorations');
     await page.getByRole('button',{name:'Close chapter',exact:true}).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.getByRole('button',{name:'Previous story',exact:true}).evaluate(element=>element===document.activeElement),true);
     await page.keyboard.press('Tab');
     assert.equal(await page.locator('.jrn-timeline button').first().evaluate(element=>element===document.activeElement),true);
     await page.keyboard.press('Escape');
@@ -1509,6 +1542,10 @@ test('Journey expanded thumbnail links open available cases directly and return 
       await page.evaluate(image=>{const copy=structuredClone(RK.data);copy.work[0].image=image;RK.renderJourney(copy);},image);
       assert.equal(await page.locator('[data-jpeek-work]').count(),1);
       assert.equal(await page.locator('.jrn-tile__case-image').count(),0);
+      await first.click();
+      assert.equal(await page.locator('[data-jwork]').isVisible(),true);
+      assert.equal(await page.locator('[data-jwork] img').count(),0);
+      await page.getByRole('button',{name:'Close chapter',exact:true}).click();
     }
     await page.route('**/journey-missing-cover.png',route=>route.fulfill({status:404,body:''}));
     await page.evaluate(()=>{const copy=structuredClone(RK.data);copy.work[0].image='/journey-missing-cover.png';RK.renderJourney(copy);});
@@ -1523,6 +1560,9 @@ test('Journey expanded thumbnail links open available cases directly and return 
       await page.evaluate(patch=>{const copy=structuredClone(RK.data);Object.assign(copy.work[0],patch);RK.renderJourney(copy);},patch);
       assert.equal(await page.locator('[data-jpeek-work]').count(),0);
       assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),0);
+      await first.click();
+      assert.equal(await page.locator('[data-jwork]').count(),0);
+      await page.getByRole('button',{name:'Close chapter',exact:true}).click();
     }
     await page.evaluate(()=>RK.renderJourney(RK.data));
     assert.equal(await page.locator('[data-jpeek-work]').count(),1);
