@@ -199,9 +199,10 @@ test("Studio and Journey reject executable rich text while preserving prose and 
     }, markup);
     assert.deepEqual(result, { handlers: 0, title: "Keep formatting", align: "center", image: "/assets/uploads/fixture.png", link: null });
     const journey = await build({ entryPoints: ["src/js/journey.js"], bundle: true, write: false, format: "iife" });
-    await page.evaluate(html => { window.RK = { data: { journey: { enabled: true, chapters: [{ name: "Fixture", entries: [{ title: "Entry", body: html }] }] }, work: [] } }; }, markup);
+    await page.evaluate(html => { document.querySelector('#fixture').innerHTML = '<ol id="timeline"></ol>'; window.RK = { data: { journey: { enabled: true, chapters: [{ name: "Fixture", entries: [{ title: "Entry", body: html, visibility: "public" }] }] }, work: [] } }; }, markup);
     await page.addScriptTag({ content: journey.outputFiles[0].text });
     await page.evaluate(() => window.RK.openJourney());
+    await page.locator('[data-jstory]').click();
     assert.equal(await page.locator(".jrn__prose strong").textContent(), "Keep formatting");
     assert.equal(await page.locator(".jrn__prose img").count(), 1);
     assert.equal(await page.locator(".jrn__prose [onerror], .jrn__prose [onload]").count(), 0);
@@ -933,6 +934,151 @@ test("built protected loading times out visibly and recovers without restarting 
     assert.equal(frameLoads, 1);
     assert.equal(await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").innerText(), "Prototype step 2");
   } finally { await browser.close(); }
+});
+
+async function journeyFixture(page) {
+  const published = await siteFixture(page, async (route, url) => {
+    if (url.pathname === '/about') { await route.fulfill({ contentType: 'text/html', body: readFileSync(new URL('./index.html', import.meta.url), 'utf8') }); return true; }
+    if (url.pathname.startsWith('/admin/')) { await route.fulfill({ json: {} }); return true; }
+    return false;
+  });
+  const images = await page.evaluate(() => ['#d4a557', '#249782', '#c75061'].map((color, index) => {
+    const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 400;
+    const context = canvas.getContext('2d'); context.fillStyle = color; context.fillRect(0, 0, 640, 400);
+    context.fillStyle = '#fafafa'; context.font = '48px sans-serif'; context.fillText('Original ' + (index + 1), 40, 210);
+    return { src: canvas.toDataURL(), caption: 'Original image ' + (index + 1) };
+  }));
+  published.path = [{ id: 'edge', years: '2024 - Now', role: 'Senior Designer - Edge Growth', org: 'Microsoft AI', desc: 'Role summary stays intact.' }, { years: '2014 - 2018', role: 'Designer - Automotive HMI', org: 'Jaguar Land Rover' }];
+  published.aboutLayout = [{key:'path',on:true}];
+  published.journey = { enabled: true, chapters: [{ id: 'stories', name: 'Microsoft', entries: [
+    { id: 'first', title: 'Edge onboarding', period: '2025 - Present', body: '<p><strong>Original story</strong> with a useful outcome.</p>', images, workId: 'journey-case', visibility: 'public' },
+    ...['second', 'third', 'fourth'].map(id => ({ id, title: id + ' chapter', body: 'Independent chapter ' + id, images: [images[1]], pathId: 'edge', visibility: 'public' })),
+    { id: 'presenter', title: 'Presentation-only story', body: 'Presenter detail retained', images: [images[2]], pathId: 'edge' }
+  ] }, { id: 'origin', name: 'Origins', entries: [{ id: 'early', title: 'Early explorations', body: 'No-image story', visibility: 'public' }] }] };
+  published.work = [{ id: 'journey-case', title: 'Journey evidence', client: 'Synthetic', featured: true, study: { blocks: [{type:'text',body:'Linked case content'}] } }];
+  return published;
+}
+
+test('inline journey expands stories, preserves media and returns from evidence across desktop and mobile', {skip:!baseURL,timeout:90000}, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage({ viewport:{width:1440,height:1000}, reducedMotion:'reduce' });
+    page.setDefaultTimeout(12000);
+    const errors=[]; page.on('pageerror', error=>errors.push(error.message));
+    const published = await journeyFixture(page), original = structuredClone(published);
+    const { rkNewSek, rkEncWithSek, rkWrapSek } = await import('./src/js/admin-core.js');
+    const key = rkNewSek(), recovery = 'synthetic journey owner proof';
+    published.work[0].study.slidesEnc = { ...await rkEncWithSek(key, []), wraps:{owner:await rkWrapSek(recovery,key)} };
+    await page.goto(baseURL+'/?view=about');
+    await page.waitForFunction(()=>!!window.RK?.renderJourney && !!window.RK?.openLbx);
+    assert.equal(await page.locator('[data-jstory]').count(),5);
+    assert.equal(await page.locator('[data-journey-open],.jrn[role="dialog"]').count(),0);
+    await page.evaluate(()=>{sessionStorage.setItem('rk:present:active','1');RK.openJourney({preview:true,silent:true});});
+    assert.equal(await page.getByRole('button',{name:'Presentation-only story',exact:true}).count(),0);
+    for (const width of [1440,800,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.emulateMedia({reducedMotion:width===800?'no-preference':'reduce'});
+      const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+      await first.click();
+      assert.equal(await first.getAttribute('aria-expanded'),'true');
+      assert.equal(await page.locator('#journey-detail').count(),1);
+      assert.equal(await page.locator('#journey-detail h4').evaluate(element=>element===document.activeElement),true);
+      assert.equal(await page.locator('.jrn__prose strong').textContent(),'Original story');
+      await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
+      assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[0].images[0].src);
+      await page.getByRole('button',{name:'Next image',exact:true}).click();
+      assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 2');
+      await page.getByRole('button',{name:'Enlarge image',exact:true}).click();
+      await page.locator('.pjx.is-open').waitFor();
+      await page.keyboard.press('Escape');
+      await page.locator('.pjx.is-open').waitFor({state:'hidden'});
+      assert.equal(await page.locator('#journey-detail').count(),1);
+      if (width===1440) {
+        await page.getByRole('button',{name:'View case study',exact:false}).click();
+        await page.locator('.pj.is-open').waitFor();
+        await page.locator('.pj.is-open [data-pj="close"]').click();
+        await page.locator('.pj.is-open').waitFor({state:'hidden'});
+        assert.equal(new URL(page.url()).pathname,'/about');
+        assert.equal(await page.locator('[data-page="about"]').isVisible(),true);
+        assert.equal(await first.getAttribute('aria-expanded'),'true');
+        assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 2');
+      }
+      const layout = await page.locator('#journey-detail').evaluate(panel=>({overflow:document.documentElement.scrollWidth>innerWidth,previous:panel.previousElementSibling?.getAttribute('aria-label'),media:panel.querySelector('.jrn-gallery__stage').getBoundingClientRect().width,columns:getComputedStyle(panel.parentElement).gridTemplateColumns.split(' ').length}));
+      assert.equal(layout.overflow,false); assert.ok(layout.media>100);
+      assert.equal(layout.columns,width>1000?3:width>600?2:1);
+      assert.equal(layout.previous,width>1000?'third chapter':width>600?'second chapter':'Edge onboarding');
+      await page.evaluate(theme=>document.documentElement.setAttribute('data-theme',theme),width===390?'day':'night');
+      await page.screenshot({path:join(tmpdir(),'rk-inline-journey-'+width+'.png')});
+      await page.getByRole('button',{name:'Close chapter',exact:true}).click();
+      assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#journey-detail').count(),0);
+    }
+    await page.getByRole('button',{name:'fourth chapter',exact:true}).click();
+    await page.setViewportSize({width:1440,height:1000});
+    await page.waitForFunction(()=>document.querySelector('#journey-detail')?.previousElementSibling?.getAttribute('aria-label')==='fourth chapter');
+    await page.getByRole('button',{name:'second chapter',exact:true}).click();
+    assert.equal(await page.locator('#journey-detail').count(),1);
+    await page.locator('.jrn-gallery__stage img').evaluate(image=>image.dispatchEvent(new Event('error')));
+    await page.getByRole('button',{name:'Retry',exact:true}).click();
+    await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
+    assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[1].images[0].src);
+    await page.getByRole('button',{name:'Early explorations',exact:true}).click();
+    assert.equal(await page.locator('.jrn-gallery').isVisible(),false);
+    assert.equal(await page.locator('.jrn__prose').textContent(),'No-image story');
+    assert.equal((await page.evaluate(value=>RK.presentAll(value),'wrong synthetic phrase')).ok,false);
+    assert.equal((await page.evaluate(value=>RK.presentAll(value),recovery)).ok,true);
+    await page.getByRole('button',{name:'Presentation-only story',exact:true}).click();
+    assert.equal(await page.locator('.jrn__prose').textContent(),'Presenter detail retained');
+    assert.deepEqual(await page.evaluate(()=>({path:RK.data.path,journey:RK.data.journey})),{path:original.path,journey:original.journey});
+    await page.locator('.present-banner .sv-banner__exit').click();
+    await page.waitForFunction(()=>!!window.RK?.renderJourney && typeof window.RK.isOwnerPresentation==='function' && !window.RK.isOwnerPresentation());
+    assert.equal(await page.getByRole('button',{name:'Presentation-only story',exact:true}).count(),0);
+    assert.equal(await page.locator('#journey-detail').count(),0);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
+test('Journey Studio saves placement and visibility in one editor without changing source media', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    page.setDefaultTimeout(12000);
+    const published=await journeyFixture(page), original=structuredClone(published);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const open=async()=>{await page.locator('.adm__tab[data-tab="aboutpage"]').click();await page.locator('[data-act="journey-edit"]').click();await page.locator('[data-act="journey-chaptoggle"][data-jc="0"] .study__block-chev').click();};
+    await open();
+    assert.equal(await page.locator('.adm__l2 [data-list="path"][data-field="role"]').count(),2);
+    const visibility=page.locator('[data-jsel="visibility"][data-jc="0"][data-je="4"]');
+    assert.equal(await visibility.inputValue(),'presenter');
+    await visibility.selectOption('public');
+    const placement=page.locator('[data-jsel="pathId"][data-jc="0"][data-je="4"]');
+    const option=await placement.locator('option').filter({hasText:'Automotive HMI'}).getAttribute('value');
+    await placement.selectOption(option);
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().path[1].id?.startsWith('jr-'));
+    const after=await page.evaluate(()=>window.__RKStudio.getDraft());
+    assert.equal(after.journey.chapters[0].entries[4].pathId,after.path[1].id);
+    assert.equal(after.journey.chapters[0].entries[4].visibility,'public');
+    assert.deepEqual(after.journey.chapters[0].entries[4].images,original.journey.chapters[0].entries[4].images);
+    assert.deepEqual(after.work,original.work);
+    await page.locator('.adm__l2 [data-act="up"][data-list="path"][data-index="1"]').click();
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().path[0].role.includes('Automotive'));
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft')||'null')?.journey?.chapters?.[0]?.entries?.[4]?.visibility==='public');
+    await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const restored=await page.evaluate(()=>window.__RKStudio.getDraft());
+    assert.equal(restored.journey.chapters[0].entries[4].pathId,restored.path[0].id);
+    assert.equal(restored.journey.chapters[0].entries[4].visibility,'public');
+    assert.deepEqual(restored.journey.chapters[0].entries[4].images,original.journey.chapters[0].entries[4].images);
+    await open();
+    const preview=page.frames().find(frame=>frame.url().includes('preview'));
+    assert.ok(preview);
+    await preview.locator('[data-jstory]').first().waitFor();
+    assert.equal(await preview.locator('.jrn[role="dialog"]').count(),0);
+    assert.equal(await preview.locator('[data-jstory]').count(),6);
+  } finally {await browser.close();}
 });
 
 function sourceFunction(name) {

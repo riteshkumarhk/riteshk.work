@@ -742,11 +742,8 @@ import { contentRevision } from "./content-revision.mjs";
 
     set("timeline", (data.path || []).map(tlEl).join(""));
     set("pathHeading", md(L.pathTitle || "Eleven years, *one throughline*: clarity at scale."));
-    var jrn = data.journey;
-    var jrnHas = !!(jrn && jrn.enabled && Array.isArray(jrn.chapters) && jrn.chapters.some(function (c) { return c && c.entries && c.entries.some(function (e) { return e && (e.title || e.body || (e.images && e.images.length) || e.period); }); }));
-    // The Design Journey is an owner-only presentation aid — the "View full journey" CTA
-    // only appears in Present mode (⋯ menu → Present mode), not on the public site.
-    set("journeyCta", (jrnHas && presentActive) ? '<button type="button" class="path__journey" data-journey-open data-cursor="hover">View full journey <span aria-hidden="true">\u2192</span></button>' : "");
+    set("journeyCta", "");
+    window.RK?.renderJourney?.(data, { owner: presentActive });
     set("recognitionList", (data.recognition || []).map(awardEl).join(""));
     set("educationList", (data.education || []).map(awardEl).join(""));
     set("aboutGallery", (data.aboutGallery || []).filter((g) => g && g.src).slice(0, 6).map(galleryEl).join(""));

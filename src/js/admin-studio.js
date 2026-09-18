@@ -55,6 +55,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
 import { boundedResumeCompletion } from "./resume-review.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
 import { resumeSignature } from "./resume-workspace.mjs";
+import { journeyRoleKey } from "./journey-core.mjs";
 
 (function () {
   "use strict";
@@ -10813,13 +10814,13 @@ import { resumeSignature } from "./resume-workspace.mjs";
     var manageBtn = '<button type="button" class="btn btn--primary" data-act="open-aboutsec" data-asec="' + key + '" style="width:100%">Manage ' + escHtml(key === "path" ? "experiences" : ASEC_LABEL[key].toLowerCase()) + " \u2192</button>";
     var count = '<div class="af__hint" style="margin:.45rem 0 ' + (key === "path" ? ".9rem" : "0") + '">' + n + " " + ASEC_NOUN[key] + (n === 1 ? "" : "s") + "</div>";
     var pathStmt = (key === "path") ? input("Journey statement", "landing.pathTitle", { md: true, hint: "The heading above your experience timeline. Use *italic*, **bold** or [[bronze]] for accents." }) : "";
-    return pathStmt + manageBtn + count + (key === "path" ? journeyCard() : "");
+    return key === "path" ? pathStmt + journeyCard() : manageBtn + count;
   }
   function aboutSectionCards() {
     const RK = window.RK || {};
     const defs = RK.ABOUT_SECTIONS || [["about", "About me"], ["photos", "Photos"], ["recognition", "Recognition"], ["capabilities", "Skills"], ["path", "Journey"], ["education", "Education"]];
     const labels = {}; defs.forEach((s) => { labels[s[0]] = s[1]; });
-    const where = { about: "Lead line, paragraphs & sign-off", photos: "Up to 6 personal shots, hidden until you add one", recognition: "Awards, talks & honours", capabilities: "Your skills (also the landing reel)", path: "Experience timeline + Design Journey", education: "Degrees & schooling" };
+    const where = { about: "Lead line, paragraphs & sign-off", photos: "Up to 6 personal shots, hidden until you add one", recognition: "Awards, talks & honours", capabilities: "Your skills (also the landing reel)", path: "Roles, chapters & media", education: "Degrees & schooling" };
     const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {
@@ -11109,10 +11110,8 @@ import { resumeSignature } from "./resume-workspace.mjs";
     var on = !!j.enabled;
     var chaps = (j.chapters || []).length;
     var entries = (j.chapters || []).reduce(function (n, c) { return n + ((c && c.entries) ? c.entries.length : 0); }, 0);
-    return '<div class="card jrncard">' +
-      '<div class="adm__sec-title" style="margin-top:.2rem">Design Journey</div>' +
-      '<div class="adm__sec-note">An immersive, scrollable timeline of your whole journey \u2014 chapters (Microsoft / Jaguar Land Rover / \u2026) each with dated entries, rich descriptions and images. It\u2019s an owner-only presentation aid: the \u201cView full journey\u201d button appears only in Present mode (\u22ef menu \u2192 Present mode), not on the public site.</div>' +
-      '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (on ? " checked" : "") + " /> Enable the journey (shown in Present mode)</label>" +
+    return '<div class="jrncard">' +
+      '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (on ? " checked" : "") + " /> Show journey stories</label>" +
       '<div class="jrncard__row"><button class="btn btn--primary" data-act="journey-edit">Edit journey \u2192</button>' +
       '<span class="jrncard__meta">' + (chaps ? (chaps + " chapter" + (chaps > 1 ? "s" : "") + " \u00b7 " + entries + " entr" + (entries === 1 ? "y" : "ies")) : "No chapters yet") + "</span></div></div>";
   }
@@ -11135,8 +11134,8 @@ import { resumeSignature } from "./resume-workspace.mjs";
     journeyData();
     journeyOpen = true;
     openStudy = -1;
-    if (l2title) l2title.textContent = "Design Journey";
-    setL2BackLabel("Back to Path");
+    if (l2title) l2title.textContent = "Journey";
+    setL2BackLabel("Back to About");
     l2body.innerHTML = journeyEditor();
     paintL2Tabs();
     resolveMediaSizes(l2body);
@@ -11185,6 +11184,12 @@ import { resumeSignature } from "./resume-workspace.mjs";
     var L = [["auto", "Auto \u2014 flowing columns"], ["grid", "Grid \u2014 even 4:3 tiles"], ["showcase", "Showcase \u2014 hero + thumbnails"], ["stack", "Stack \u2014 one per row"]];
     return L.map(function (o) { return '<option value="' + o[0] + '"' + ((sel || "auto") === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("");
   }
+  function journeyPlacementOptions(value) {
+    var options = [["", "Automatic"], ["separate", "Separate row"]];
+    (data.path || []).forEach(function (role) { options.push([journeyRoleKey(role), role.role || role.org || "Role"]); });
+    if (value && !options.some(function (option) { return option[0] === value; })) options.push([value, "Unavailable role (separate row)"]);
+    return options.map(function (option) { return '<option value="' + escAttr(option[0]) + '"' + ((value || "") === option[0] ? " selected" : "") + '>' + escHtml(option[1]) + '</option>'; }).join("");
+  }
   function journeyImageRow(c, e, k, im) {
     var src = (im && im.src) || "";
     return '<div class="rep__item jimg">' +
@@ -11208,7 +11213,9 @@ import { resumeSignature } from "./resume-workspace.mjs";
       "</div>" +
       richJourney(c, e, entry.body) +
       '<div class="af__row">' +
-      '<div class="af"><label class="af__label">Image layout</label><select data-jsel="layout" data-jc="' + c + '" data-je="' + e + '">' + journeyLayoutOptions(entry.layout) + "</select></div>" +
+      '<div class="af"><label class="af__label">Timeline role</label><select aria-label="Timeline role" data-jsel="pathId" data-jc="' + c + '" data-je="' + e + '">' + journeyPlacementOptions(entry.pathId) + "</select></div>" +
+      '<div class="af"><label class="af__label">Visibility</label><select aria-label="Story visibility" data-jsel="visibility" data-jc="' + c + '" data-je="' + e + '"><option value="presenter"' + (entry.visibility !== "public" ? " selected" : "") + '>Present mode</option><option value="public"' + (entry.visibility === "public" ? " selected" : "") + '>Public</option></select></div></div>' +
+      '<div class="af__row">' +
       '<div class="af"><label class="af__label">Link to a case study</label><select data-jsel="workId" data-jc="' + c + '" data-je="' + e + '">' + journeyWorkOptions(entry.workId) + "</select></div>" +
       "</div>" +
       '<div class="rep"><div class="rep__head"><span>Images</span><button class="btn btn--add rep__add" data-act="jimg-add" data-jc="' + c + '" data-je="' + e + '">+ Add images\u2026</button></div>' +
@@ -11236,11 +11243,8 @@ import { resumeSignature } from "./resume-workspace.mjs";
   function journeyEditor() {
     var j = journeyData();
     var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
-    return '<div class="l2grp"><div class="l2grp__head">Journey header <span>The intro shown at the top of the immersive view.</span></div>' +
-      '<div class="af"><label class="af__label">Eyebrow</label><input type="text" data-jmeta="eyebrow" value="' + escAttr(j.eyebrow || "") + '" placeholder="Design Journey" /></div>' +
-      '<div class="af"><label class="af__label">Title</label><input type="text" data-jmeta="title" value="' + escAttr(j.title || "") + '" placeholder="Eleven years, from \u2026 to \u2026" /></div>' +
-      '<div class="af"><label class="af__label">Intro</label><textarea data-jmeta="intro" rows="2" placeholder="One or two lines that set the scene.">' + escHtml(j.intro || "") + "</textarea></div></div>" +
-      '<div class="l2grp"><div class="l2grp__head">Chapters <span>Group entries by company or era. Each chapter is a stop on the left timeline.</span></div>' +
+    return '<div class="l2grp">' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
+      '<div class="l2grp"><div class="l2grp__head">Stories <span>Grouped by company or era. Visibility controls display, not encryption; existing journey data is not encrypted.</span></div>' +
       (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
       '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
       '<div class="l2grp__foot"><button class="btn btn--primary" data-act="journey-close">Done</button></div>';
@@ -11254,11 +11258,21 @@ import { resumeSignature } from "./resume-workspace.mjs";
     var ent = chap.entries && chap.entries[+t.dataset.je];
     if (!ent) return;
     if (t.dataset.jfield !== undefined) { ent[t.dataset.jfield] = t.value; saveDraft(); refreshJourneyPreview(); return; }
-    if (t.dataset.jsel !== undefined) { ent[t.dataset.jsel] = t.value; saveDraft(); refreshJourneyPreview(); return; }
+    if (t.dataset.jsel !== undefined) {
+      var value = t.value;
+      if (t.dataset.jsel === "pathId" && value && value !== "separate") {
+        var role = (data.path || []).find(function (item) { return journeyRoleKey(item) === value; });
+        if (role) { if (!role.id) role.id = "jr-" + crypto.randomUUID(); value = role.id; }
+      }
+      ent[t.dataset.jsel] = value; saveDraft();
+      if (t.dataset.jsel === "pathId") renderJourneyEditor(); else refreshJourneyPreview();
+      return;
+    }
     if (t.dataset.jimg !== undefined) { var im = ent.images && ent.images[+t.dataset.jk]; if (im) { im[t.dataset.jimg] = t.value; saveDraft(); refreshJourneyPreview(); } }
   }
 
   function renderBody() {
+    if (journeyOpen) { renderJourneyEditor(); return; }
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
     resolveMediaSizes(body);
