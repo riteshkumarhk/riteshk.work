@@ -6,7 +6,7 @@
 .jrn-tile__story { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; letter-spacing: 0; cursor: pointer; }
 .jrn-tile .jrn-tile__case { display: none; align-self: flex-start; margin: 0 16px 18px; padding: 8px 12px; max-width: calc(100% - 32px); min-height: 36px; border: 1px solid var(--text-faint); border-radius: 999px; color: var(--text); text-decoration: none; font-size: .7rem; line-height: 1.4; transition: color .16s, background-color .16s; }
 .jrn-stories.is-peeking .jrn-tile__case { display: inline-flex; }
-.jrn-tile .jrn-tile__case-image { flex: 0 0 28px; display: block; width: 28px; height: 20px; border-radius: 3px; object-fit: contain; }
+.jrn-tile .jrn-tile__case-image { flex: 0 0 28px; display: block; width: 28px; height: 28px; border-radius: 7px; corner-shape: squircle; background: var(--bg-elev); object-fit: contain; }
 .jrn-tile .jrn-tile__case-label { min-width: 0; overflow-wrap: anywhere; }
 .jrn-tile .jrn-tile__case span[aria-hidden] { flex: 0 0 auto; color: var(--accent); font-size: 1rem; }
 .jrn-tile .jrn-tile__case:hover, .jrn-tile .jrn-tile__case:focus-visible { color: var(--accent); background: var(--bg-elev); }

@@ -1221,7 +1221,9 @@ test('Journey expanded thumbnail links open available cases directly and return 
       await cover.evaluate(image=>image.decode());
       const thumbnail=await cover.boundingBox();
       assert.equal(thumbnail.width,28);
-      assert.equal(thumbnail.height,20);
+      assert.equal(thumbnail.height,28);
+      assert.equal(await cover.evaluate(image=>getComputedStyle(image).borderRadius),'7px');
+      assert.equal(await cover.evaluate(image=>{if(!CSS.supports('corner-shape','squircle'))return true;const reference=document.createElement('div');reference.style.cornerShape='squircle';document.body.append(reference);const expected=getComputedStyle(reference).cornerShape;reference.remove();return getComputedStyle(image).cornerShape===expected;}),true);
       assert.equal(await cover.evaluate(image=>getComputedStyle(image).objectFit),'contain');
       assert.equal(await link.evaluate(element=>{const bounds=element.getBoundingClientRect();return [...element.children].every(child=>{const rect=child.getBoundingClientRect();return rect.x>=bounds.x && rect.right<=bounds.right && rect.y>=bounds.y && rect.bottom<=bounds.bottom;});}),true);
       await page.screenshot({path:join(tmpdir(),'rk-journey-case-link-'+width+'.png')});
