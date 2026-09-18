@@ -1075,10 +1075,11 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
     await page.goto(baseURL+'/studio/?devstub=1');
     await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
     await page.locator('.adm__tab[data-tab="aboutpage"]').click();
-    await page.locator('[data-act="journey-edit"]').click();
+    await page.locator('[data-act="aboutsec-edit"][data-key="path"]').click();
     const before=await page.evaluate(()=>window.__RKStudio.getDraft());
-    const tabs=page.getByRole('tablist',{name:'Journey editor',exact:true});
-    assert.deepEqual(await tabs.getByRole('tab').allTextContents(),['Journey','Stories']);
+    const tabs=page.getByRole('tablist',{name:'About editor',exact:true});
+    assert.deepEqual(await tabs.getByRole('tab').allTextContents(),['About','Journey','Stories','Photos','More']);
+    assert.equal(await page.locator('[data-jpreview]').count(),0);
     assert.equal(await page.locator('[data-journey-section="journey"] .jedit__body:visible').count(),0);
     await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
     assert.equal(await page.locator('[data-journey-section="journey"] .jedit__body:visible').count(),1);
@@ -1094,9 +1095,9 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
     await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="0"]').first().click();
     assert.equal(await page.locator('.jentry .jedit__body:visible').count(),1);
     await preview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Edge onboarding');
-    await page.locator('[data-jpreview="about"]').click();
+    await tabs.getByRole('tab',{name:'About',exact:true}).click();
     await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
-    await page.locator('[data-jpreview="story"]').click();
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
     await preview.locator('#journey-detail').waitFor();
     await tabs.getByRole('tab',{name:'Stories',exact:true}).focus();
     await page.keyboard.press('ArrowLeft');
@@ -1110,9 +1111,10 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
     await newTitle.fill('Unassigned preview');
     await preview.waitForFunction(()=>document.querySelector('#journey-detail [aria-current]')?.getAttribute('aria-label')==='Open story: Unassigned preview');
     assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[5].pathId),'unassigned');
-    await page.locator('[data-jpreview="about"]').click();
+    await tabs.getByRole('tab',{name:'About',exact:true}).click();
     await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
     assert.equal(await preview.getByRole('button',{name:'Unassigned preview',exact:true}).count(),0);
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
     const storyHead=index=>page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="'+index+'"]').first().locator('..');
     await storyHead(0).getByLabel('Story actions',{exact:true}).click();
     assert.equal(await storyHead(0).getByRole('button',{name:'Move up',exact:true}).isDisabled(),true);
@@ -1132,7 +1134,8 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
     for(const width of [1440,390,320]) {
       await page.setViewportSize({width,height:1000});
       await page.locator('[data-act="jstory-toggle"][data-jc="0"][data-je="2"]').first().scrollIntoViewIfNeeded();
-      assert.equal(await page.locator('[data-l2tabs]').evaluate(element=>element.scrollWidth<=element.clientWidth+1),true);
+      await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
+      await page.waitForFunction(()=>{const tabs=document.querySelector('[data-l2tabs]'),selected=tabs.querySelector('[aria-selected="true"]');const bounds=tabs.getBoundingClientRect(),active=selected.getBoundingClientRect();return active.left>=bounds.left-1 && active.right<=bounds.right+1;});
       assert.equal(await storyHead(2).evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth;}),true);
       assert.equal(await storyHead(2).locator('.jedit__select').evaluate(element=>element.getBoundingClientRect().width>=120),true);
       await storyHead(2).getByLabel('Story actions',{exact:true}).click();
@@ -1175,6 +1178,105 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
   } finally {await browser.close();}
 });
 
+test('About overview preserves section order and visibility and routes Edit to the matching tab', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    await journeyFixture(page);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    const tabs=page.getByRole('tablist',{name:'About editor',exact:true});
+    const preview=page.frames().find(frame=>frame.url().includes('preview'));
+    await preview.locator('#timeline').waitFor();
+    const before=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const overview=page.getByRole('tabpanel',{name:'About',exact:true});
+    const row=key=>overview.locator('[data-about-section="'+key+'"]');
+    const order=()=>overview.locator('[data-about-section]').evaluateAll(rows=>rows.map(element=>element.dataset.aboutSection));
+    const originalOrder=await order();
+    assert.equal(originalOrder.length,6);
+    await row('photos').getByTitle('Move up',{exact:true}).click();
+    const movedOrder=await order();
+    assert.equal(movedOrder.indexOf('photos'),originalOrder.indexOf('photos')-1);
+    const grip=await row('photos').locator('[data-grip]').boundingBox();
+    const next=await row(originalOrder[originalOrder.indexOf('photos')-1]).boundingBox();
+    await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x+grip.width/2,next.y+next.height-4,{steps:12});
+    await page.mouse.up();
+    assert.deepEqual(await order(),originalOrder);
+    await row('photos').getByTitle('Move up',{exact:true}).click();
+    await row('recognition').locator('[data-act="aboutsec-toggle"]').uncheck();
+    assert.equal(await row('recognition').evaluate(element=>element.classList.contains('is-off')),true);
+    for(const [key,tab] of [['path','Journey'],['photos','Photos'],['recognition','More'],['education','More'],['about','More'],['capabilities','More']]) {
+      await row(key).locator('[data-act="aboutsec-edit"]').click();
+      assert.equal(await tabs.getByRole('tab',{name:tab,exact:true}).getAttribute('aria-selected'),'true');
+      const section=page.locator('[data-about-editor="'+key+'"]');
+      await page.waitForFunction(key=>document.activeElement?.dataset.aboutEditor===key,key);
+      assert.equal(await section.isVisible(),true);
+      const destination=await section.evaluate(element=>{const rect=element.getBoundingClientRect(),bar=document.querySelector('.adm__workbar').getBoundingClientRect();return {top:rect.top,barBottom:bar.bottom,height:innerHeight};});
+      assert.ok(destination.top>=destination.barBottom && destination.top<destination.height,key+': '+JSON.stringify(destination));
+      assert.equal(await page.locator('.mlib').count(),0);
+      await tabs.getByRole('tab',{name:'About',exact:true}).click();
+    }
+    assert.deepEqual(await order(),movedOrder);
+    assert.equal(await row('recognition').locator('[data-act="aboutsec-toggle"]').isChecked(),false);
+    await row('recognition').locator('[data-act="aboutsec-toggle"]').check();
+    await row('about').locator('[data-act="aboutsec-edit"]').click();
+    await page.locator('[data-path="landing.aboutSign"]').fill('Overview routing checked');
+    await page.waitForFunction(()=>window.__RKStudio.getDraft().landing.aboutSign==='Overview routing checked');
+    await tabs.getByRole('tab',{name:'About',exact:true}).click();
+    const after=await page.evaluate(()=>window.__RKStudio.getDraft());
+    assert.deepEqual(after.path,before.path);
+    assert.deepEqual(after.journey,before.journey);
+    assert.deepEqual(after.work,before.work);
+    assert.deepEqual(after.aboutGallery,before.aboutGallery);
+    await tabs.getByRole('tab',{name:'Photos',exact:true}).click();
+    if(!before.aboutGallery.length) await page.locator('[data-act="gal-add"]').click();
+    const caption=page.locator('[data-galedit="0"][data-galfield="caption"]');
+    const originalCaption=await caption.inputValue();
+    await caption.fill('Photo tab edit');
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().aboutGallery[0].caption),'Photo tab edit');
+    if(!before.aboutGallery.length) await page.locator('[data-act="gal-remove"][data-gindex="0"]').click();
+    else await caption.fill(originalCaption);
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().aboutGallery),before.aboutGallery);
+    await tabs.getByRole('tab',{name:'About',exact:true}).click();
+    for(const [key,field] of [['recognition','title'],['education','title'],['capabilities',null]]) {
+      await row(key).locator('[data-act="aboutsec-edit"]').click();
+      const input=page.locator('[data-about-editor="'+key+'"] [data-list="'+key+'"][data-index="0"]'+(field?'[data-field="'+field+'"]':'[data-scalar]'));
+      await input.fill('Edited '+key);
+      assert.equal(await page.evaluate(({key,field})=>field?window.__RKStudio.getDraft()[key][0][field]:window.__RKStudio.getDraft()[key][0],{key,field}),'Edited '+key);
+      await tabs.getByRole('tab',{name:'About',exact:true}).click();
+    }
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      for(const name of ['About','Journey','Stories','Photos','More']) {
+        await tabs.getByRole('tab',{name,exact:true}).click();
+        await page.waitForFunction(()=>{const host=document.querySelector('[data-l2tabs]'),active=host.querySelector('[aria-selected="true"]');const rect=active.getBoundingClientRect(),bounds=host.getBoundingClientRect();return rect.width>0 && rect.left>=bounds.left-1 && rect.right<=bounds.right+1;});
+      }
+      await tabs.getByRole('tab',{name:'About',exact:true}).click();
+      assert.equal(await overview.evaluate(element=>Array.from(element.querySelectorAll('.adm__lsec-head')).every(head=>{const title=head.querySelector('.adm__lsec-titles').getBoundingClientRect(),ops=head.querySelector('.adm__lsec-ops').getBoundingClientRect();return title.width>=100 && ops.width>0 && ops.left>=0 && ops.right<=innerWidth && (title.right<=ops.left || title.bottom<=ops.top);})),true);
+      await overview.locator('[data-about-section]').first().scrollIntoViewIfNeeded();
+      await page.screenshot({path:join(tmpdir(),'rk-about-overview-'+width+'.png')});
+      await row('education').locator('[data-act="aboutsec-edit"]').click();
+      await page.waitForFunction(()=>document.activeElement?.dataset.aboutEditor==='education');
+      await page.screenshot({path:join(tmpdir(),'rk-about-more-'+width+'.png')});
+      await tabs.getByRole('tab',{name:'About',exact:true}).click();
+    }
+    await row('recognition').locator('[data-act="aboutsec-toggle"]').uncheck();
+    await page.waitForFunction(()=>{const draft=JSON.parse(localStorage.getItem('rk:content:draft'));return draft?.landing?.aboutSign==='Overview routing checked' && draft?.aboutSections?.some(section=>section.key==='recognition' && !section.on);});
+    await page.reload();
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    assert.deepEqual(await order(),movedOrder);
+    assert.equal(await row('recognition').locator('[data-act="aboutsec-toggle"]').isChecked(),false);
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().landing.aboutSign),'Overview routing checked');
+    await page.getByRole('button',{name:'Back to Studio',exact:true}).click();
+    assert.equal(await page.locator('.adm__tab[data-tab="work"]').evaluate(element=>element.classList.contains('is-active')),true);
+  } finally {await browser.close();}
+});
+
 test('Journey Studio picks configured stories and preserves case links through edits and reload', {skip:!baseURL,timeout:60000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -1184,7 +1286,7 @@ test('Journey Studio picks configured stories and preserves case links through e
     await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
     await page.goto(baseURL+'/studio/?devstub=1');
     await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
-    const open=async()=>{await page.locator('.adm__tab[data-tab="aboutpage"]').click();await page.locator('[data-act="journey-edit"]').click();};
+    const open=async()=>{await page.locator('.adm__tab[data-tab="aboutpage"]').click();await page.locator('[data-act="aboutsec-edit"][data-key="path"]').click();};
     await open();
     assert.deepEqual(await page.locator('[data-journey-section] > .l2grp__head').allTextContents(),['Journey','Stories']);
     assert.equal(await page.locator('.jmap,[data-jsel="pathId"]').count(),0);

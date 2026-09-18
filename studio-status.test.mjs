@@ -408,9 +408,9 @@ test("project tabs remain in the shared workbar on the Slideshow surface", () =>
   assert.match(tabs, /\["gen", "AI Options"\]/);
   assert.match(tabs, /\["story", "Case study"\]/);
   assert.match(tabs, /\["slides", "Slideshow"\]/);
-  assert.match(tabs, /tb\.innerHTML = journeyOpen \? \["journey", "stories"\]\.map/);
+  assert.match(tabs, /tb\.innerHTML = journeyOpen \? \["about", "journey", "stories", "photos", "more"\]\.map/);
   assert.match(tabs, /\}\)\.join\(""\) : show \? l2TabsHtml\(\) : ""; tb\.hidden = !show && !journeyOpen/);
-  assert.match(tabs, /tb\.setAttribute\("aria-label", journeyOpen \? "Journey editor" : "Project editor"\)/);
+  assert.match(tabs, /tb\.setAttribute\("aria-label", journeyOpen \? "About editor" : "Project editor"\)/);
   assert.match(source.slice(source.indexOf("function revert()"), source.indexOf("function pickImage")), /aiSession\.end\(\)/);
   const styles = readFileSync(new URL("./css/slide-studio.css", import.meta.url), "utf8");
   assert.doesNotMatch(styles, /workbar > :not\(\[data-native-slide-toolbar\]\)/);

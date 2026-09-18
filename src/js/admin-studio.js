@@ -262,10 +262,11 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   var slidePvRO = null; // ResizeObserver that refits inline slide previews when the editor width changes
   let journeyOpen = false; // is the Design Journey editor open in the L2 panel?
   let journeyTab = "journey";
+  let journeyMoreSection = "recognition";
   let journeyRole = null;
   let journeyStory = null;
   let journeyPreviewMode = "about";
-  const journeyScroll = { journey: 0, stories: 0 };
+  const journeyScroll = { about: 0, journey: 0, stories: 0, photos: 0, more: 0 };
   let openJC = -1; // which journey chapter is expanded in the accordion
   let jrnPreviewTimer = 0;
   let musResumeOnExit = false; // was music playing when admin opened? → resume on exit
@@ -415,7 +416,8 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   function syncPreviewPage() {
     const w = frame && frame.contentWindow;
     if (!(w && typeof w.__rkShowPage === "function")) return;
-    if (openStudy >= 0 || journeyOpen) return; // a case study / journey owns the preview
+    if (journeyOpen) { previewJourney(); return; }
+    if (openStudy >= 0) return; // a case study owns the preview
     try { w.__rkShowPage(ABOUT_TABS[activeTab] ? "about" : "work"); } catch (e) {}
   }
 
@@ -6729,15 +6731,15 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     const back = root && root.querySelector("[data-l2-back]");
     if (back) back.hidden = !show && !journeyOpen;
     const heading = root && root.querySelector(".adm__l2-bar");
-    if (heading) heading.hidden = !journeyOpen;
+    if (heading) heading.hidden = true;
     updateHistUI();
     var tb = root && root.querySelector("[data-l2tabs]");
     if (tb) {
       const focused = tb.contains(document.activeElement);
-      tb.innerHTML = journeyOpen ? ["journey", "stories"].map(function (tab) {
-        return '<button type="button" role="tab" aria-selected="' + (journeyTab === tab) + '" tabindex="' + (journeyTab === tab ? "0" : "-1") + '" class="l2tab' + (journeyTab === tab ? " is-on" : "") + '" data-act="journey-tab" data-journey-tab="' + tab + '">' + (tab === "journey" ? "Journey" : "Stories") + '</button>';
+      tb.innerHTML = journeyOpen ? ["about", "journey", "stories", "photos", "more"].map(function (tab) {
+        return '<button type="button" role="tab" aria-selected="' + (journeyTab === tab) + '" tabindex="' + (journeyTab === tab ? "0" : "-1") + '" class="l2tab' + (journeyTab === tab ? " is-on" : "") + '" data-act="journey-tab" data-journey-tab="' + tab + '">' + ({ about: "About", journey: "Journey", stories: "Stories", photos: "Photos", more: "More" })[tab] + '</button>';
       }).join("") : show ? l2TabsHtml() : ""; tb.hidden = !show && !journeyOpen;
-      tb.setAttribute("aria-label", journeyOpen ? "Journey editor" : "Project editor");
+      tb.setAttribute("aria-label", journeyOpen ? "About editor" : "Project editor");
       if (show || journeyOpen) requestAnimationFrame(() => {
         const selected = tb.querySelector('[aria-selected="true"]');
         if (!selected || tb.hidden) return;
@@ -10838,19 +10840,18 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {
-      const body = aboutSectionFields(s.key);
-      html += '<section class="adm__group adm__lsec adm__asec' + (s.on ? "" : " is-off") + '">' +
+      html += '<section class="adm__group adm__lsec adm__asec' + (s.on ? "" : " is-off") + '" data-about-section="' + escAttr(s.key) + '">' +
         '<div class="adm__lsec-head">' +
-          '<span class="sortgrip" data-grip data-sortkey="asec" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + "</span>" +
+          '<span class="sortgrip" data-grip data-sortkey="asec" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>" +
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
             (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
           '<div class="adm__lsec-ops">' +
+            '<button type="button" class="iconbtn" data-act="aboutsec-edit" data-key="' + escAttr(s.key) + '" title="Edit ' + escAttr(labels[s.key] || s.key) + '" aria-label="Edit ' + escAttr(labels[s.key] || s.key) + '">' + IC.edit + '</button>' +
             '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
             '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
             eyeToggle('data-act="aboutsec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
           "</div>" +
         "</div>" +
-        (body ? '<div class="adm__lsec-body">' + body + "</div>" : "") +
         "</section>";
     });
     return html;
@@ -11144,10 +11145,16 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       if (w.document.querySelector('.pj.is-open')) w.RK.closeProject?.({ push: false });
       if (!selected) w.RK.closeJourney?.();
       w.RK.data = previewData;
-      w.RK.openJourney(Object.assign({ preview: true, silent: true }, selected ? { chapterIndex: story.chapterIndex, entryIndex: story.entryIndex } : {}, selection?.scroll ? { scroll: true } : {}));
-      if (!selected && selection?.scroll && journeyRole) {
-        var roleIndex = (data.path || []).indexOf(journeyRole);
-        w.document.querySelectorAll('#timeline > .tl')[roleIndex]?.scrollIntoView({ behavior: "instant", block: "center" });
+      w.RK.openJourney(Object.assign({ preview: true, silent: true }, selected ? { chapterIndex: story.chapterIndex, entryIndex: story.entryIndex } : {}, selected && selection?.scroll ? { scroll: true } : {}));
+      if (!selected && selection?.scroll) {
+        if (journeyTab === "journey" && journeyRole) {
+          var roleIndex = (data.path || []).indexOf(journeyRole);
+          w.document.querySelectorAll('#timeline > .tl')[roleIndex]?.scrollIntoView({ behavior: "instant", block: "center" });
+        } else {
+          var key = selection.section || ({ journey: "path", photos: "photos", more: journeyMoreSection })[journeyTab];
+          var section = w.document.getElementById(key ? "sec-" + key : "aboutSections");
+          if (section && !section.hidden) section.scrollIntoView({ behavior: "instant", block: "start" });
+        }
       }
     } catch (e) {}
   }
@@ -11157,17 +11164,19 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     jrnPreviewTimer = setTimeout(function () { if (journeyOpen) previewJourney(selection); }, 180);
   }
   function setL2BackLabel(txt) {
-    var bk = root && root.querySelector(".adm__l2-back");
+    var bk = root && root.querySelector("[data-l2-back]");
     if (bk) { bk.innerHTML = IC.back; bk.setAttribute("aria-label", txt); bk.setAttribute("title", txt); }
   }
-  function openJourneyEditor() {
+  function openJourneyEditor(tab) {
     journeyData();
     journeyOpen = true;
-    journeyTab = "journey";
+    journeyTab = tab || "journey";
     journeyPreviewMode = "about";
     openStudy = -1;
-    if (l2title) l2title.textContent = "Journey";
-    setL2BackLabel("Back to About");
+    activeTab = "aboutpage";
+    root.querySelectorAll(".adm__tab").forEach((button) => button.classList.toggle("is-active", button.dataset.tab === activeTab));
+    if (l2title) l2title.textContent = "About";
+    setL2BackLabel("Back to Studio");
     l2body.innerHTML = journeyEditor();
     paintL2Tabs();
     resolveMediaSizes(l2body);
@@ -11198,7 +11207,25 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     var vt = root && root.querySelector("[data-view]"); if (vt) vt.textContent = "Preview";
     try { var w = frameWin(); if (w && w.RK && w.RK.closeJourney) w.RK.closeJourney(); } catch (e) {}
     previewLanding();
-    if (opts.render !== false) renderBody();
+    if (opts.render !== false) { activeTab = "work"; renderBody(); }
+  }
+  function editAboutSection(key) {
+    var tab = key === "path" ? "journey" : key === "photos" ? "photos" : "more";
+    if (tab === "more") journeyMoreSection = key;
+    journeyScroll[journeyTab] = root.querySelector('.adm__editor').scrollTop;
+    if (!journeyOpen) openJourneyEditor(tab);
+    else {
+      journeyTab = tab;
+      journeyPreviewMode = "about";
+      renderJourneyEditor();
+    }
+    refreshJourneyPreview({ scroll: true, section: key });
+    requestAnimationFrame(function () {
+      var section = l2body.querySelector('[data-about-editor="' + key + '"]');
+      var editor = root.querySelector('.adm__editor');
+      if (section && editor) editor.scrollTop += section.getBoundingClientRect().top - editor.getBoundingClientRect().top - 16;
+      section?.focus({ preventScroll: true });
+    });
   }
   function richJourney(c, e, val) {
     return '<div class="af rt"><label class="af__label">Description (optional)</label>' + richFieldWrap('data-rtjrn="body" data-jc="' + c + '" data-je="' + e + '"', val) + "</div>";
@@ -11360,12 +11387,15 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     journeyStory = journeyStories().find(function (story) { return story.entry === journeyStory || (journeyStory?.id && story.entry.id === journeyStory.id); })?.entry || null;
     var j = journeyData();
     var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
-    return '<div class="jedit__preview-switch" role="group" aria-label="Preview content"><span>Preview</span>' + ['about', 'story'].map(function (mode) {
-      return '<button type="button" class="l2tab' + (journeyPreviewMode === mode ? ' is-on' : '') + '" data-act="journey-preview" data-jpreview="' + mode + '" aria-pressed="' + (journeyPreviewMode === mode) + '"' + (mode === 'story' && !journeyStory ? ' disabled' : '') + '>' + (mode === 'about' ? 'About' : 'Story') + '</button>';
-    }).join('') + '</div><div class="l2grp" data-journey-section="journey" role="tabpanel" aria-label="Journey"' + (journeyTab === "journey" ? '' : ' hidden') + '><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + sections.path() + '</div>' +
+    return '<div class="l2grp" data-journey-section="about" role="tabpanel" aria-label="About"' + (journeyTab === "about" ? '' : ' hidden') + '>' + aboutSectionCards() + '</div>' +
+      '<div class="l2grp" data-journey-section="journey" data-about-editor="path" tabindex="-1" role="tabpanel" aria-label="Journey"' + (journeyTab === "journey" ? '' : ' hidden') + '><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (j.enabled !== false ? ' checked' : '') + '> Show journey stories</label>' + sections.path() + '</div>' +
       '<div class="l2grp" data-journey-section="stories" role="tabpanel" aria-label="Stories"' + (journeyTab === "stories" ? '' : ' hidden') + '><div class="l2grp__head">Stories</div>' +
       (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
       '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
+      '<div class="l2grp" data-journey-section="photos" data-about-editor="photos" tabindex="-1" role="tabpanel" aria-label="Photos"' + (journeyTab === "photos" ? '' : ' hidden') + '>' + aboutGalleryBlock() + '</div>' +
+      '<div data-journey-section="more" role="tabpanel" aria-label="More"' + (journeyTab === "more" ? '' : ' hidden') + '>' + ['recognition', 'education', 'about', 'capabilities'].map(function (key) {
+        return '<section class="l2grp" data-about-editor="' + key + '" tabindex="-1" aria-label="' + (key === 'about' ? 'About me' : ASEC_LABEL[key]) + '">' + (key === 'about' ? '<div class="l2grp__head">About me</div>' + aboutSectionFields(key) : sections[key]()) + '</section>';
+      }).join('') + '</div>' +
       '<div class="l2grp__foot"><button class="btn btn--primary" data-act="journey-close">Done</button></div>';
   }
   function onJourneyEdit(t) {
@@ -11398,6 +11428,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
 
   function renderBody() {
     if (journeyOpen) { renderJourneyEditor(); return; }
+    if (activeTab === "aboutpage") { openJourneyEditor("about"); return; }
     body.innerHTML = sections[activeTab]();
     root.querySelectorAll(".adm__tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === activeTab));
     resolveMediaSizes(body);
@@ -12164,7 +12195,8 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (act === "open-highlights") { openHlModal(); return; }
     if (act === "hl-close") { closeHlModal(); return; }
     if (act === "hl-nav") { hlPage = b.dataset.hlpage === "brands" ? "brands" : "stats"; refreshHlPanel(); return; }
-    if (act === "open-aboutsec") { openAboutSecModal(b.dataset.asec); return; }
+    if (act === "open-aboutsec") { editAboutSection(b.dataset.asec); return; }
+    if (act === "aboutsec-edit") { editAboutSection(b.dataset.key); return; }
     if (act === "asec-close") { closeAboutSecModal(); return; }
     if (act === "asec-nav") { asecPage = b.dataset.asecpage; refreshAboutSecModal(); return; }
     if (act === "hi-order-up" || act === "hi-order-down") {
@@ -12615,16 +12647,11 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (act === "journey-tab") {
       var journeyEditorPane = root.querySelector('.adm__editor');
       journeyScroll[journeyTab] = journeyEditorPane.scrollTop;
-      journeyTab = b.dataset.journeyTab === "stories" ? "stories" : "journey";
+      journeyTab = ["about", "journey", "stories", "photos", "more"].includes(b.dataset.journeyTab) ? b.dataset.journeyTab : "about";
       journeyPreviewMode = journeyTab === "stories" && journeyStory ? "story" : "about";
       renderJourneyEditor();
+      refreshJourneyPreview({ scroll: true });
       journeyEditorPane.scrollTop = journeyScroll[journeyTab];
-      return;
-    }
-    if (act === "journey-preview") {
-      journeyPreviewMode = b.dataset.jpreview === "story" && journeyStory ? "story" : "about";
-      l2body.querySelectorAll('[data-jpreview]').forEach(function (button) { var active = button.dataset.jpreview === journeyPreviewMode; button.classList.toggle('is-on', active); button.setAttribute('aria-pressed', String(active)); });
-      refreshJourneyPreview();
       return;
     }
     if (act === "jstories-add") { journeyStoryPicker(+b.dataset.index, b); return; }
