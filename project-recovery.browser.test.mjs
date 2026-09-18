@@ -1286,6 +1286,13 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await first.scrollIntoViewIfNeeded();
     await page.evaluate(()=>document.activeElement.blur());
     await page.waitForFunction(()=>!!document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    await page.waitForFunction(()=>{
+      const tile=document.querySelector('.jrn-tile.is-case-unseen');
+      if(tile.closest('.is-peeking'))return false;
+      const anchor=tile.getBoundingClientRect();
+      const drift=Math.max(-anchor.height*.08,Math.min(anchor.height*.08,(anchor.top+anchor.height/2-innerHeight/2)/innerHeight*anchor.height*.12));
+      return tile.style.getPropertyValue('--jrn-par-y')===drift.toFixed(1)+'px';
+    });
     const ringStyle=await ring.evaluate(element=>{const style=getComputedStyle(element,'::before');return {animation:style.animationName,mask:style.maskComposite,angle:parseFloat(style.getPropertyValue('--jrn-ring-angle'))};});
     assert.equal(ringStyle.animation,'none');
     assert.ok(ringStyle.mask.split(',').every(value=>value.trim()==='exclude'));
