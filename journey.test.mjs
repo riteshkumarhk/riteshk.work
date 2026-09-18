@@ -63,3 +63,19 @@ test("broad product words cannot attach early game experiments to Xbox or growth
   assert.equal(journeyRoleIndex(data.path, {name:"Microsoft Corporation"}, {title:"Windows 11 - Xbox Subscription Growth"}), 3);
   assert.equal(journeyRoleIndex(data.path, {name:"Microsoft Corporation"}, {title:"Windows 11 - Microsoft Account"}), -1);
 });
+
+test("unlinked library stories retain case studies and media without appearing in the journey", () => {
+  const data = fixture();
+  const entry = data.journey.chapters[0].entries[0];
+  entry.workId = "linked-case";
+  entry.pathId = "unassigned";
+  const before = structuredClone(data);
+  for (const mode of [{}, { owner: true }, { preview: true }]) {
+    assert.equal(journeyRows(data, mode).flatMap(row => row.stories).some(story => story.entry === entry), false);
+  }
+  assert.deepEqual(data, before);
+  entry.pathId = "edge";
+  const attached = journeyRows(data, { owner: true })[0].stories.find(story => story.entry === entry);
+  assert.equal(attached.entry.workId, "linked-case");
+  assert.deepEqual(attached.entry.images, before.journey.chapters[0].entries[0].images);
+});

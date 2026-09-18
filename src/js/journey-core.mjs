@@ -10,6 +10,7 @@ export function journeyEntryKey(chapter, entry, chapterIndex, entryIndex) {
 }
 
 export function journeyRoleIndex(paths, chapter, entry) {
+  if (entry.pathId === "unassigned") return -2;
   if (entry.pathId === "separate") return -1;
   if (entry.pathId) return paths.findIndex(role => journeyRoleKey(role) === entry.pathId);
   const titleTerms = new Set(terms(entry.title));
@@ -36,6 +37,7 @@ export function journeyRows(data, { owner = false, preview = false } = {}) {
       if (!owner && !preview && entry.visibility !== "public") return;
       const story = { key: journeyEntryKey(chapter, entry, chapterIndex, entryIndex), chapter, entry, chapterIndex, entryIndex };
       const roleIndex = journeyRoleIndex(paths, chapter, entry);
+      if (roleIndex === -2) return;
       if (roleIndex >= 0) rows[roleIndex].stories.push(story);
       else {
         if (!separate) {
