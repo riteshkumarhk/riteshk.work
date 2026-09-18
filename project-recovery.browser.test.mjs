@@ -1187,7 +1187,9 @@ test('Journey expanded thumbnail links open available cases directly and return 
   try {
     const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
     const errors=[]; page.on('pageerror',error=>errors.push(error.message));
-    const published=await journeyFixture(page), original=structuredClone(published);
+    const published=await journeyFixture(page);
+    published.work[0].image=published.journey.chapters[0].entries[0].images[2].src;
+    const original=structuredClone(published);
     await page.goto(baseURL+'/?view=about');
     await page.waitForFunction(()=>!!window.RK?.renderJourney);
     const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
@@ -1213,6 +1215,15 @@ test('Journey expanded thumbnail links open available cases directly and return 
       assert.equal(craft.linkInset,'12px');
       assert.equal(craft.linkDivider,'1px');
       assert.ok(craft.linkWidth<=craft.previewWidth-31);
+      const cover=link.locator('.jrn-tile__case-image');
+      assert.equal(await cover.getAttribute('src'),original.work[0].image);
+      assert.equal(await cover.getAttribute('alt'),'');
+      await cover.evaluate(image=>image.decode());
+      const thumbnail=await cover.boundingBox();
+      assert.equal(thumbnail.width,28);
+      assert.equal(thumbnail.height,20);
+      assert.equal(await cover.evaluate(image=>getComputedStyle(image).objectFit),'contain');
+      assert.equal(await link.evaluate(element=>{const bounds=element.getBoundingClientRect();return [...element.children].every(child=>{const rect=child.getBoundingClientRect();return rect.x>=bounds.x && rect.right<=bounds.right && rect.y>=bounds.y && rect.bottom<=bounds.bottom;});}),true);
       await page.screenshot({path:join(tmpdir(),'rk-journey-case-link-'+width+'.png')});
       const returnY=await page.evaluate(()=>scrollY);
       await link.click();
@@ -1239,6 +1250,18 @@ test('Journey expanded thumbnail links open available cases directly and return 
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pj')).opacity==='0');
     assert.equal(new URL(page.url()).pathname,'/about');
     assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+    for(const image of ['', 'javascript:window.journeyUnsafeCover=true']) {
+      await page.evaluate(image=>{const copy=structuredClone(RK.data);copy.work[0].image=image;RK.renderJourney(copy);},image);
+      assert.equal(await page.locator('[data-jpeek-work]').count(),1);
+      assert.equal(await page.locator('.jrn-tile__case-image').count(),0);
+    }
+    await page.route('**/journey-missing-cover.png',route=>route.fulfill({status:404,body:''}));
+    await page.evaluate(()=>{const copy=structuredClone(RK.data);copy.work[0].image='/journey-missing-cover.png';RK.renderJourney(copy);});
+    await first.hover();
+    await page.waitForFunction(()=>!document.querySelector('.jrn-tile__case-image'));
+    assert.equal(await link.isVisible(),true);
+    assert.equal(await link.getAttribute('href'),'/work/journey-case');
+    assert.equal(await page.evaluate(()=>!!window.journeyUnsafeCover),false);
     for(const patch of [{hidden:true},{encWork:'synthetic'},{id:'unmatched'}]) {
       await page.evaluate(patch=>{const copy=structuredClone(RK.data);Object.assign(copy.work[0],patch);RK.renderJourney(copy);},patch);
       assert.equal(await page.locator('[data-jpeek-work]').count(),0);

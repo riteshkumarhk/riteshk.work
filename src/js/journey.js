@@ -45,11 +45,14 @@ import { journeyRows } from "./journey-core.mjs";
     const identity = story.chapterIndex + "-" + story.entryIndex;
     const label = entry.title || story.chapter.name || "Chapter";
     const work = linkedWork(story);
+    const cover = work?.image ? mediaUrl(work.image) : '';
     return '<div class="jrn-tile"><div class="jrn-tile__preview"><button type="button" class="jrn-tile__story" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '">' +
       '<span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
       (entry.period ? '<span class="jrn-tile__period">' + esc(entry.period) + '</span>' : '') +
       '<span class="jrn-tile__title">' + md(label) + '</span></span></button>' +
-      (work ? '<a class="jrn-case jrn-tile__case" data-jpeek-work="' + esc(work.id) + '" href="/work/' + encodeURIComponent(work.id) + '">Case study available <span aria-hidden="true">&#8599;</span></a>' : '') + '</div></div>';
+      (work ? '<a class="jrn-case jrn-tile__case" data-jpeek-work="' + esc(work.id) + '" href="/work/' + encodeURIComponent(work.id) + '">' +
+        (cover ? '<img class="jrn-tile__case-image" src="' + esc(cover) + '" alt="" loading="lazy" draggable="false" />' : '') +
+        '<span class="jrn-tile__case-label">Case study available</span><span aria-hidden="true">&#8599;</span></a>' : '') + '</div></div>';
   }
 
   function linkedWork(story) {
@@ -298,6 +301,7 @@ import { journeyRows } from "./journey-core.mjs";
     document.addEventListener('scroll', positionPeek, true);
     window.addEventListener("resize", () => closePeek());
     document.addEventListener("error", event => {
+      if (event.target.matches?.('.jrn-tile__case-image')) { event.target.remove(); return; }
       const stage = event.target.closest?.(".jrn-gallery__stage");
       if (!stage || !activeStory()) return;
       const image = media(activeStory())[mediaIndex];
