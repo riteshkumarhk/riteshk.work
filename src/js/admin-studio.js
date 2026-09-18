@@ -9808,13 +9808,13 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     },
     path() {
       const list = data.path || [];
-      let html = (journeyOpen ? "" : secHead("Journey", "Your experience timeline.")) + addBar("path", "Add experience");
+      let html = (journeyOpen ? "" : secHead("Journey", "Your experience timeline.")) + addBar("path", "Add experience") + (journeyOpen ? '<div class="study__blocks">' : '');
       list.forEach((p, i) => {
         var expanded = journeyRole === p;
-        html += '<div class="card' + (journeyOpen ? ' study__block jedit' + (expanded ? ' is-open' : '') : '') + '">' + (journeyOpen ?
+        html += '<div class="' + (journeyOpen ? 'study__block jedit' + (expanded ? ' is-open' : '') : 'card') + '">' + (journeyOpen ?
           '<div class="study__block-head"><span class="sortgrip study__block-grip" data-grip data-sortkey="list:path" title="Drag to reorder">' + GRIP_SVG + '</span>' +
           '<button type="button" class="jedit__select" data-act="jrole-toggle" data-index="' + i + '" aria-expanded="' + expanded + '"><strong>' + escHtml(p.role || 'Untitled role') + '</strong><small>' + escHtml([p.org, p.years].filter(Boolean).join(' / ')) + '</small></button>' +
-          journeyRowMenu('role', i, null, list.length) + '<button type="button" class="iconbtn" data-act="jrole-toggle" data-index="' + i + '" aria-label="Edit ' + escAttr(p.role || 'role') + '" aria-expanded="' + expanded + '">' + IC.chevD + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' : cardHead(p.role || "Role " + (i + 1), "path", i, list.length)) +
+          journeyRowMenu('role', i, null, list.length) + '<button type="button" class="iconbtn study__block-chev" data-act="jrole-toggle" data-index="' + i + '" aria-label="Edit ' + escAttr(p.role || 'role') + '" aria-expanded="' + expanded + '">' + IC.chev + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' : cardHead(p.role || "Role " + (i + 1), "path", i, list.length)) +
           '<div class="af__row">' + itemField("path", i, "years", "Years") +
           '<div class="af"><label class="af__label">Present</label><label class="chk" style="padding-top:.4rem"><input type="checkbox" data-act="present" data-index="' + i + '"' + (p.present ? " checked" : "") + " /> I work here now</label></div>" +
           "</div>" +
@@ -9825,7 +9825,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
           (journeyOpen ? '</div>' : '') +
           "</div>";
       });
-      return html;
+      return html + (journeyOpen ? '</div>' : '');
     },
     recognition() {
       return titleMetaList("recognition", "Recognition", "Awards, talks and honours.");
@@ -10840,16 +10840,15 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     const layout = RK.aboutLayout ? RK.aboutLayout(data) : defs.map((s) => ({ key: s[0], on: true }));
     let html = "";
     layout.forEach((s, i) => {
-      html += '<section class="adm__group adm__lsec adm__asec' + (s.on ? "" : " is-off") + '" data-about-section="' + escAttr(s.key) + '">' +
-        '<div class="adm__lsec-head">' +
+      html += '<section class="adm__group adm__lsec adm__asec study__block' + (s.on ? "" : " is-off") + '" data-about-section="' + escAttr(s.key) + '">' +
+        '<div class="adm__lsec-head study__block-head">' +
           '<span class="sortgrip" data-grip data-sortkey="asec" title="Drag to reorder" aria-label="Drag to reorder">' + GRIP_SVG + "</span>" +
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
             (where[s.key] ? '<span class="adm__lsec-sub">' + escHtml(where[s.key]) + "</span>" : "") + "</div>" +
           '<div class="adm__lsec-ops">' +
-            '<button type="button" class="iconbtn" data-act="aboutsec-edit" data-key="' + escAttr(s.key) + '" title="Edit ' + escAttr(labels[s.key] || s.key) + '" aria-label="Edit ' + escAttr(labels[s.key] || s.key) + '">' + IC.edit + '</button>' +
-            '<button class="iconbtn" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
-            '<button class="iconbtn" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +
+            journeyActions('Section actions', '<button type="button" data-act="aboutsec-up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + ' title="Move up">' + IC.up + '<span>Move up</span></button><button type="button" data-act="aboutsec-down" data-i="' + i + '"' + (i === layout.length - 1 ? ' disabled' : '') + ' title="Move down">' + IC.down + '<span>Move down</span></button>') +
             eyeToggle('data-act="aboutsec-toggle" data-key="' + s.key + '"', s.on, "adm__lsec-tog") +
+            '<button type="button" class="iconbtn study__block-chev" data-act="aboutsec-edit" data-key="' + escAttr(s.key) + '" title="Edit ' + escAttr(labels[s.key] || s.key) + '" aria-label="Edit ' + escAttr(labels[s.key] || s.key) + '">' + IC.chev + '</button>' +
           "</div>" +
         "</div>" +
         "</section>";
@@ -11248,15 +11247,18 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       return (chapter.entries || []).map(function (entry, entryIndex) { return { chapter: chapter, chapterIndex: chapterIndex, entry: entry, entryIndex: entryIndex }; });
     });
   }
+  function journeyActions(label, buttons) {
+    return '<details class="study__actions"><summary class="iconbtn" aria-label="' + label + '" title="' + label + '" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group" aria-label="' + label + ' menu">' + buttons + '</div></details>';
+  }
   function journeyRowMenu(kind, index, chapterIndex, length) {
-    var identity = kind === 'role' ? ' data-list="path" data-index="' + index + '"' : ' data-jc="' + chapterIndex + '" data-je="' + index + '"';
+    var identity = kind === 'role' ? ' data-list="path" data-index="' + index + '"' : kind === 'chapter' ? ' data-jc="' + index + '"' : ' data-jc="' + chapterIndex + '" data-je="' + index + '"';
     var actions = [['rename', 'Rename', IC.edit], ['up', 'Move up', IC.up, index === 0], ['down', 'Move down', IC.down, index === length - 1]];
     if (kind === 'story') actions.push(['duplicate', 'Duplicate', IC.dup]);
     actions.push(['remove', 'Remove', IC.trash]);
-    return '<details class="study__actions"><summary class="iconbtn" aria-label="' + (kind === 'role' ? 'Role' : 'Story') + ' actions" title="' + (kind === 'role' ? 'Role' : 'Story') + ' actions" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group">' + actions.map(function (action) {
-      var act = kind === 'role' && action[0] !== 'rename' ? action[0] : 'j' + kind + '-' + action[0];
+    return journeyActions((kind === 'role' ? 'Role' : kind === 'chapter' ? 'Chapter' : 'Story') + ' actions', actions.map(function (action) {
+      var act = kind === 'role' && action[0] !== 'rename' ? action[0] : kind === 'chapter' && action[0] === 'remove' ? 'jchap-del' : 'j' + kind + '-' + action[0];
       return '<button type="button" data-act="' + act + '"' + identity + (action[3] ? ' disabled' : '') + '>' + action[2] + '<span>' + action[1] + '</span></button>';
-    }).join('') + '</div></details>';
+    }).join(''));
   }
   function journeyRoleStories(roleIndex) {
     var stories = journeyStories().filter(function (story) { return journeyRoleIndex(data.path || [], story.chapter, story.entry) === roleIndex; });
@@ -11349,7 +11351,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     return '<div class="study__block jentry jedit' + (expanded ? ' is-open' : '') + '">' +
       '<div class="study__block-head"><span class="sortgrip study__block-grip" data-grip data-sortkey="jentry:' + c + '" title="Drag to reorder">' + GRIP_SVG + '</span>' + thumbnail +
       '<button type="button" class="jedit__select" data-act="jstory-toggle" data-jc="' + c + '" data-je="' + e + '" aria-expanded="' + expanded + '"><strong>' + escHtml(entry.title || 'Untitled story') + '</strong><small>' + escHtml(summary) + '</small></button>' +
-      journeyRowMenu('story', e, c, journeyData().chapters[c].entries.length) + '<button type="button" class="iconbtn" data-act="jstory-toggle" data-jc="' + c + '" data-je="' + e + '" aria-label="Edit ' + escAttr(entry.title || 'story') + '" aria-expanded="' + expanded + '">' + IC.chevD + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' +
+      journeyRowMenu('story', e, c, journeyData().chapters[c].entries.length) + '<button type="button" class="iconbtn study__block-chev" data-act="jstory-toggle" data-jc="' + c + '" data-je="' + e + '" aria-label="Edit ' + escAttr(entry.title || 'story') + '" aria-expanded="' + expanded + '">' + IC.chev + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' +
       '<div class="af__row">' +
       '<div class="af"><label class="af__label">Period</label><input type="text" data-jfield="period" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.period || "") + '" placeholder="e.g. 2022 \u2014 2023" /></div>' +
       '<div class="af"><label class="af__label">Title</label><input type="text" data-jfield="title" data-jc="' + c + '" data-je="' + e + '" value="' + escAttr(entry.title || "") + '" placeholder="What you worked on" /></div>' +
@@ -11367,19 +11369,19 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     var open = openJC === c;
     var entries = (chap.entries || []);
     var entriesHtml = entries.map(function (en, e) { return journeyEntryHtml(c, en, e); }).join("");
-    return '<div class="card jchap' + (open ? " is-open" : "") + '">' +
-      '<div class="jchap__head" data-act="journey-chaptoggle" data-jc="' + c + '">' +
+    return '<div class="study__block jchap' + (open ? " is-open" : "") + '">' +
+      '<div class="study__block-head jchap__head" data-act="journey-chaptoggle" data-jc="' + c + '">' +
       '<span class="sortgrip" data-grip data-sortkey="jchap" title="Drag to reorder">' + GRIP_SVG + '</span>' +
       '<input type="text" class="jchap__name" data-jname data-jc="' + c + '" value="' + escAttr(chap.name || "") + '" placeholder="Chapter name (e.g. Microsoft)" />' +
       '<span class="jchap__count" title="entries">' + entries.length + '</span>' +
-      '<span class="card__ops"><button class="iconbtn iconbtn--danger" data-act="jchap-del" data-jc="' + c + '" title="Remove chapter">' + IC.trash + '</button></span>' +
-      '<span class="study__block-chev">' + IC.chev + '</span></div>' +
+      journeyRowMenu('chapter', c, null, journeyData().chapters.length) +
+      '<button type="button" class="iconbtn study__block-chev" data-act="journey-chaptoggle" data-jc="' + c + '" aria-label="Edit ' + escAttr(chap.name || 'chapter') + '" aria-expanded="' + open + '">' + IC.chev + '</button></div>' +
       '<div class="jchap__body">' +
       '<div class="af"><label class="af__label">Company logo (optional)</label>' +
       '<div class="jimg__preview jlogo__preview' + (chap.logo ? " has" : "") + '">' + (chap.logo ? '<img src="' + escAttr(previewSrc(chap.logo)) + '" alt="" />' : "<span>No logo</span>") + "</div>" +
       '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jlogo-upload" data-jc="' + c + '">' + (chap.logo ? "Replace\u2026" : "Upload\u2026") + "</button>" +
       (chap.logo ? '<button class="btn btn--ghost" data-act="jlogo-clear" data-jc="' + c + '">Clear</button>' : "") + mediaSizeTag(chap.logo) + "</div></div>" +
-      (entriesHtml || '<div class="rep__empty">No entries yet.</div>') +
+      '<div class="study__blocks">' + (entriesHtml || '<div class="rep__empty">No entries yet.</div>') + '</div>' +
       '<button class="btn btn--add" data-act="jentry-add" data-jc="' + c + '">+ Add story</button></div></div>';
   }
   function journeyEditor() {
@@ -11387,16 +11389,15 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     journeyStory = journeyStories().find(function (story) { return story.entry === journeyStory || (journeyStory?.id && story.entry.id === journeyStory.id); })?.entry || null;
     var j = journeyData();
     var chaps = (j.chapters || []).map(function (chap, c) { return journeyChapterHtml(chap, c); }).join("");
-    return '<div class="l2grp" data-journey-section="about" role="tabpanel" aria-label="About"' + (journeyTab === "about" ? '' : ' hidden') + '>' + aboutSectionCards() + '</div>' +
-      '<div class="l2grp" data-journey-section="journey" data-about-editor="path" tabindex="-1" role="tabpanel" aria-label="Journey"' + (journeyTab === "journey" ? '' : ' hidden') + '><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (j.enabled !== false ? ' checked' : '') + '> Show journey stories</label>' + sections.path() + '</div>' +
-      '<div class="l2grp" data-journey-section="stories" role="tabpanel" aria-label="Stories"' + (journeyTab === "stories" ? '' : ' hidden') + '><div class="l2grp__head">Stories</div>' +
-      (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') +
+    return '<div class="l2grp study-sections" data-journey-section="about" role="tabpanel" aria-label="About"' + (journeyTab === "about" ? '' : ' hidden') + '><div class="study__blocks">' + aboutSectionCards() + '</div></div>' +
+      '<div class="l2grp study-sections" data-journey-section="journey" data-about-editor="path" tabindex="-1" role="tabpanel" aria-label="Journey"' + (journeyTab === "journey" ? '' : ' hidden') + '><div class="l2grp__head">Journey</div>' + input("Journey statement", "landing.pathTitle", { md: true }) + '<label class="chk jrncard__chk"><input type="checkbox" data-act="journey-toggle"' + (j.enabled !== false ? ' checked' : '') + '> Show journey stories</label>' + sections.path() + '</div>' +
+      '<div class="l2grp study-sections" data-journey-section="stories" role="tabpanel" aria-label="Stories"' + (journeyTab === "stories" ? '' : ' hidden') + '><div class="l2grp__head">Stories</div><div class="study__blocks">' +
+      (chaps || '<div class="adm__empty">No chapters yet \u2014 add your first below.</div>') + '</div>' +
       '<button class="btn btn--add" data-act="jchap-add" style="margin-top:.6rem">+ Add chapter</button></div>' +
       '<div class="l2grp" data-journey-section="photos" data-about-editor="photos" tabindex="-1" role="tabpanel" aria-label="Photos"' + (journeyTab === "photos" ? '' : ' hidden') + '>' + aboutGalleryBlock() + '</div>' +
       '<div data-journey-section="more" role="tabpanel" aria-label="More"' + (journeyTab === "more" ? '' : ' hidden') + '>' + ['recognition', 'education', 'about', 'capabilities'].map(function (key) {
         return '<section class="l2grp" data-about-editor="' + key + '" tabindex="-1" aria-label="' + (key === 'about' ? 'About me' : ASEC_LABEL[key]) + '">' + (key === 'about' ? '<div class="l2grp__head">About me</div>' + aboutSectionFields(key) : sections[key]()) + '</section>';
-      }).join('') + '</div>' +
-      '<div class="l2grp__foot"><button class="btn btn--primary" data-act="journey-close">Done</button></div>';
+      }).join('') + '</div>';
   }
   function onJourneyEdit(t) {
     var j = journeyData();
@@ -12675,11 +12676,22 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       refreshJourneyPreview({ chapterIndex: openJC, entryIndex: +storyIndex, scroll: true });
       return;
     }
+    if (act === "jchapter-rename") {
+      var chapterName = l2body.querySelector('[data-jname][data-jc="' + b.dataset.jc + '"]');
+      chapterName?.focus(); chapterName?.select(); return;
+    }
+    if (act === "jchapter-up" || act === "jchapter-down") {
+      var chapters = journeyData().chapters, chapterIndex = +b.dataset.jc, nextChapterIndex = chapterIndex + (act === "jchapter-up" ? -1 : 1);
+      if (chapterIndex < 0 || nextChapterIndex < 0 || nextChapterIndex >= chapters.length) return;
+      var expandedChapter = chapters[openJC], movedChapter = chapters.splice(chapterIndex, 1)[0];
+      chapters.splice(nextChapterIndex, 0, movedChapter); openJC = chapters.indexOf(expandedChapter);
+      saveDraft(true); renderJourneyEditor(); return;
+    }
     if (act === "journey-chaptoggle") {
-      if (e.target.closest("input, button, [data-grip], .card__ops")) return;
+      if (e.target.closest("input, [data-grip], details") || e.target.closest("button") && e.target.closest("button") !== b) return;
       var jtc = +b.dataset.jc;
       openJC = (openJC === jtc) ? -1 : jtc;
-      if (l2body) l2body.querySelectorAll(".jchap").forEach(function (x, k) { x.classList.toggle("is-open", k === openJC); });
+      if (l2body) l2body.querySelectorAll(".jchap").forEach(function (x, k) { x.classList.toggle("is-open", k === openJC); x.querySelector('button[data-act="journey-chaptoggle"]')?.setAttribute('aria-expanded', String(k === openJC)); });
       return;
     }
     if (act === "jchap-add") { journeyData().chapters.push(blankChapter()); openJC = data.journey.chapters.length - 1; saveDraft(true); renderJourneyEditor(); return; }

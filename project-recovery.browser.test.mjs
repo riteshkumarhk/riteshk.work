@@ -1207,6 +1207,79 @@ test('Journey expanded thumbnail links open available cases directly and return 
   } finally {await browser.close();}
 });
 
+test('About editor rows reuse case-study styling and autosave without Done', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    await journeyFixture(page);
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const before=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const appearance=element=>{
+      const style=getComputedStyle(element),head=getComputedStyle(element.querySelector('.study__block-head')),chevron=getComputedStyle(element.querySelector('.study__block-chev'));
+      return {background:style.backgroundColor,border:style.borderColor,radius:style.borderRadius,shadow:style.boxShadow,minHeight:head.minHeight,padding:head.padding,chevronBorder:chevron.borderColor};
+    };
+    const tabs=page.getByRole('tablist',{name:'About editor',exact:true});
+    for(const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.locator('.adm__tab[data-tab="work"]').click();
+      await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+      await page.locator('[data-l2tab="story"]').click();
+      await page.mouse.move(0,0);
+      const reference=page.locator('.study-sections .study__block').first();
+      const native=await reference.evaluate(appearance);
+      await reference.screenshot({path:join(tmpdir(),'rk-native-row-'+width+'.png')});
+      await page.locator('[data-l2-back]').click();
+      await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+      for(const name of ['About','Journey','Stories','Photos','More']) {
+        await tabs.getByRole('tab',{name,exact:true}).click();
+        assert.equal(await page.locator('[data-act="journey-close"]').count(),0);
+        assert.equal(await page.getByRole('button',{name:'Back to Studio',exact:true}).isVisible(),true);
+        if(!['About','Journey','Stories'].includes(name)) continue;
+        const panel=page.getByRole('tabpanel',{name,exact:true});
+        const row=panel.locator('.study__block').first();
+        assert.deepEqual(await row.evaluate(appearance),native,name+' '+width);
+        await row.scrollIntoViewIfNeeded();
+        assert.equal(await row.locator('.study__block-head').first().evaluate(head=>Array.from(head.children).every(child=>{const bounds=child.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth;})),true,name+' controls '+width);
+        await page.screenshot({path:join(tmpdir(),'rk-editor-rows-'+name.toLowerCase()+'-'+width+'.png')});
+      }
+      await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
+      await page.locator('button[data-act="journey-chaptoggle"][data-jc="0"]').click();
+      const nested=page.locator('.jentry').first();
+      assert.deepEqual(await nested.evaluate(appearance),native,'closed story in open chapter '+width);
+      assert.equal(await nested.locator('.study__block-chev').evaluate(element=>getComputedStyle(element).transform),'none');
+      assert.equal(await page.locator('.jchap').first().evaluate(element=>getComputedStyle(element).backgroundColor),'rgba(0, 0, 0, 0)');
+      await page.locator('button[data-act="journey-chaptoggle"][data-jc="0"]').click();
+      await page.getByRole('button',{name:'Back to Studio',exact:true}).click();
+    }
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
+    const chapter=()=>page.locator('.jchap').filter({has:page.locator('[data-jname][value="Microsoft"]')});
+    await chapter().getByLabel('Chapter actions',{exact:true}).click();
+    assert.equal(await chapter().getByRole('button',{name:'Move up',exact:true}).isDisabled(),true);
+    await chapter().getByRole('button',{name:'Move down',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters.map(chapter=>chapter.id)),['origin','stories']);
+    await chapter().getByLabel('Chapter actions',{exact:true}).click();
+    await chapter().getByRole('button',{name:'Move up',exact:true}).click();
+    await chapter().getByLabel('Chapter actions',{exact:true}).click();
+    await chapter().getByRole('button',{name:'Remove',exact:true}).click();
+    await page.locator('.pass').getByRole('button',{name:'Cancel',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft()),before);
+    await chapter().getByLabel('Chapter actions',{exact:true}).click();
+    await chapter().getByRole('button',{name:'Rename',exact:true}).click();
+    assert.equal(await chapter().locator('[data-jname]').evaluate(element=>element===document.activeElement),true);
+    await chapter().locator('[data-jname]').fill('Microsoft renamed');
+    await page.getByRole('button',{name:'Back to Studio',exact:true}).click();
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:content:draft'))?.journey?.chapters[0]?.name==='Microsoft renamed');
+    await page.reload();
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    const after=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const expected=structuredClone(before); expected.journey.chapters[0].name='Microsoft renamed';
+    assert.deepEqual(after,expected);
+  } finally {await browser.close();}
+});
+
 test('Journey editor tabs preserve the draft and support keyboard navigation', {skip:!baseURL,timeout:30000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -1337,6 +1410,7 @@ test('About overview preserves section order and visibility and routes Edit to t
     const order=()=>overview.locator('[data-about-section]').evaluateAll(rows=>rows.map(element=>element.dataset.aboutSection));
     const originalOrder=await order();
     assert.equal(originalOrder.length,6);
+    await row('photos').locator('summary').click();
     await row('photos').getByTitle('Move up',{exact:true}).click();
     const movedOrder=await order();
     assert.equal(movedOrder.indexOf('photos'),originalOrder.indexOf('photos')-1);
@@ -1347,6 +1421,7 @@ test('About overview preserves section order and visibility and routes Edit to t
     await page.mouse.move(grip.x+grip.width/2,next.y+next.height-4,{steps:12});
     await page.mouse.up();
     assert.deepEqual(await order(),originalOrder);
+    await row('photos').locator('summary').click();
     await row('photos').getByTitle('Move up',{exact:true}).click();
     await row('recognition').locator('[data-act="aboutsec-toggle"]').uncheck();
     assert.equal(await row('recognition').evaluate(element=>element.classList.contains('is-off')),true);
