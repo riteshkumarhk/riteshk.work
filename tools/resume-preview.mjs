@@ -13,6 +13,7 @@ import { renderResumeHtml, RESUME_FONTS, RESUME_RENDER_VERSION } from '../src/js
 import { atsParseLayout } from '../src/js/ats-core.js';
 import { cornerEnginePlugin } from '../slide-lab-engine.mjs';
 import { mergerThemePlugin } from '../slide-merge-theme.mjs';
+import { uiCornersPlugin } from './ui-corners.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -48,7 +49,7 @@ export function createPreviewStore(directory) {
 export async function buildPreview({ clean = false } = {}) {
   const outdir = join(root, 'studio/resume-preview/assets');
   mkdirSync(outdir, { recursive: true });
-  const result = await build({ absWorkingDir: root, entryPoints: ['src/js/resume-preview.jsx'], bundle: true, format: 'esm', target: 'es2022', outdir, entryNames: 'app', splitting: true, chunkNames: '[name]-[hash]', jsx: 'automatic', conditions: ['production'], plugins: [cornerEnginePlugin(), mergerThemePlugin()], loader: { '.woff2': 'file', '.svg': 'file', '.gif': 'file' }, define: { 'process.env.NODE_ENV': '"production"' }, minify: true, metafile: true, logLevel: 'warning' });
+  const result = await build({ absWorkingDir: root, entryPoints: ['src/js/resume-preview.jsx'], bundle: true, format: 'esm', target: 'es2022', outdir, entryNames: 'app', splitting: true, chunkNames: '[name]-[hash]', jsx: 'automatic', conditions: ['production'], plugins: [cornerEnginePlugin(), mergerThemePlugin(), uiCornersPlugin()], loader: { '.woff2': 'file', '.svg': 'file', '.gif': 'file' }, define: { 'process.env.NODE_ENV': '"production"' }, minify: true, metafile: true, logLevel: 'warning' });
   copyFileSync(join(root, 'node_modules/pagedjs/dist/paged.polyfill.js'), join(outdir, 'paged.polyfill.js'));
   copyFileSync(join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'), join(outdir, 'pdf.worker.mjs'));
   if (clean) {

@@ -203,7 +203,7 @@
   .case__link:hover .case__img { transform: scale(1.03); filter: saturate(1.08); }
   .case__media--photo::after { content: ""; position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(8,8,10,.3) 0%, rgba(8,8,10,0) 24%, rgba(8,8,10,0) 44%, rgba(8,8,10,.76) 100%); }
   .plate__idx { position: absolute; top: 1rem; left: 1.2rem; z-index: 3; font-family: var(--mono); font-size: .72rem; color: var(--text-dim); letter-spacing: .1em; }
-  .plate__tag { position: absolute; top: 1rem; right: 1.2rem; z-index: 3; font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); padding: .35rem .7rem; border: 1px solid var(--line); border-radius: 100px; background: rgba(8,8,10,0.55); backdrop-filter: blur(4px); }
+  .plate__tag { position: absolute; top: 1rem; right: 1.2rem; z-index: 3; font-family: var(--mono); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text); padding: .35rem .7rem; border: 1px solid var(--line); border-radius: 100px; corner-shape: round; background: rgba(8,8,10,0.55); backdrop-filter: blur(4px); }
   .case__cm { display: flex; flex-direction: column; gap: .3rem; position: absolute; left: 1.2rem; right: 1.2rem; bottom: 1.05rem; z-index: 3; font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase; text-shadow: 0 1px 5px rgba(8,8,10,0.6); }
   .case__cm-client { color: var(--text); font-size: .72rem; }
   .case__cm-period { color: var(--text-dim); font-size: .66rem; }
@@ -236,7 +236,7 @@
   .topbar { position: sticky; top: 0; z-index: 50; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
   .topbar__row { max-width: 1180px; margin: 0 auto; padding: .8rem clamp(1rem, 4vw, 2rem); display: flex; gap: .8rem; align-items: stretch; }
   .systems { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; flex: 1; }
-  .sys { text-align: left; background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; padding: .75rem .9rem; cursor: pointer; display: flex; flex-direction: column; gap: .12rem; transition: border-color .25s, background .25s, transform .25s; color: inherit; }
+  .sys { text-align: left; background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; corner-shape: squircle; padding: .75rem .9rem; cursor: pointer; display: flex; flex-direction: column; gap: .12rem; transition: border-color .25s, background .25s, transform .25s; color: inherit; }
   .sys:hover { transform: translateY(-2px); border-color: var(--line); }
   .sys[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev)); }
   .sys__n { font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; color: var(--accent); }
@@ -247,7 +247,7 @@
   .sys__note { font-family: var(--mono); font-size: .56rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); margin-bottom: .3rem; }
   .sys__f { font-family: var(--mono); font-size: .6rem; line-height: 1.45; color: var(--text-faint); display: flex; justify-content: space-between; gap: .6rem; }
   .sys__f b { color: var(--text-dim); font-weight: 500; }
-  .theme { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; padding: .6rem 1.1rem; cursor: pointer; color: var(--text-dim); font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; transition: border-color .25s, color .25s; }
+  .theme { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; background: var(--bg-elev); border: 1px solid var(--line-soft); border-radius: 16px; corner-shape: squircle; padding: .6rem 1.1rem; cursor: pointer; color: var(--text-dim); font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; transition: border-color .25s, color .25s; }
   .theme:hover { color: var(--accent); border-color: var(--accent); }
   .theme__ico { font-size: 1.1rem; line-height: 1; }
 

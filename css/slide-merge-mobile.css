@@ -24,7 +24,7 @@
   .merge-shell .merge-notes-toggle { width:36px; height:36px; padding:0; border:0; }
   .merge-shell .merge-notes-toggle>span { display:none; }
   .merge-shell .merge-workspace { display:grid; grid-template-rows:80px minmax(0,1fr); isolation:auto; }
-  .merge-shell .merge-workspace .merge-canvas-tools { position:relative; inset:auto; transform:none; width:100%; max-width:none; height:80px; padding:4px 6px; border:0; border-bottom:1px solid var(--merge-line); border-radius:0; box-shadow:none; display:flex; flex-wrap:wrap; align-content:center; justify-content:center; gap:2px 4px; }
+  .merge-shell .merge-workspace .merge-canvas-tools { position:relative; inset:auto; transform:none; width:100%; max-width:none; height:80px; padding:4px 6px; border:0; border-bottom:1px solid var(--merge-line); border-radius:0; corner-shape:round; box-shadow:none; display:flex; flex-wrap:wrap; align-content:center; justify-content:center; gap:2px 4px; }
   .merge-shell .merge-canvas-tools .merge-tool,.merge-shell .merge-canvas-tools summary { width:34px; height:34px; }
   .merge-shell .merge-canvas-tools summary { width:40px; }
   .merge-shell .merge-tool-group { gap:0; padding-left:0; border:0; }
@@ -42,17 +42,17 @@
   .merge-shell .excalidraw .App-toolbar,.merge-shell .excalidraw .App-mobile-menu,.merge-shell .excalidraw .selected-shape-actions,.merge-shell .excalidraw .mobile-misc-tools-container { display:none; }
   .merge-shell .excalidraw .merge-slide-properties { display:none; }
   .merge-shell .merge-notes { display:none; }
-  .merge-shell .merge-sheet-scrim { position:fixed; inset:0; z-index:19; display:block; border:0; border-radius:0; background:rgba(0,0,0,.5); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); cursor:default; }
-  .merge-shell .merge-sheet-head { position:fixed; z-index:22; left:0; right:0; bottom:var(--mobile-panel-height); box-sizing:border-box; height:64px; padding:20px 56px 8px; display:flex; align-items:center; justify-content:center; background:var(--bg-elev); border:0; border-top:1px solid var(--line); border-radius:18px 18px 0 0; box-shadow:0 -22px 55px rgba(0,0,0,.5); }
+  .merge-shell .merge-sheet-scrim { position:fixed; inset:0; z-index:19; display:block; border:0; border-radius:0; corner-shape:round; background:rgba(0,0,0,.5); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); cursor:default; }
+  .merge-shell .merge-sheet-head { position:fixed; z-index:22; left:0; right:0; bottom:var(--mobile-panel-height); box-sizing:border-box; height:64px; padding:20px 56px 8px; display:flex; align-items:center; justify-content:center; background:var(--bg-elev); border:0; border-top:1px solid var(--line); border-radius:18px 18px 0 0; corner-shape:squircle; box-shadow:0 -22px 55px rgba(0,0,0,.5); }
   .merge-shell .merge-sheet-head { clip-path:inset(-80px -80px 0); }
-  .merge-sheet-head::before { content:""; position:absolute; top:9px; left:50%; transform:translateX(-50%); width:36px; height:4px; border-radius:4px; background:var(--text-faint); opacity:.5; }
+  .merge-sheet-head::before { content:""; position:absolute; top:9px; left:50%; transform:translateX(-50%); width:36px; height:4px; border-radius:4px; corner-shape:round; background:var(--text-faint); opacity:.5; }
   .merge-sheet-head strong { font-family:var(--sans); font-size:13px; font-weight:500; text-align:center; }
   .merge-shell .merge-sheet-close { position:absolute; right:12px; bottom:8px; width:36px; height:36px; }
   .merge-shell[data-mobile-panel="properties"] .excalidraw .merge-slide-properties,
   .merge-shell[data-mobile-panel="properties"] .excalidraw .selected-shape-actions,
   .merge-shell[data-mobile-panel="properties"] .excalidraw .App-mobile-menu,
   .merge-shell[data-mobile-panel="library"] .excalidraw .default-sidebar,
-  .merge-shell[data-mobile-panel="notes"] .merge-notes { display:block; position:fixed; z-index:21; inset:auto 0 28px; width:100%; height:var(--mobile-panel-height); max-height:var(--mobile-panel-height); margin:0; padding:14px 16px; overflow:auto; overscroll-behavior:contain; border:0; border-radius:0; background:var(--merge-bg); box-shadow:none; }
+  .merge-shell[data-mobile-panel="notes"] .merge-notes { display:block; position:fixed; z-index:21; inset:auto 0 28px; width:100%; height:var(--mobile-panel-height); max-height:var(--mobile-panel-height); margin:0; padding:14px 16px; overflow:auto; overscroll-behavior:contain; border:0; border-radius:0; corner-shape:round; background:var(--merge-bg); box-shadow:none; }
   .merge-shell[data-mobile-panel="properties"] .App-mobile-menu .Island { display:block; padding:0; box-shadow:none; border:0; }
   .merge-shell[data-mobile-panel="properties"] .selected-shape-actions>.Island { width:100%; max-height:none; padding:0; box-shadow:none; border:0; overflow:visible; }
   .merge-shell[data-mobile-panel="properties"] .merge-layout-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }

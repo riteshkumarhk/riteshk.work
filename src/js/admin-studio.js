@@ -1581,7 +1581,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     return '<div class="imgblk"><div class="af__label">Site icon / logo</div>' +
       '<div class="af__hint" style="margin-bottom:.6rem">Shown as the header brand mark (replacing the &ldquo;RK&rdquo; monogram) and the browser-tab favicon. SVG, PNG or JPEG. A <strong>monochrome SVG</strong> auto-switches colour for light &amp; dark; a multi-colour SVG or a PNG/JPEG is used exactly as uploaded. No logo keeps the RK initials.</div>' +
       '<div style="display:flex;align-items:center;gap:14px">' +
-        '<div style="width:72px;height:46px;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text)">' + inner + '</div>' +
+        '<div style="width:72px;height:46px;border-radius:8px;corner-shape:squircle;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text)">' + inner + '</div>' +
         '<div class="imgblk__row" style="margin:0"><button class="btn btn--ghost" data-act="siteicon-upload">' + (has ? "Replace..." : "Upload logo...") + '</button>' + (has ? '<button class="btn btn--ghost" data-act="siteicon-clear">Remove</button>' : "") + "</div>" +
       "</div>" + toggle + "</div>";
   }
@@ -2133,7 +2133,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       var img = "";
       if (qrcode) { try { var qr = qrcode(0, "M"); qr.addData(url); qr.make(); img = qr.createDataURL(6, 4); } catch (e) {} }
       box.innerHTML =
-        (img ? '<div style="background:#fff;border-radius:14px;padding:14px;display:inline-block"><img src="' + img + '" alt="Inbox QR" style="display:block;width:220px;height:220px;image-rendering:pixelated"></div>' : "") +
+        (img ? '<div style="background:#fff;border-radius:14px;corner-shape:squircle;padding:14px;display:inline-block"><img src="' + img + '" alt="Inbox QR" style="display:block;width:220px;height:220px;image-rendering:pixelated"></div>' : "") +
         '<div class="af__hint" style="margin-top:12px">Scan to open the requests inbox on your phone, then verify with your passkey. Add this phone as a passkey first via <b>\u22EF \u2192 Passkeys</b> above.</div>' +
         '<div class="af__hint" style="opacity:.65;word-break:break-all">Or open on the phone: ' + escHtml(url) + "</div>";
     } catch (e) {
@@ -7448,12 +7448,12 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.19", "/css/slide-studio.css?v=1.6"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.20", "/css/slide-studio.css?v=1.7"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.38";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.39";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
@@ -11085,7 +11085,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       const order = hiOrderArr(), hlab = { brands: "Brands & products", stats: "Stats numbers" };
       let rows = "";
       order.forEach((k, oi) => {
-        rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--line);border-radius:7px;margin-top:.4rem">' +
+        rows += '<div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--line);border-radius:7px;corner-shape:squircle;margin-top:.4rem">' +
           '<span style="font-size:.85rem">' + hlab[k] + '</span><span style="display:flex;gap:.25rem">' +
           '<button type="button" class="iconbtn" data-act="hi-order-up" data-oi="' + oi + '"' + (oi === 0 ? " disabled" : "") + ' title="Move up">' + IC.up + '</button>' +
           '<button type="button" class="iconbtn" data-act="hi-order-down" data-oi="' + oi + '"' + (oi === order.length - 1 ? " disabled" : "") + ' title="Move down">' + IC.down + '</button>' +

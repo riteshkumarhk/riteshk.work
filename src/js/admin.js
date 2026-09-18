@@ -203,7 +203,7 @@ import {
         '<div style="width:60px;height:60px;border-radius:50%;overflow:hidden;flex:0 0 60px;background:rgba(255,255,255,.05);border:1px solid color-mix(in srgb, var(--accent) 45%, rgba(255,255,255,.14));display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 9%, transparent)">' +
           (avatarUrl ? '<img src="' + avatarUrl + '" alt="Ritesh" style="width:100%;height:100%;object-fit:cover" />' : '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.4" style="opacity:.4"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-6.5 8-6.5s8 2.1 8 6.5"/></svg>') +
         "</div>" +
-        '<div style="background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 24%, transparent);border-radius:13px;padding:13px 15px;text-align:center">' +
+        '<div style="background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 24%, transparent);border-radius:13px;corner-shape:squircle;padding:13px 15px;text-align:center">' +
           '<div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px">\u2726 A little pride</div>' +
           '<div style="font-size:12.5px;line-height:1.62;opacity:.82">I was a core designer on the team that brought <b style="color:var(--accent);font-weight:600">passkeys to Windows</b> \u2014 yes, the very security behind sign-ins like this one. Endless gratitude to my teammates across the Windows security landscape for the opportunity and the collaboration. <span style="opacity:.7">\u2014 Ritesh</span></div>' +
         "</div>" +

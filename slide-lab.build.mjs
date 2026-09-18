@@ -3,6 +3,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import { cornerEnginePlugin } from "./slide-lab-engine.mjs";
 import { checkLabAssets } from "./slide-lab-security.mjs";
 import { mergerThemePlugin } from "./slide-merge-theme.mjs";
+import { uiCornersPlugin } from "./tools/ui-corners.mjs";
 
 await rm("studio/slide-lab/assets", { recursive: true, force: true });
 await build({
@@ -15,7 +16,7 @@ await build({
   splitting: true,
   format: "esm",
   conditions: ["production"],
-  plugins: [cornerEnginePlugin(), mergerThemePlugin()],
+  plugins: [cornerEnginePlugin(), mergerThemePlugin(), uiCornersPlugin()],
   loader: { ".woff2": "file" },
   minify: true,
   target: ["es2020"],

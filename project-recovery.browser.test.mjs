@@ -7,10 +7,49 @@ import { chromium } from "playwright-core";
 import { build } from "esbuild";
 import { createServer } from "node:http";
 import { flowNode, flowEdge } from './src/js/workflow-core.mjs';
+import postcss from 'postcss';
+import { applyUiCorners } from './tools/ui-corners.mjs';
+import { presenterPanelStyles } from './src/js/presenter-panel.mjs';
 
 const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "utf8");
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
+
+test('platform squircle corners preserve radii geometry circles pills and authored content', async () => {
+  const browser = await chromium.launch(launchOptions);
+  const css = ['styles','admin','project','journey','resume-preview','slide-merge-theme','slide-merge-properties','workflow'].map(name => readFileSync(new URL('./css/' + name + '.css', import.meta.url), 'utf8')).join('\n') + presenterPanelStyles + applyUiCorners(readFileSync('node_modules/@excalidraw/excalidraw/dist/prod/index.css', 'utf8'));
+  const baseline = postcss.parse(css);
+  baseline.walkDecls(/^corner-/, declaration => declaration.remove());
+  try {
+    const page = await browser.newPage();
+    await page.route('**/*', route => route.abort());
+    await page.setContent('<style id="surface"></style><style>body{margin:16px!important;overflow:auto!important}section{margin:16px 0;max-width:100%}.audit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px}.audit-grid>div{min-width:0}#dialog{position:static;transform:none;width:min(360px,100%);margin:0}#native{position:relative;min-height:120px}#circle{width:40px;height:40px}#card{padding:12px}.pp__nowwrap{max-width:280px}</style><main><section class="audit-grid"><div class="pjb__card" id="card" data-corner="squircle">Case study card</div><button class="btn" id="pill" data-corner="round">Primary action</button><button class="pjx__btn" id="circle" data-corner="round" aria-label="Close">X</button><div class="pass__box" id="dialog" data-corner="squircle">Dialog surface</div></section><section class="adm"><button class="adm__hist-btn" id="history" data-corner="squircle" aria-label="Undo">Undo</button><div class="af"><input type="text" id="field" value="Studio field" data-corner="squircle"></div></section><section class="excalidraw" id="native"><div class="Island" id="island" data-corner="squircle">Native properties</div><div class="OverwriteConfirm__Description__icon" id="native-circle" data-corner="round">!</div></section><section class="pp__ctrls"><button class="pp__btn" id="presenter-circle" data-corner="round">Next</button></section><section><div class="pp__nowwrap" id="presenter-preview" data-corner="squircle"></div><button class="pp__btn" id="presenter-tool" data-corner="squircle">Tool</button></section><section><div class="wf-step" id="authored-workflow" data-corner="round">Authored workflow</div><div class="gs-card" id="authored-card" style="border-radius:18px;width:100px;height:60px" data-corner="round">Authored card</div><iframe id="art-frame" title="Authored resume" srcdoc="<div id=art style=\'border-radius:12px;width:100px;height:60px\'>Resume artwork</div>"></iframe></section></main>');
+    await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important}.adm{position:relative!important;display:block!important;height:auto!important;min-height:0!important;opacity:1!important;visibility:visible!important;transform:none!important}.excalidraw{height:auto!important;min-height:100px}#island{width:180px;min-height:80px}.audit-grid{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}'});
+    for (const width of [1440,390,320]) {
+      await page.setViewportSize({ width, height: 1100 });
+      for (const appearance of ['light','dark']) {
+        await page.evaluate(({css,appearance}) => { document.documentElement.dataset.appearance=appearance; document.querySelector('#surface').textContent=css; }, { css:baseline.toString(), appearance });
+        const measure = () => page.locator('[data-corner]').evaluateAll(elements => elements.map(element => {
+          const style=getComputedStyle(element),rect=element.getBoundingClientRect();
+          return { id:element.id, rect:[rect.x,rect.y,rect.width,rect.height], radii:[style.borderTopLeftRadius,style.borderTopRightRadius,style.borderBottomLeftRadius,style.borderBottomRightRadius] };
+        }));
+        const before=await measure();
+        assert.ok(before.every(element=>element.rect[2]>0&&element.rect[3]>0), 'Every measured sample must be visible');
+        await page.evaluate(css => { document.querySelector('#surface').textContent=css; }, css);
+        assert.deepEqual(await measure(), before);
+        const failures = await page.locator('[data-corner]').evaluateAll(elements => elements.flatMap(element => {
+          if (!CSS.supports('corner-shape','squircle')) return [];
+          const reference=document.createElement('div'); reference.style.cornerShape=element.dataset.corner; document.body.append(reference);
+          const expected=getComputedStyle(reference).cornerShape; reference.remove();
+          return getComputedStyle(element).cornerShape===expected ? [] : [{id:element.id,expected,actual:getComputedStyle(element).cornerShape}];
+        }));
+        assert.deepEqual(failures, []);
+        assert.equal(await page.frameLocator('#art-frame').locator('#art').evaluate(element=>getComputedStyle(element).cornerShape===getComputedStyle(document.body).cornerShape), true);
+        await page.screenshot({path:join(tmpdir(),'rk-platform-corners-'+width+'-'+appearance+'.png'),fullPage:true});
+      }
+    }
+  } finally { await browser.close(); }
+});
 
 const statcounterSnippet = '<div id="desktop-browser-ww-monthly-202508-202608" width="600" height="400" style="width:600px; height: 400px;"></div><!-- You may change the values of width and height above to resize the chart --><p>Source: <a href="https://gs.statcounter.com/browser-market-share/desktop/worldwide">StatCounter Global Stats - Browser Market Share</a></p><script type="text/javascript" src="https://www.statcounter.com/js/fusioncharts.js"></script><script type="text/javascript" src="https://gs.statcounter.com/chart.php?desktop-browser-ww-monthly-202508-202608&chartWidth=600"></script>';
 
@@ -1286,7 +1325,7 @@ test('About editor rows reuse case-study styling and autosave without Done', {sk
     const before=await page.evaluate(()=>window.__RKStudio.getDraft());
     const appearance=element=>{
       const style=getComputedStyle(element),head=getComputedStyle(element.querySelector('.study__block-head')),chevron=getComputedStyle(element.querySelector('.study__block-chev'));
-      return {background:style.backgroundColor,border:style.borderColor,radius:style.borderRadius,shadow:style.boxShadow,minHeight:head.minHeight,padding:head.padding,chevronBorder:chevron.borderColor};
+      return {background:style.backgroundColor,border:style.borderColor,radius:style.borderRadius,corner:style.cornerShape,shadow:style.boxShadow,minHeight:head.minHeight,padding:head.padding,chevronBorder:chevron.borderColor};
     };
     const tabs=page.getByRole('tablist',{name:'About editor',exact:true});
     for(const width of [1440,390,320]) {
@@ -1297,6 +1336,7 @@ test('About editor rows reuse case-study styling and autosave without Done', {sk
       await page.mouse.move(0,0);
       const reference=page.locator('.study-sections .study__block').first();
       const native=await reference.evaluate(appearance);
+      assert.equal(await reference.evaluate(element=>{if(!CSS.supports('corner-shape','squircle'))return true;const probe=document.createElement('div');probe.style.cornerShape='squircle';document.body.append(probe);const expected=getComputedStyle(probe).cornerShape;probe.remove();return getComputedStyle(element).cornerShape===expected;}),true);
       await reference.screenshot({path:join(tmpdir(),'rk-native-row-'+width+'.png')});
       await page.locator('[data-l2-back]').click();
       await page.locator('.adm__tab[data-tab="aboutpage"]').click();

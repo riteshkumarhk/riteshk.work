@@ -128,6 +128,7 @@
   background: transparent;
   color: var(--text-dim);
   border-radius: 6px;
+  corner-shape: squircle;
   flex-shrink: 0;
   padding: 0;
 }
@@ -179,6 +180,7 @@
   border: 1px solid var(--line);
   background: var(--bg-2);
   border-radius: 6px;
+  corner-shape: squircle;
   color: var(--text);
   font-size: 12px;
 }
@@ -225,6 +227,7 @@
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
+  corner-shape: squircle;
   color: var(--text-faint);
 }
 .rws-search input {
@@ -255,6 +258,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
+  corner-shape: squircle;
   color: var(--text-dim);
 }
 .rws-library-row > svg {
@@ -711,6 +715,7 @@
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
+  corner-shape: squircle;
   padding: 8px 9px;
   font-family: var(--sans);
   font-size: 12px;
@@ -747,7 +752,7 @@
 .rws-typography-field > span:first-child { cursor: ew-resize; }
 .rws-typography-field > .slide-number { display: block; width: 100%; margin: 0; }
 .rws .rws-typography-field input[type="number"] { height: 35px; padding: 6px 28px 6px 9px; min-width: 0; font-size: 12px; touch-action: pan-y; }
-.rws .rws-typography-field .slide-number-steps button { display: grid; place-items: center; width: 22px; min-width: 0; height: auto; min-height: 0; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--text-dim); }
+.rws .rws-typography-field .slide-number-steps button { display: grid; place-items: center; width: 22px; min-width: 0; height: auto; min-height: 0; padding: 0; border: 0; border-radius: 3px; corner-shape: squircle; background: transparent; color: var(--text-dim); }
 .rws .rws-typography-field .slide-number-steps button:hover:not(:disabled) { color: var(--accent); background: var(--bg-2); }
 .rws-typography-field[data-scrubbing] input { cursor: ew-resize; user-select: none; border-color: var(--accent); }
 .rws-checkbox {
@@ -778,6 +783,7 @@
   height: 24px;
   border: 2px solid transparent;
   border-radius: 50%;
+  corner-shape: round;
   color: white;
   padding: 0;
 }
@@ -810,6 +816,7 @@
   white-space: normal;
   border: 1px solid var(--line);
   border-radius: 6px;
+  corner-shape: squircle;
   background: var(--bg);
   color: var(--text-dim);
   font-size: 11px;
@@ -907,6 +914,7 @@
 .rws-proposal {
   border: 1px solid var(--line);
   border-radius: 6px;
+  corner-shape: squircle;
   padding: 12px;
   margin-top: 12px;
   background: var(--bg);
@@ -1167,7 +1175,7 @@
 }
 .rws-pdf-scroll { position: absolute; inset: 44px 0 0; overflow: auto; }
 .rws-pdf-controls { height: 44px; display: flex; align-items: center; justify-content: center; gap: 4px; background: var(--bg-2); color: var(--text); }
-.rws .rws-pdf-controls input[type="number"] { flex: 0 0 42px; width: 42px; min-width: 0; height: 28px; padding: 2px; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; text-align: center; font: inherit; }
+.rws .rws-pdf-controls input[type="number"] { flex: 0 0 42px; width: 42px; min-width: 0; height: 28px; padding: 2px; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; corner-shape: squircle; text-align: center; font: inherit; }
 .rws-pdf-controls span { font: 11px var(--mono); min-width: 24px; }
 .rws-pdf-error, .rws-pdf-loading { position: relative; z-index: 2; margin: 0; padding: 16px; color: #242628; background: #f4f6f5; }
 .rws-pdf-reader .pdfViewer .page { color-scheme: light; }
@@ -1312,6 +1320,7 @@
   background: none;
   border: 0;
   border-radius: 6px;
+  corner-shape: squircle;
   padding: 12px;
   color: var(--text);
   font-size: 13px;
@@ -1343,6 +1352,7 @@
   color: var(--text);
   border: 1px solid transparent;
   border-radius: 6px;
+  corner-shape: squircle;
   background: none;
 }
 .rws-version-list button.is-active {
@@ -1415,6 +1425,7 @@
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 6px;
+  corner-shape: squircle;
   background: var(--bg);
   max-height: 42vh;
   overflow: auto;
@@ -1434,8 +1445,8 @@
   --mono: inherit;
 }
 .rws .rws-workbar { min-height: 48px; height: auto; background: var(--bg-2); }
-.rws .rws-workbar .rws-icon { border: 1px solid var(--line); border-radius: 8px; }
-.rws .rws-workbar-actions .rws-icon { border-radius: 50%; }
+.rws .rws-workbar .rws-icon { border: 1px solid var(--line); border-radius: 8px; corner-shape: squircle; }
+.rws .rws-workbar-actions .rws-icon { border-radius: 50%; corner-shape: round; }
 .rws .rws-preview-pdf { font-family: var(--mono); font-size: .6rem; }
 .rws .rws-workbar-actions .rws-download { color: var(--accent); }
 .rws[data-view="pdf"] .rws-body,
@@ -1454,7 +1465,7 @@
 .rws-score-parts { margin: 0; }
 .rws-score-parts > div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 11px; }
 .rws-score-parts dd { margin: 0; text-align: right; }
-.rws .rws-keywords button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 6px; background: transparent; border: 1px solid var(--line); border-radius: 4px; color: var(--text-dim); font-size: 10px; }
+.rws .rws-keywords button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 6px; background: transparent; border: 1px solid var(--line); border-radius: 4px; corner-shape: squircle; color: var(--text-dim); font-size: 10px; }
 .rws .rws-keywords button.is-mentioned { color: var(--rws-teal); border-color: currentColor; }
 .rws .rws-keywords button:disabled { opacity: 1; cursor: default; }
 .rws .lucide-lock-keyhole { color: var(--accent); }
@@ -1509,6 +1520,7 @@
   text-align: left;
   border: 1px solid transparent;
   border-radius: 6px;
+  corner-shape: squircle;
   background: none;
   color: var(--text-dim);
   font-size: 12px;

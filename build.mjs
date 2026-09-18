@@ -12,6 +12,7 @@
    stays as its current hand-written js/ file until it is migrated.
 --------------------------------------------------------------------------- */
 import { build, context } from "esbuild";
+import { uiCornersPlugin } from "./tools/ui-corners.mjs";
 
 const watch = process.argv.includes("--watch");
 
@@ -24,6 +25,7 @@ const options = {
   entryPoints: [...ENTRIES.map((name) => ({ in: `src/js/${name}.js`, out: name })), { in: 'src/js/workflow.jsx', out: 'workflow' }],
   outdir: "js",
   bundle: true,
+  plugins: [uiCornersPlugin()],
   // Safe minification: esbuild renames LOCALS + strips whitespace/dead code only.
   // Property mangling stays OFF, so window.RK.* , localStorage keys and Web-Crypto
   // string params ("AES-GCM"/"PBKDF2") are all preserved.

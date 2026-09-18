@@ -22,7 +22,7 @@
   .stage .fallback{ position:absolute; inset:0; display:grid; place-items:center; color:var(--dim); font-size:.85rem; text-align:center; padding:2rem; }
   .stage .fallback[hidden]{ display:none; }
   .panel{ position:fixed; right:1rem; top:1rem; width:250px; background:rgba(13,13,16,.92); backdrop-filter:blur(10px);
-          border:1px solid var(--line); border-radius:16px; padding:1rem 1rem 1.1rem; z-index:10; font-size:.8rem; }
+          border:1px solid var(--line); border-radius:16px; corner-shape:squircle; padding:1rem 1rem 1.1rem; z-index:10; font-size:.8rem; }
   .panel h2{ font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); margin:.2rem 0 .8rem; font-weight:600; }
   .row{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.55rem 0; }
   .row label{ color:var(--dim); }
@@ -30,7 +30,7 @@
   input[type=range]{ width:130px; accent-color:var(--accent); }
   input[type=checkbox]{ accent-color:var(--accent); }
   .covers{ display:flex; flex-wrap:wrap; gap:.4rem; margin:.2rem 0 .9rem; }
-  .covers button{ font:inherit; font-size:.72rem; padding:.3rem .55rem; border-radius:8px; cursor:pointer;
+  .covers button{ font:inherit; font-size:.72rem; padding:.3rem .55rem; border-radius:8px; corner-shape:squircle; cursor:pointer;
                   background:var(--bg-elev); color:var(--dim); border:1px solid var(--line); }
   .covers button.on{ color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:600; }
   .hint{ color:var(--faint); font-size:.68rem; line-height:1.5; margin-top:.7rem; border-top:1px solid var(--line); padding-top:.6rem; }

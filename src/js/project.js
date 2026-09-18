@@ -2418,7 +2418,7 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
   function sdbgPlace() {
     if (!sdbgOn()) return;
     var d = document.getElementById("__sdbg");
-    if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;white-space:pre-wrap;pointer-events:none"; }
+    if (!d) { d = document.createElement("div"); d.id = "__sdbg"; d.style.cssText = "position:fixed;left:6px;bottom:6px;z-index:99999;max-width:94vw;padding:7px 9px;background:rgba(0,0,0,.86);color:#5f5;font:11px/1.45 ui-monospace,monospace;border:1px solid #5f5;border-radius:6px;corner-shape:squircle;white-space:pre-wrap;pointer-events:none"; }
     var host = overlay && activeId != null ? overlay : document.body;
     if (d.parentNode !== host) host.appendChild(d);
     return d;

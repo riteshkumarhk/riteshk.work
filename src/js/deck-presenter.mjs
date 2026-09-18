@@ -242,7 +242,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
       ".pp{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;height:100vh;box-sizing:border-box;padding:18px}" +
       ".pp__main{display:flex;flex-direction:column;min-width:0;min-height:0;gap:14px;overflow:auto}" +
       ".pp-body,.pp-body *{cursor:auto}.pp-body button{cursor:pointer}.pp__livebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.pp__livestatus{font-size:.78rem;line-height:1.4;color:#b8b2aa;flex:1;min-width:150px}.pp__media{display:flex;align-items:center;gap:10px}.pp__media[hidden]{display:none}.pp__media input{min-width:0;flex:1;accent-color:var(--accent,#d8a657)}.pp__btn:disabled{opacity:.5;cursor:default}.pp__nowwrap{flex-shrink:0}.pp__now--live{cursor:none}.pp__media svg{display:block}" +
-      ".pp__nowwrap{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.12)}" +
+      ".pp__nowwrap{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;corner-shape:squircle;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.12)}" +
       ".pp__now{position:absolute;inset:0}.pp__now,.pp__now *{cursor:inherit}.pp__now .slidepv__stage{position:absolute;top:0;left:0;transform-origin:top left}.pp__now .slidepv__stage .pjps--free{padding:0}" +
       ".pp__meta{display:flex;align-items:center;gap:14px}.pp__time{display:flex;align-items:baseline;gap:6px;font-family:var(--mono,ui-monospace,monospace)}.pp__time span{font-size:2rem;font-variant-numeric:tabular-nums}.pp__time em{font-style:normal;text-transform:uppercase;letter-spacing:.12em;font-size:.6rem;color:#8a857e}" +
       ".pp__clock{margin-left:auto;font-family:var(--mono,monospace);font-size:1rem;color:#b8b2aa}.pp__count{font-family:var(--mono,monospace);font-size:1rem;color:#b8b2aa}" +
@@ -251,7 +251,7 @@ export function presentDeckWithRenderer(w, opts, { renderPjSlide, pjDeckSlides, 
       ".pp__notes{flex:1 1 auto;overflow:auto;font-size:1.35rem;line-height:1.5;color:#ece7e1}.pp__notes p{margin:0 0 .6em}.pp__pnote-empty{color:#6f6a63}" +
       ".pp__nextbox{flex:0 0 auto;border-top:1px solid rgba(255,255,255,.1);padding-top:8px}.pp__next{position:relative;width:100%;max-width:260px;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--bg,#0a0a0c);border:1px solid rgba(255,255,255,.1);margin:.35rem 0}.pp__next .slidepv__stage{position:absolute;top:0;left:0;transform-origin:top left}.pp__next .slidepv__stage .pjps--free{padding:0}.pp__nexttitle{font-family:var(--serif,Georgia,serif);color:#b8b2aa;font-size:1rem}" +
       ".pp__hint{flex:0 0 auto;font-size:.78rem;line-height:1.4;color:#8a857e;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}@media(max-width:820px){.pp{grid-template-columns:1fr}}" +
-      "</style>";
+      ".pp__btn,.pp__next{corner-shape:squircle}</style>";
     return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Presenter view \u2014 riteshk.work</title>" + links + css + "</head><body class=\"pp-body\">" +
       '<div class="pp"><div class="pp__main">' +
       '<div class="pp__nowwrap"><div class="pp__now" data-pp-now></div></div>' +
