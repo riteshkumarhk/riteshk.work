@@ -1127,6 +1127,9 @@ test('Journey thumbnails expand into solo cards or bounded story strips without 
       await first.scrollIntoViewIfNeeded();
       const resting=await first.boundingBox();
       assert.ok(resting.width<=112 && resting.height<=84,JSON.stringify(resting));
+      assert.equal(await firstTile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).borderRadius),'20px');
+      assert.equal(await first.locator('.jrn-tile__image').evaluate(element=>getComputedStyle(element).borderRadius),'20px');
+      assert.equal(await first.locator('.jrn-tile__image').evaluate(element=>{if(!CSS.supports('corner-shape','squircle'))return true;const reference=document.createElement('div');reference.style.cornerShape='squircle';document.body.append(reference);const expected=getComputedStyle(reference).cornerShape;reference.remove();return getComputedStyle(element).cornerShape===expected;}),true);
       assert.equal(await first.locator('.jrn-tile__details').isVisible(),false);
       assert.equal(await first.locator('img').getAttribute('src'),original.journey.chapters[0].entries[0].images[0].src);
       const baseline=await geometry();
