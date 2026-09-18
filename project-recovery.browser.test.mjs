@@ -1226,6 +1226,117 @@ test('Journey thumbnails expand into solo cards or bounded story strips without 
   } finally {await browser.close();}
 });
 
+test('Journey unseen case outlines transfer on hover and persist after opening with scroll parallax', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const page=await context.newPage();
+    const published=await journeyFixture(page);
+    published.journey.chapters[0].entries[1].workId='journey-case';
+    const original=structuredClone(published);
+    await page.goto(baseURL+'/?view=about');
+    await page.waitForFunction(()=>!!window.RK?.renderJourney);
+    const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+    const tile=page.locator('.jrn-tile').filter({has:first});
+    const image=first.locator('.jrn-tile__image');
+    const link=tile.locator('[data-jpeek-work]');
+    assert.equal(await page.locator('.is-case-unseen').count(),2);
+    await first.scrollIntoViewIfNeeded();
+    assert.equal(await image.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');
+    await first.hover();
+    assert.equal(await image.evaluate(element=>getComputedStyle(element).outlineStyle),'none');
+    assert.equal(await link.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:journey:seen-cases:v1')),null);
+    await page.keyboard.press('Escape');
+    await page.mouse.move(0,0);
+    assert.equal(await image.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');
+    for (const width of [1440,390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await first.scrollIntoViewIfNeeded();
+      await page.mouse.move(0,0);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-unseen-rest-'+width+'.png')});
+      await first.hover();
+      const outline=await link.evaluate(element=>{const style=getComputedStyle(element),rect=element.getBoundingClientRect();return {width:style.outlineWidth,offset:style.outlineOffset,color:style.outlineColor,border:style.borderRadius,left:rect.left-5,right:rect.right+5};});
+      assert.equal(outline.width,'2px');
+      assert.equal(outline.offset,'3px');
+      assert.equal(outline.border,'8px');
+      assert.ok(outline.left>=16 && outline.right<=width-16,JSON.stringify(outline));
+      await page.screenshot({path:join(tmpdir(),'rk-journey-unseen-cta-'+width+'.png')});
+      await page.keyboard.press('Escape');
+      await page.mouse.move(0,0);
+    }
+    await page.setViewportSize({width:1440,height:1000});
+    await page.keyboard.press('Tab');
+    await first.focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await link.evaluate(element=>document.activeElement===element),true);
+    assert.equal(await link.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');
+    await page.evaluate(()=>{window.__journeyOpen=RK.openProject;RK.openProject=()=>{};});
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:journey:seen-cases:v1')),null);
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),2);
+    await page.evaluate(()=>{RK.openProject=window.__journeyOpen;delete window.__journeyOpen;});
+    await page.mouse.move(0,0);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(()=>window.scrollTo({top:document.querySelector('[data-jstory]').getBoundingClientRect().top+scrollY-400,behavior:'instant'}));
+    await page.waitForFunction(()=>!!document.querySelector('.jrn-tile').style.getPropertyValue('--jrn-par-y'));
+    const drift=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y'));
+    await page.evaluate(()=>window.scrollBy({top:140,behavior:'instant'}));
+    await page.waitForFunction(before=>document.querySelector('.jrn-tile').style.getPropertyValue('--jrn-par-y')!==before,drift);
+    assert.notEqual(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    await first.hover();
+    assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    await page.keyboard.press('Escape');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    await first.click();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:journey:seen-cases:v1')),null);
+    await page.getByRole('button',{name:'View case study',exact:false}).click();
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('rk:journey:seen-cases:v1')||'[]').includes('journey-case'));
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),0);
+    await page.locator('.pj.is-open [data-pj="close"]').click();
+    await page.locator('#journey-detail:not([hidden])').waitFor();
+    await page.getByRole('button',{name:'Close chapter',exact:true}).click();
+    await page.reload();
+    await first.waitFor();
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),0);
+    const second=await page.context().newPage();
+    await journeyFixture(second);
+    await second.goto(baseURL+'/?view=about');
+    await second.waitForFunction(()=>!!window.RK?.renderJourney);
+    assert.equal(await second.locator('.jrn-tile.is-case-unseen').count(),0);
+    await second.evaluate(()=>localStorage.removeItem('rk:journey:seen-cases:v1'));
+    await page.waitForFunction(()=>document.querySelectorAll('.jrn-tile.is-case-unseen').length===2);
+    await second.close();
+    assert.deepEqual(published,original);
+  } finally {await browser.close();}
+});
+
+test('Journey unseen indicators tolerate blocked storage without changing original content', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce',hasTouch:true});
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const published=await journeyFixture(page),original=structuredClone(published);
+    await page.addInitScript(()=>{
+      for(const method of ['getItem','setItem']) {
+        const native=Storage.prototype[method];
+        Storage.prototype[method]=function(key,...args){if(key==='rk:journey:seen-cases:v1')throw new DOMException('Storage disabled','SecurityError');return native.call(this,key,...args);};
+      }
+    });
+    await page.goto(baseURL+'/?view=about');
+    const first=page.getByRole('button',{name:'Edge onboarding',exact:true});
+    await first.waitFor();
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),1);
+    await first.tap();
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),1);
+    await page.getByRole('button',{name:'View case study',exact:false}).tap();
+    await page.waitForFunction(()=>document.querySelectorAll('.jrn-tile.is-case-unseen').length===0);
+    assert.deepEqual(published,original);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
 test('Journey expanded thumbnail links open available cases directly and return to About', {skip:!baseURL,timeout:60000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -1317,9 +1428,12 @@ test('Journey expanded thumbnail links open available cases directly and return 
     assert.equal(await link.isVisible(),true);
     assert.equal(await link.getAttribute('href'),'/work/journey-case');
     assert.equal(await page.evaluate(()=>!!window.journeyUnsafeCover),false);
+    await page.evaluate(()=>{localStorage.removeItem('rk:journey:seen-cases:v1');window.dispatchEvent(new StorageEvent('storage',{key:'rk:journey:seen-cases:v1'}));});
+    assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),1);
     for(const patch of [{hidden:true},{encWork:'synthetic'},{id:'unmatched'}]) {
       await page.evaluate(patch=>{const copy=structuredClone(RK.data);Object.assign(copy.work[0],patch);RK.renderJourney(copy);},patch);
       assert.equal(await page.locator('[data-jpeek-work]').count(),0);
+      assert.equal(await page.locator('.jrn-tile.is-case-unseen').count(),0);
     }
     await page.evaluate(()=>RK.renderJourney(RK.data));
     assert.equal(await page.locator('[data-jpeek-work]').count(),1);

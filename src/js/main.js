@@ -262,9 +262,16 @@ import { initNodeWeb } from "./particles.js";
   const parLite = document.documentElement.classList.contains("lite");
   const updateParallax = () => {
     if (parLite) return;
-    const pars = document.querySelectorAll(".case__par");
+    const pars = document.querySelectorAll(".case__par, .jrn-tile");
     const vh = window.innerHeight;
     for (let i = 0; i < pars.length; i++) {
+      if (pars[i].classList.contains('jrn-tile')) {
+        const anchor = pars[i].getBoundingClientRect();
+        const steady = matchMedia('(prefers-reduced-motion: reduce)').matches || pars[i].closest('.is-peeking');
+        const drift = steady ? 0 : Math.max(-anchor.height * .08, Math.min(anchor.height * .08, (anchor.top + anchor.height / 2 - vh / 2) / vh * anchor.height * .12));
+        pars[i].style.setProperty('--jrn-par-y', drift.toFixed(1) + 'px');
+        continue;
+      }
       const r = pars[i].getBoundingClientRect();
       if (r.bottom < -100 || r.top > vh + 100) continue; // skip offscreen
       const h = r.height;

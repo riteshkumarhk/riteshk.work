@@ -7,6 +7,8 @@ import { journeyRows } from "./journey-core.mjs";
   let currentData, rows = [], activeKey = null, mediaIndex = 0, editorPreview = false, caseReturn = null;
   let background = null, openingKey = null;
   let peekRow = null, peekTrigger = null, peekResize = null;
+  const seenKey = 'rk:journey:seen-cases:v1';
+  let seenCases = readSeenCases();
   const timeline = () => document.getElementById("timeline");
   const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
   const md = value => window.RK?.md ? window.RK.md(value) : esc(value);
@@ -15,6 +17,34 @@ import { journeyRows } from "./journey-core.mjs";
   const media = story => (story.entry.images || []).filter(image => image?.src && mediaUrl(image.src));
   const video = image => image.kind === "video" || /^data:video\//i.test(image.src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(image.src);
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function readSeenCases() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(seenKey) || '[]');
+      return new Set(Array.isArray(saved) ? saved.filter(id => typeof id === 'string' && id.length < 200).slice(-256) : []);
+    } catch { return new Set(); }
+  }
+
+  function refreshSeenCases() {
+    timeline()?.querySelectorAll('.jrn-tile').forEach(element => {
+      const trigger = element.querySelector('[data-jstory]');
+      const work = linkedWork(allStories().find(story => story.key === trigger.dataset.jstory));
+      const unseen = !!work && !seenCases.has(String(work.id));
+      element.classList.toggle('is-case-unseen', unseen);
+      if (unseen) trigger.setAttribute('aria-description', 'Linked case study not yet viewed');
+      else trigger.removeAttribute('aria-description');
+    });
+  }
+
+  function rememberOpenCase() {
+    if (previewFrame || !/^\/work\//.test(location.pathname) || !document.querySelector('.pj.is-open')) return;
+    let id;
+    try { id = decodeURIComponent(location.pathname.slice('/work/'.length)); } catch { return; }
+    if (!allStories().some(story => String(linkedWork(story)?.id) === id) || seenCases.has(id)) return;
+    seenCases = new Set([...readSeenCases(), ...seenCases, id].slice(-256));
+    try { localStorage.setItem(seenKey, JSON.stringify([...seenCases])); } catch {}
+    refreshSeenCases();
+  }
 
   function mediaUrl(reference) {
     const value = window.RK?.mediaUrl ? window.RK.mediaUrl(reference) : reference;
@@ -46,7 +76,8 @@ import { journeyRows } from "./journey-core.mjs";
     const label = entry.title || story.chapter.name || "Chapter";
     const work = linkedWork(story);
     const cover = work?.image ? mediaUrl(work.image) : '';
-    return '<div class="jrn-tile"><div class="jrn-tile__preview"><button type="button" class="jrn-tile__story" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '">' +
+    const unseen = work && !seenCases.has(String(work.id));
+    return '<div class="jrn-tile' + (unseen ? ' is-case-unseen' : '') + '"><div class="jrn-tile__preview"><button type="button" class="jrn-tile__story" id="journey-story-' + identity + '" data-jstory="' + esc(story.key) + '" aria-expanded="false" aria-controls="journey-detail" aria-label="' + esc(label) + '"' + (unseen ? ' aria-description="Linked case study not yet viewed"' : '') + '>' +
       '<span class="jrn-tile__image">' + thumb(media(story)[0] || (story.chapter.logo ? { src: story.chapter.logo } : null)) + '</span><span class="jrn-tile__details">' +
       (entry.period ? '<span class="jrn-tile__period">' + esc(entry.period) + '</span>' : '') +
       '<span class="jrn-tile__title">' + md(label) + '</span></span></button>' +
@@ -136,6 +167,7 @@ import { journeyRows } from "./journey-core.mjs";
         (row.stories.length > 1 ? '<button type="button" class="jrn-control jrn-stories__prev" data-jpeek-step="-1" aria-label="Previous stories" title="Previous stories">&#8249;</button><button type="button" class="jrn-control jrn-stories__next" data-jpeek-step="1" aria-label="Next stories" title="Next stories">&#8250;</button>' : '') + '</div></div>' : '') + '</div></li>').join('');
     if (activeStory()) expand(activeKey, false);
     else close(false);
+    requestAnimationFrame(rememberOpenCase);
   }
 
   function triggerFor(key) {
@@ -333,6 +365,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (new URLSearchParams(location.search).has("journey")) open({ silent: true });
     });
     document.addEventListener("rk:route", () => {
+      requestAnimationFrame(rememberOpenCase);
       if (!caseReturn || document.querySelector(".pj.is-open") || /^\/work\//.test(location.pathname)) return;
       history.replaceState({ rkPage: "about" }, "", caseReturn.path);
       document.title = caseReturn.title;
@@ -341,6 +374,11 @@ import { journeyRows } from "./journey-core.mjs";
       const panel = document.getElementById("journey-detail");
       if (panel) { panel.hidden = false; lockBackground(true); panel.querySelector('[data-jwork]')?.focus({ preventScroll: true }); }
       else if (returnKey) { triggerFor(returnKey)?.focus({ preventScroll: true }); closePeek(); requestAnimationFrame(() => window.scrollTo(returnPosition)); }
+    });
+    window.addEventListener('storage', event => {
+      if (event.key !== seenKey && event.key !== null) return;
+      seenCases = readSeenCases();
+      refreshSeenCases();
     });
     if (window.__siteRendered) render(window.RK?.data);
   }
