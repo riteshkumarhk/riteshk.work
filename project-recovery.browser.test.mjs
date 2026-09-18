@@ -1341,10 +1341,10 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     assert.deepEqual(await ring.boundingBox(),rect);
     const speeds=await page.evaluate(()=>new Promise(resolve=>{
       const host=document.querySelector('#timeline'),started=performance.now(),values=[];
-      let previous=started,angle=parseFloat(host.style.getPropertyValue('--jrn-ring-angle'));
+      let previous=null,angle=null;
       function sample(now){
         const current=parseFloat(host.style.getPropertyValue('--jrn-ring-angle')),delta=now-previous;
-        if(delta>0)values.push((current-angle+360)%360/Math.min(50,delta)*1000);
+        if(previous!==null && delta>0)values.push((current-angle+360)%360/Math.min(50,delta)*1000);
         previous=now;angle=current;
         if(now-started<7400)requestAnimationFrame(sample);else resolve(values);
       }
