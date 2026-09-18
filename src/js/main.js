@@ -268,7 +268,7 @@ import { initNodeWeb } from "./particles.js";
       if (pars[i].classList.contains('jrn-tile')) {
         const anchor = pars[i].getBoundingClientRect();
         const steady = matchMedia('(prefers-reduced-motion: reduce)').matches || pars[i].closest('.is-peeking');
-        const drift = steady ? 0 : Math.max(-anchor.height * .08, Math.min(anchor.height * .08, (anchor.top + anchor.height / 2 - vh / 2) / vh * anchor.height * .12));
+        const drift = steady ? 0 : Math.max(-16, Math.min(16, (anchor.top + anchor.height / 2 - vh / 2) / vh * 48));
         pars[i].style.setProperty('--jrn-par-y', drift.toFixed(1) + 'px');
         continue;
       }

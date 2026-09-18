@@ -19,23 +19,30 @@ import { journeyRows } from "./journey-core.mjs";
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const ringPreference = matchMedia('(prefers-reduced-motion: reduce)');
   let ringFrame = 0, ringLast = 0, ringVisible = false;
-  let ringAngle = 0, ringSpeed = 12, ringStartSpeed = 12, ringTargetSpeed = 12, ringElapsed = 0, ringDuration = 0;
+  const ringStates = new WeakMap();
 
   function animateRing(now) {
     const delta = ringLast ? Math.min(50, now - ringLast) : 0;
     ringLast = now;
-    if (ringElapsed >= ringDuration) {
-      ringStartSpeed = ringSpeed;
-      ringTargetSpeed = Math.random() < .16 ? 1.5 : 10 + Math.random() * 66;
-      ringDuration = 1400 + Math.random() * 2600;
-      ringElapsed = 0;
-    }
-    ringElapsed += delta;
-    const progress = Math.min(1, ringElapsed / ringDuration);
-    const blend = progress * progress * (3 - 2 * progress);
-    ringSpeed = ringStartSpeed + (ringTargetSpeed - ringStartSpeed) * blend;
-    ringAngle = (ringAngle + ringSpeed * delta / 1000) % 360;
-    timeline()?.style.setProperty('--jrn-ring-angle', ringAngle.toFixed(3) + 'deg');
+    timeline()?.querySelectorAll('.is-case-unseen').forEach(element => {
+      let state = ringStates.get(element);
+      if (!state) {
+        state = { angle: Math.random() * 360, speed: 12, start: 12, target: 12, elapsed: 0, duration: 0 };
+        ringStates.set(element, state);
+      }
+      if (state.elapsed >= state.duration) {
+        state.start = state.speed;
+        state.target = Math.random() < .16 ? 1.5 : 10 + Math.random() * 66;
+        state.duration = 1400 + Math.random() * 2600;
+        state.elapsed = 0;
+      }
+      state.elapsed += delta;
+      const progress = Math.min(1, state.elapsed / state.duration);
+      const blend = progress * progress * (3 - 2 * progress);
+      state.speed = state.start + (state.target - state.start) * blend;
+      state.angle = (state.angle + state.speed * delta / 1000) % 360;
+      element.style.setProperty('--jrn-ring-angle', state.angle.toFixed(3) + 'deg');
+    });
     ringFrame = requestAnimationFrame(animateRing);
   }
 
@@ -198,7 +205,8 @@ import { journeyRows } from "./journey-core.mjs";
     host.querySelectorAll("video").forEach(element => element.pause());
     host.innerHTML = rows.map(row => '<li class="tl' + (row.role.present ? ' tl--present' : '') + '">' +
       '<div class="tl__year">' + esc(row.role.years) + '</div><div class="tl__main">' +
-      '<h3>' + esc(row.role.role) + '</h3>' + (row.role.org ? '<span class="tl__org">' + esc(row.role.org) + '</span>' : '') +
+      '<h3>' + esc(row.role.role) + '</h3>' + (row.role.org || mediaUrl(row.role.logo) ? '<span class="tl__org">' +
+        (mediaUrl(row.role.logo) ? '<img class="tl__logo" src="' + esc(mediaUrl(row.role.logo)) + '" alt="" loading="lazy" draggable="false" />' : '') + '<span>' + esc(row.role.org) + '</span></span>' : '') +
       (row.role.desc ? '<p>' + esc(row.role.desc) + '</p>' : '') +
       (row.stories.length ? '<div class="jrn-stories"><div class="jrn-stories__preview"><div class="jrn-stories__track" data-lenis-prevent>' + row.stories.map(tile).join('') + '</div>' +
         (row.stories.length > 1 ? '<button type="button" class="jrn-control jrn-stories__prev" data-jpeek-step="-1" aria-label="Previous stories" title="Previous stories">&#8249;</button><button type="button" class="jrn-control jrn-stories__next" data-jpeek-step="1" aria-label="Next stories" title="Next stories">&#8250;</button>' : '') + '</div></div>' : '') + '</div></li>').join('');
@@ -394,7 +402,7 @@ import { journeyRows } from "./journey-core.mjs";
     document.addEventListener('scroll', positionPeek, true);
     window.addEventListener("resize", () => closePeek());
     document.addEventListener("error", event => {
-      if (event.target.matches?.('.jrn-tile__case-image')) { event.target.remove(); return; }
+      if (event.target.matches?.('.jrn-tile__case-image, .tl__logo')) { event.target.remove(); return; }
       const stage = event.target.closest?.(".jrn-gallery__stage");
       if (!stage || !activeStory()) return;
       const image = media(activeStory())[mediaIndex];

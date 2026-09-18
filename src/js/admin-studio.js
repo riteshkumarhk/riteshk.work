@@ -55,7 +55,7 @@ import { createRefreshGate } from "./studio-refresh.mjs";
 import { boundedResumeCompletion } from "./resume-review.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
 import { resumeSignature } from "./resume-workspace.mjs";
-import { journeyRoleIndex } from "./journey-core.mjs";
+import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as orderedRoleStories } from "./journey-core.mjs";
 
 (function () {
   "use strict";
@@ -4624,7 +4624,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
      Keys: "list:<name>" (L1 lists) · "block:<i>" (case-study sections) ·
      "item:<i>:<j>" (repeater items). Pointer-based, so it's reliable across
      browsers and auto-scrolls the editor when you drag near an edge. */
-  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem, .story__item";
+  var SORT_ROW_SEL = ".rep__item, .study__block, .card, .cellrow, .adm__lsec, .adm__asec, .slides__navitem, .story__item, .jlinks__row";
   function sortRowsFor(key) {
     if (key.indexOf('block:') === 0) {
       var sectionGrip = root.querySelector('.study-sections [data-grip][data-sortkey="' + key + '"]');
@@ -4751,6 +4751,8 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   }
   function sortApply(key, from, to) {
     var p = key.split(":"), arr = null, after = null;
+    if (key === 'list:path') { moveJourneyRole(from, to); return; }
+    if (p[0] === 'jlinks') { moveJourneyStory(+p[1], from, to); return; }
     if (p[0] === "list") { arr = data[p[1]]; after = function () { apply(true); renderBody(); }; }
     else if (p[0] === "lsec") { arr = workLayoutArr(); after = function () { setWorkLayout(arr); }; }
     else if (p[0] === "asec") { arr = aboutLayoutArr(); after = function () { setAboutLayout(arr); }; }
@@ -9807,19 +9809,20 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       return secHead("About", "The sections that make up your About page. Drag the grip or use the arrows to reorder them, and the eye to show or hide any. The About text &amp; photos edit here; Recognition, Skills, Journey and Education open a Manage dialog.") + aboutSectionCards();
     },
     path() {
-      const list = data.path || [];
-      let html = (journeyOpen ? "" : secHead("Journey", "Your experience timeline.")) + addBar("path", "Add experience") + (journeyOpen ? '<div class="study__blocks">' : '');
-      list.forEach((p, i) => {
+      const list = journeyRoles(data);
+      let html = (journeyOpen ? "" : secHead("Journey", "Your experience timeline.")) + '<div class="imgblk__row"><button type="button" class="btn btn--ghost" data-act="jroles-reset" title="Reset experiences to timeline order"' + (data.journey?.roleOrder === 'manual' ? '' : ' disabled') + '>' + IC.refresh + ' Reset order</button></div>' + addBar("path", "Add experience") + (journeyOpen ? '<div class="study__blocks">' : '');
+      list.forEach(({role: p, index: i}, position) => {
         var expanded = journeyRole === p;
         html += '<div class="' + (journeyOpen ? 'study__block jedit' + (expanded ? ' is-open' : '') : 'card') + '">' + (journeyOpen ?
           '<div class="study__block-head"><span class="sortgrip study__block-grip" data-grip data-sortkey="list:path" title="Drag to reorder">' + GRIP_SVG + '</span>' +
           '<button type="button" class="jedit__select" data-act="jrole-toggle" data-index="' + i + '" aria-expanded="' + expanded + '"><strong>' + escHtml(p.role || 'Untitled role') + '</strong><small>' + escHtml([p.org, p.years].filter(Boolean).join(' / ')) + '</small></button>' +
-          journeyRowMenu('role', i, null, list.length) + '<button type="button" class="iconbtn study__block-chev" data-act="jrole-toggle" data-index="' + i + '" aria-label="Edit ' + escAttr(p.role || 'role') + '" aria-expanded="' + expanded + '">' + IC.chev + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' : cardHead(p.role || "Role " + (i + 1), "path", i, list.length)) +
+          journeyRowMenu('role', i, null, list.length, position) + '<button type="button" class="iconbtn study__block-chev" data-act="jrole-toggle" data-index="' + i + '" aria-label="Edit ' + escAttr(p.role || 'role') + '" aria-expanded="' + expanded + '">' + IC.chev + '</button></div><div class="jedit__body"' + (expanded ? '' : ' hidden') + '>' : cardHead(p.role || "Role " + (i + 1), "path", i, list.length)) +
           '<div class="af__row">' + itemField("path", i, "years", "Years") +
           '<div class="af"><label class="af__label">Present</label><label class="chk" style="padding-top:.4rem"><input type="checkbox" data-act="present" data-index="' + i + '"' + (p.present ? " checked" : "") + " /> I work here now</label></div>" +
           "</div>" +
           itemField("path", i, "role", "Role") +
           itemField("path", i, "org", "Organisation") +
+          journeyRoleLogo(p, i) +
           itemField("path", i, "desc", "Description", { type: "textarea", rows: 3 }) +
           (journeyOpen ? journeyRoleStories(i) : "") +
           (journeyOpen ? '</div>' : '') +
@@ -11147,7 +11150,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       w.RK.openJourney(Object.assign({ preview: true, silent: true }, selected ? { chapterIndex: story.chapterIndex, entryIndex: story.entryIndex } : {}, selected && selection?.scroll ? { scroll: true } : {}));
       if (!selected && selection?.scroll) {
         if (journeyTab === "journey" && journeyRole) {
-          var roleIndex = (data.path || []).indexOf(journeyRole);
+          var roleIndex = journeyRoles(data).findIndex(item => item.role === journeyRole);
           w.document.querySelectorAll('#timeline > .tl')[roleIndex]?.scrollIntoView({ behavior: "instant", block: "center" });
         } else {
           var key = selection.section || ({ journey: "path", photos: "photos", more: journeyMoreSection })[journeyTab];
@@ -11198,6 +11201,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   function closeJourneyEditor(opts) {
     opts = opts || {};
     journeyOpen = false;
+    paintL2Tabs();
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
     if (root) { root.classList.remove("is-l2"); root.classList.remove("is-preview"); root.classList.remove("is-noprev"); }
     if (body) body.hidden = false;
@@ -11250,9 +11254,9 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   function journeyActions(label, buttons) {
     return '<details class="study__actions"><summary class="iconbtn" aria-label="' + label + '" title="' + label + '" aria-haspopup="true" aria-expanded="false">' + svgIco('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>') + '</summary><div class="study__action-menu" popover="manual" role="group" aria-label="' + label + ' menu">' + buttons + '</div></details>';
   }
-  function journeyRowMenu(kind, index, chapterIndex, length) {
+  function journeyRowMenu(kind, index, chapterIndex, length, position = index) {
     var identity = kind === 'role' ? ' data-list="path" data-index="' + index + '"' : kind === 'chapter' ? ' data-jc="' + index + '"' : ' data-jc="' + chapterIndex + '" data-je="' + index + '"';
-    var actions = [['rename', 'Rename', IC.edit], ['up', 'Move up', IC.up, index === 0], ['down', 'Move down', IC.down, index === length - 1]];
+    var actions = [['rename', 'Rename', IC.edit], ['up', 'Move up', IC.up, position === 0], ['down', 'Move down', IC.down, position === length - 1]];
     if (kind === 'story') actions.push(['duplicate', 'Duplicate', IC.dup]);
     actions.push(['remove', 'Remove', IC.trash]);
     return journeyActions((kind === 'role' ? 'Role' : kind === 'chapter' ? 'Chapter' : 'Story') + ' actions', actions.map(function (action) {
@@ -11261,14 +11265,45 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     }).join(''));
   }
   function journeyRoleStories(roleIndex) {
-    var stories = journeyStories().filter(function (story) { return journeyRoleIndex(data.path || [], story.chapter, story.entry) === roleIndex; });
-    return '<div class="jlinks" data-jrole="' + roleIndex + '"><div class="rep__head"><span>Stories</span><button type="button" class="btn btn--add rep__add" data-act="jstories-add" data-index="' + roleIndex + '">+ Add stories</button></div>' +
-      (stories.map(function (story) {
+    var stories = orderedRoleStories(data, roleIndex);
+    return '<div class="jlinks" data-jrole="' + roleIndex + '"><div class="rep__head"><span>Stories</span><button type="button" class="iconbtn" data-act="jstories-reset" data-index="' + roleIndex + '" title="Reset stories to timeline order" aria-label="Reset stories to timeline order"' + (Array.isArray(data.path[roleIndex].storyOrder) ? '' : ' disabled') + '>' + IC.refresh + '</button><button type="button" class="btn btn--add rep__add" data-act="jstories-add" data-index="' + roleIndex + '">+ Add stories</button></div>' +
+      (stories.map(function (story, position) {
         var title = story.entry.title || story.entry.period || "Untitled story";
         var identity = ' data-jc="' + story.chapterIndex + '" data-je="' + story.entryIndex + '"';
-        return '<div class="jlinks__row"><span data-jmap-title' + identity + '>' + escHtml(title) + '</span><button type="button" class="iconbtn" data-act="jentry-edit"' + identity + ' title="Edit story" aria-label="Edit ' + escAttr(title) + '">' + IC.edit + '</button>' +
+        var moveIdentity = ' data-index="' + roleIndex + '" data-position="' + position + '"';
+        return '<div class="jlinks__row"><span class="sortgrip" data-grip data-sortkey="jlinks:' + roleIndex + '" title="Drag to reorder stories">' + GRIP_SVG + '</span><span data-jmap-title' + identity + '>' + escHtml(title) + (story.entry.period ? '<small>' + escHtml(story.entry.period) + '</small>' : '') + '</span>' +
+          journeyActions('Linked story actions', '<button type="button" data-act="jlinked-up"' + moveIdentity + (position === 0 ? ' disabled' : '') + '>' + IC.up + '<span>Move up</span></button><button type="button" data-act="jlinked-down"' + moveIdentity + (position === stories.length - 1 ? ' disabled' : '') + '>' + IC.down + '<span>Move down</span></button>') +
+          '<button type="button" class="iconbtn" data-act="jentry-edit"' + identity + ' title="Edit story" aria-label="Edit ' + escAttr(title) + '">' + IC.edit + '</button>' +
           '<button type="button" class="iconbtn" data-act="jstory-unlink" data-index="' + roleIndex + '"' + identity + ' title="Unlink story" aria-label="Unlink ' + escAttr(title) + '">' + IC.link + '</button></div>';
       }).join("") || '<div class="rep__empty">No stories added.</div>') + '</div>';
+  }
+  function moveJourneyRole(from, to) {
+    const roles = journeyRoles(data).map(item => item.role);
+    if (from < 0 || to < 0 || from >= roles.length || to >= roles.length || from === to) return;
+    roles.splice(to, 0, roles.splice(from, 1)[0]);
+    data.path = roles;
+    journeyData().roleOrder = 'manual';
+    apply(true); renderBody();
+  }
+  function moveJourneyStory(roleIndex, from, to) {
+    const role = data.path?.[roleIndex], stories = orderedRoleStories(data, roleIndex);
+    if (!role || from < 0 || to < 0 || from >= stories.length || to >= stories.length || from === to) return;
+    stories.forEach(story => {
+      if (!story.chapter.id) story.chapter.id = 'jc-' + crypto.randomUUID();
+      if (!story.entry.id) story.entry.id = 'je-' + crypto.randomUUID();
+    });
+    stories.splice(to, 0, stories.splice(from, 1)[0]);
+    role.storyOrder = stories.map(story => journeyEntryKey(story.chapter, story.entry, story.chapterIndex, story.entryIndex));
+    saveDraft(true); renderJourneyEditor();
+  }
+  function journeyRoleLogo(role, index) {
+    return '<div class="af"><label class="af__label" for="role-logo-url-' + index + '">Company logo</label>' +
+      (role.logo ? '<img class="adm__brand-logo" src="' + escAttr(previewSrc(role.logo)) + '" alt="Company logo" />' : '') +
+      '<input type="text" id="role-logo-url-' + index + '" data-role-logo-url="' + index + '" placeholder="https://..." aria-label="Company logo image URL" />' +
+      '<div class="imgblk__row"><button type="button" class="btn btn--ghost" data-act="role-logo-upload" data-index="' + index + '">' + IC.publish + ' Upload logo</button>' +
+      '<button type="button" class="btn btn--ghost" data-act="role-logo-fetch" data-index="' + index + '">' + IC.link + ' Fetch link</button>' +
+      (role.logo ? '<button type="button" class="btn btn--ghost" data-act="role-logo-remove" data-index="' + index + '">' + IC.trash + ' Remove logo</button>' : '') +
+      '</div><div class="af__hint" data-role-logo-error="' + index + '" role="alert"></div></div>';
   }
   function journeyStoryPicker(roleIndex, trigger) {
     var role = (data.path || [])[roleIndex];
@@ -11418,6 +11453,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
       if (rowTitle) rowTitle.textContent = ent.title || 'Untitled story';
       var summaryTitle = l2body.querySelector('[data-jmap-title][data-jc="' + t.dataset.jc + '"][data-je="' + t.dataset.je + '"]');
       if (summaryTitle) summaryTitle.textContent = ent.title || ent.period || "Untitled story";
+      if (t.dataset.jfield === 'period') l2body.querySelectorAll('[data-jrole]').forEach(element => { element.outerHTML = journeyRoleStories(+element.dataset.jrole); });
       return;
     }
     if (t.dataset.jsel !== undefined) {
@@ -12381,6 +12417,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (act === "plate-sample") { data.work[i].theme = b.dataset.theme; data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Motion placeholder applied.", true); return; }
     if (act === "img-clear") { data.work[i].image = ""; apply(true); if (openStudy >= 0) renderL2(); else renderBody(); status("Image removed."); return; }
     if (act.startsWith("brand-logo-")) { editBrandLogo(act, i, b); return; }
+    if (act.startsWith("role-logo-")) { editBrandLogo(act, i, b); return; }
     if (act === "img-upload") {
       var uploadWork = data.work[i];
       if (!uploadWork) return;
@@ -12608,6 +12645,9 @@ import { journeyRoleIndex } from "./journey-core.mjs";
     if (act === "study-slides") { openL2(i, "slides"); return; }
     if (act === "journey-edit") { openJourneyEditor(); return; }
     if (act === "journey-close") { closeJourneyEditor(); return; }
+    if (act === 'jroles-reset') { delete journeyData().roleOrder; apply(true); renderBody(); return; }
+    if (act === 'jstories-reset') { delete data.path[+b.dataset.index].storyOrder; saveDraft(true); renderJourneyEditor(); return; }
+    if (act === 'jlinked-up' || act === 'jlinked-down') { const position = +b.dataset.position; moveJourneyStory(+b.dataset.index, position, position + (act === 'jlinked-up' ? -1 : 1)); return; }
     if (act === "jrole-toggle" || act === "jrole-rename") {
       var selectedRole = data.path[+b.dataset.index];
       journeyRole = act === "jrole-toggle" && journeyRole === selectedRole ? null : selectedRole;
@@ -12979,6 +13019,7 @@ import { journeyRoleIndex } from "./journey-core.mjs";
           .then(function (ok) { if (ok) { data.work.splice(i, 1); apply(true); renderBody(); status("Case study deleted.", true); } });
       } else { data[list].splice(i, 1); apply(true); renderBody(); }
     }
+    else if (list === 'path' && (act === 'up' || act === 'down')) { const position = journeyRoles(data).findIndex(item => item.index === i); moveJourneyRole(position, position + (act === 'up' ? -1 : 1)); }
     else if (act === "up" && i > 0) { const a = data[list]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; apply(true); renderBody(); }
     else if (act === "down" && i < data[list].length - 1) { const a = data[list]; [a[i + 1], a[i]] = [a[i], a[i + 1]]; apply(true); renderBody(); }
   }
@@ -14748,14 +14789,22 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   /* ---------- imagery + AI ---------- */
   const brandLogoOps = new WeakMap();
   async function editBrandLogo(action, index, button) {
-    const work = data.work[index]; if (!work) return;
+    const roleLogo = action.startsWith('role-logo-');
+    const work = (roleLogo ? data.path : data.work)?.[index]; if (!work) return;
+    const prefix = roleLogo ? 'role-logo' : 'brand-logo';
     const operation = (brandLogoOps.get(work) || 0) + 1; brandLogoOps.set(work, operation);
-    const current = () => root?.isConnected && data?.work?.includes(work) && brandLogoOps.get(work) === operation;
-    const accept = uri => { if (!current()) return; work.brandLogo = uri; apply(true); if (openStudy === data.work.indexOf(work) && l2Tab === "details") renderL2(); };
-    if (action === "brand-logo-remove") { accept(""); return; }
-    if (action === "brand-logo-upload") { pickImage(accept); return; }
-    const field = root.querySelector('[data-brand-logo-url="' + index + '"]');
-    const error = root.querySelector('[data-brand-logo-error="' + index + '"]');
+    const current = () => root?.isConnected && (roleLogo ? data?.path : data?.work)?.includes(work) && brandLogoOps.get(work) === operation;
+    const accept = uri => {
+      if (!current()) return;
+      work[roleLogo ? 'logo' : 'brandLogo'] = uri;
+      apply(true);
+      if (roleLogo) { if (journeyOpen) renderJourneyEditor(); }
+      else if (openStudy === data.work.indexOf(work) && l2Tab === "details") renderL2();
+    };
+    if (action === prefix + "-remove") { accept(""); return; }
+    if (action === prefix + "-upload") { pickImage(accept); return; }
+    const field = root.querySelector('[data-' + prefix + '-url="' + index + '"]');
+    const error = root.querySelector('[data-' + prefix + '-error="' + index + '"]');
     try {
       error.textContent = ""; button.disabled = true;
       const url = new URL(field.value.trim());

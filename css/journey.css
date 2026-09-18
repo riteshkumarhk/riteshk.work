@@ -1,4 +1,7 @@
 .tl__main { min-width: 0; }
+.tl__org { display: flex; align-items: center; gap: 8px; }
+.tl__org > span { min-width: 0; overflow-wrap: anywhere; }
+.tl__logo { flex: 0 0 auto; width: 1lh; height: 1lh; max-width: 24px; max-height: 24px; object-fit: contain; }
 .jrn-stories { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 112px)); gap: 12px; margin-top: 20px; }
 .jrn-stories__preview, .jrn-stories__track { display: contents; }
 .jrn-stories__preview > .jrn-control { display: none; }

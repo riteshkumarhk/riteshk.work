@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { journeyRows, journeyRoleKey, journeyRoleIndex } from "./src/js/journey-core.mjs";
+import { journeyRows, journeyRoleKey, journeyRoleIndex, journeyRoles, journeyRoleStories, journeyDateOrder } from "./src/js/journey-core.mjs";
 
 const fixture = () => ({
   path: [
@@ -78,4 +78,32 @@ test("unlinked library stories retain case studies and media without appearing i
   const attached = journeyRows(data, { owner: true })[0].stories.find(story => story.entry === entry);
   assert.equal(attached.entry.workId, "linked-case");
   assert.deepEqual(attached.entry.images, before.journey.chapters[0].entries[0].images);
+});
+
+test('timeline dates sort current, ranges, before and unknown years stably without mutation', () => {
+  const dates=['unknown','2014 - 2016','2024 - Now','Before 2014','2023 - Early 2025','2025 - Present','2014','unknown'];
+  const before=structuredClone(dates);
+  assert.deepEqual(journeyDateOrder(dates,value=>value),['2025 - Present','2024 - Now','2023 - Early 2025','2014 - 2016','2014','Before 2014','unknown','unknown']);
+  assert.deepEqual(dates,before);
+});
+
+test('roles and role stories use date defaults and independently reset manual order', () => {
+  const data=fixture();
+  data.path[1].years='2021 - 2024';data.path[2].years='2015 - 2018';
+  data.path.reverse();
+  const chapter=data.journey.chapters[1];
+  chapter.entries.forEach(entry=>entry.pathId='edge');
+  chapter.entries[0].period='2019 - 2021';chapter.entries[1].period='2025 - Present';
+  const before=structuredClone(data);
+  assert.deepEqual(journeyRoles(data).map(item=>item.role.id),['edge','identity','automotive']);
+  assert.deepEqual(journeyRoleStories(data,2).map(story=>story.entry.id),['auth','growth']);
+  assert.deepEqual(data,before);
+  data.journey.roleOrder='manual';
+  data.path[2].storyOrder=['["microsoft","growth"]','["microsoft","auth"]'];
+  assert.deepEqual(journeyRoles(data).map(item=>item.role.id),['automotive','identity','edge']);
+  assert.deepEqual(journeyRoleStories(data,2).map(story=>story.entry.id),['growth','auth']);
+  assert.deepEqual(journeyRows(data,{owner:true})[2].stories.map(story=>story.entry.id),['growth','auth']);
+  delete data.path[2].storyOrder;delete data.journey.roleOrder;
+  assert.deepEqual(journeyRows(data,{owner:true})[0].stories.map(story=>story.entry.id),['auth','growth']);
+  assert.deepEqual(data,before);
 });

@@ -1354,12 +1354,12 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await page.emulateMedia({reducedMotion:'no-preference'});
     await first.scrollIntoViewIfNeeded();
     await page.evaluate(()=>document.activeElement.blur());
-    await page.waitForFunction(()=>!!document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    await page.waitForFunction(()=>!!document.querySelector('.jrn-tile.is-case-unseen').style.getPropertyValue('--jrn-ring-angle'));
     await page.waitForFunction(()=>{
       const tile=document.querySelector('.jrn-tile.is-case-unseen');
       if(tile.closest('.is-peeking'))return false;
       const anchor=tile.getBoundingClientRect();
-      const drift=Math.max(-anchor.height*.08,Math.min(anchor.height*.08,(anchor.top+anchor.height/2-innerHeight/2)/innerHeight*anchor.height*.12));
+      const drift=Math.max(-16,Math.min(16,(anchor.top+anchor.height/2-innerHeight/2)/innerHeight*48));
       return tile.style.getPropertyValue('--jrn-par-y')===drift.toFixed(1)+'px';
     });
     const ringStyle=await ring.evaluate(element=>{const style=getComputedStyle(element,'::before');return {animation:style.animationName,mask:style.maskComposite,angle:parseFloat(style.getPropertyValue('--jrn-ring-angle'))};});
@@ -1373,7 +1373,7 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     assert.notDeepEqual(afterMotion,beforeMotion,'Gradient must visibly move without rotating the card');
     assert.deepEqual(await ring.boundingBox(),rect);
     const speeds=await page.evaluate(()=>new Promise(resolve=>{
-      const host=document.querySelector('#timeline'),started=performance.now(),values=[];
+      const host=document.querySelector('.jrn-tile.is-case-unseen'),started=performance.now(),values=[];
       let previous=null,angle=null;
       function sample(now){
         const current=parseFloat(host.style.getPropertyValue('--jrn-ring-angle')),delta=now-previous;
@@ -1385,30 +1385,43 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     }));
     assert.ok(Math.max(...speeds)-Math.min(...speeds)>20,'Rotation must ease between noticeably different speeds');
     assert.ok(speeds.every(speed=>speed>=0 && speed<80),'Rotation stays clockwise and bounded without jumps');
+    const independent=await page.evaluate(()=>new Promise(resolve=>{
+      const tiles=[...document.querySelectorAll('.jrn-tile.is-case-unseen')];
+      const initial=tiles.map(tile=>parseFloat(tile.style.getPropertyValue('--jrn-ring-angle')));
+      const started=performance.now();
+      function sample(now){
+        if(now-started<900){requestAnimationFrame(sample);return;}
+        resolve(tiles.map((tile,index)=>({start:initial[index],delta:(parseFloat(tile.style.getPropertyValue('--jrn-ring-angle'))-initial[index]+360)%360})));
+      }
+      requestAnimationFrame(sample);
+    }));
+    assert.notEqual(independent[0].start,independent[1].start);
+    assert.ok(Math.abs(independent[0].delta-independent[1].delta)>1,'Each ring must have its own changing speed, not only a phase offset');
     await page.evaluate(()=>{Math.random=window.__nativeRingRandom;delete window.__nativeRingRandom;});
     await page.evaluate(()=>window.scrollTo({top:document.querySelector('[data-jstory]').getBoundingClientRect().top+scrollY-400,behavior:'instant'}));
-    await page.waitForFunction(()=>!!document.querySelector('.jrn-tile').style.getPropertyValue('--jrn-par-y'));
+    await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
     const drift=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y'));
     await page.evaluate(()=>window.scrollBy({top:140,behavior:'instant'}));
-    await page.waitForFunction(before=>document.querySelector('.jrn-tile').style.getPropertyValue('--jrn-par-y')!==before,drift);
+    await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
+    assert.ok(Math.abs(parseFloat(await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y')))-parseFloat(drift))>5,'A 140px scroll must produce visible thumbnail parallax');
     assert.notEqual(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
     await first.hover();
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
-    assert.equal(await link.evaluate(element=>getComputedStyle(element,'::before').getPropertyValue('--jrn-ring-angle')===document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),true);
+    assert.equal(await link.evaluate(element=>getComputedStyle(element,'::before').getPropertyValue('--jrn-ring-angle')===element.closest('.jrn-tile').style.getPropertyValue('--jrn-ring-angle')),true);
     await page.keyboard.press('Escape');
     await page.emulateMedia({reducedMotion:'reduce'});
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
     assert.equal(await ring.evaluate(element=>getComputedStyle(element,'::before').animationName),'none');
-    const frozen=await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    const frozen=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-ring-angle'));
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    assert.equal(await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),frozen);
+    assert.equal(await tile.evaluate(element=>element.style.getPropertyValue('--jrn-ring-angle')),frozen);
     await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
     await page.waitForFunction(()=>document.querySelector('#timeline').getBoundingClientRect().top>innerHeight);
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    const offscreen=await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle'));
+    const offscreen=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-ring-angle'));
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    assert.equal(await page.evaluate(()=>document.querySelector('#timeline').style.getPropertyValue('--jrn-ring-angle')),offscreen);
+    assert.equal(await tile.evaluate(element=>element.style.getPropertyValue('--jrn-ring-angle')),offscreen);
     await page.emulateMedia({reducedMotion:'reduce'});
     await first.click();
     assert.equal(await page.evaluate(()=>localStorage.getItem('rk:journey:seen-cases:v1')),null);
@@ -1645,6 +1658,139 @@ test('About editor rows reuse case-study styling and autosave without Done', {sk
   } finally {await browser.close();}
 });
 
+test('Journey chronology supports independent story and experience overrides, drag, reset and reload', {skip:!baseURL,timeout:90000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    for(const width of [1440,390]) {
+      const page=await browser.newPage({viewport:{width,height:1000},reducedMotion:'reduce'});
+      const published=await journeyFixture(page);
+      published.path.reverse();
+      const entries=published.journey.chapters[0].entries;
+      entries[1].period='2019 - 2020';entries[2].period='2023 - 2024';entries[3].period='2021 - 2022';
+      const original=structuredClone(published);
+      await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+      await page.goto(baseURL+'/studio/?devstub=1');
+      await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      const openJourney=async()=>{
+        await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+        await page.locator('[data-act="aboutsec-edit"][data-key="path"]').click();
+      };
+      await openJourney();
+      const titles=()=>page.locator('[data-journey-section="journey"] .jedit__select strong').allTextContents();
+      assert.deepEqual(await titles(),['Senior Designer - Edge Growth','Designer - Automotive HMI']);
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().path),original.path);
+      const automotive=page.locator('[data-act="jrole-toggle"][data-index="0"]').first().locator('..');
+      await automotive.getByLabel('Role actions',{exact:true}).click();
+      await automotive.getByRole('button',{name:'Move up',exact:true}).click();
+      assert.deepEqual(await titles(),['Designer - Automotive HMI','Senior Designer - Edge Growth']);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.roleOrder),'manual');
+      await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
+      const linked=page.locator('[data-jrole="1"]');
+      const names=()=>linked.locator('[data-jmap-title]').evaluateAll(elements=>elements.map(element=>element.firstChild.textContent));
+      const dateOrder=['Edge onboarding','third chapter','fourth chapter','second chapter','Presentation-only story'];
+      assert.deepEqual(await names(),dateOrder);
+      await linked.locator('.jlinks__row').first().getByLabel('Linked story actions',{exact:true}).click();
+      await linked.locator('.jlinks__row').first().getByRole('button',{name:'Move down',exact:true}).click();
+      assert.deepEqual(await names(),['third chapter','Edge onboarding','fourth chapter','second chapter','Presentation-only story']);
+      await page.locator('.adm__tab[data-tab="work"]').click();
+      await page.reload();await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+      await openJourney();
+      assert.deepEqual(await titles(),['Designer - Automotive HMI','Senior Designer - Edge Growth']);
+      await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
+      assert.deepEqual(await names(),['third chapter','Edge onboarding','fourth chapter','second chapter','Presentation-only story']);
+      await linked.getByRole('button',{name:'Reset stories to timeline order',exact:true}).click();
+      assert.deepEqual(await names(),dateOrder);
+      assert.equal(await page.locator('[data-act="jroles-reset"]').isEnabled(),true);
+      const first=linked.locator('.jlinks__row').first(),last=linked.locator('.jlinks__row').last();
+      await last.scrollIntoViewIfNeeded();
+      const grip=await first.locator('[data-grip]').boundingBox(),end=await last.boundingBox();
+      await page.mouse.move(grip.x+grip.width/2,grip.y+grip.height/2);
+      await page.mouse.down();await page.mouse.move(end.x+12,end.y+end.height-2,{steps:12});await page.mouse.up();
+      assert.deepEqual(await names(),['third chapter','fourth chapter','second chapter','Presentation-only story','Edge onboarding']);
+      await linked.getByRole('button',{name:'Reset stories to timeline order',exact:true}).click();
+      await page.locator('[data-act="jroles-reset"]').click();
+      assert.deepEqual(await titles(),['Senior Designer - Edge Growth','Designer - Automotive HMI']);
+      assert.equal(await page.locator('[data-act="jroles-reset"]').isDisabled(),true);
+      assert.deepEqual(await names(),dateOrder);
+      const saved=await page.evaluate(()=>window.__RKStudio.getDraft());
+      assert.deepEqual(saved.path,original.path);
+      assert.deepEqual(saved.journey,original.journey);
+      assert.deepEqual(saved.work,original.work);
+      assert.equal(await page.locator('[data-act="jroles-reset"] svg').count(),1);
+      assert.equal(await linked.locator('[data-act="jstories-reset"] svg').count(),1);
+      await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().click();
+      const roleRows=page.locator('[data-journey-section="journey"] > .study__blocks > .jedit');
+      await roleRows.last().scrollIntoViewIfNeeded();
+      const roleGrip=await roleRows.first().locator('[data-grip]').first().boundingBox(),roleEnd=await roleRows.last().boundingBox();
+      await page.mouse.move(roleGrip.x+roleGrip.width/2,roleGrip.y+roleGrip.height/2);
+      await page.mouse.down();await page.mouse.move(roleEnd.x+12,roleEnd.y+roleEnd.height-2,{steps:12});await page.mouse.up();
+      assert.deepEqual(await titles(),['Designer - Automotive HMI','Senior Designer - Edge Growth']);
+      await page.locator('[data-act="jroles-reset"]').click();
+      await page.locator('[data-act="jrole-toggle"][data-index="0"]').first().click();
+      await page.locator('[data-list="path"][data-field="years"][data-index="0"]').fill('2026 - Present');
+      await page.locator('[data-act="jrole-toggle"][data-index="0"]').first().click();
+      assert.deepEqual(await titles(),['Designer - Automotive HMI','Senior Designer - Edge Growth']);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-order-'+width+'.png')});
+      await page.close();
+    }
+  } finally {await browser.close();}
+});
+
+test('Journey experience logos upload original bytes, fetch safely and fit the organisation line', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const page=await context.newPage();
+    const published=await journeyFixture(page),original=structuredClone(published);
+    const source=published.journey.chapters[0].entries[0].images[0].src;
+    const bytes=Buffer.from(source.split(',')[1],'base64');
+    await page.route('https://logos.example/company.png',route=>route.fulfill({contentType:'image/png',body:bytes}));
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    await page.locator('[data-act="aboutsec-edit"][data-key="path"]').click();
+    await page.locator('[data-act="jrole-toggle"][data-index="0"]').first().click();
+    const chooser=page.waitForEvent('filechooser');
+    await page.locator('[data-act="role-logo-upload"][data-index="0"]').click();
+    await (await chooser).setFiles({name:'company.png',mimeType:'image/png',buffer:bytes});
+    await page.waitForFunction(expected=>window.__RKStudio.getDraft().path[0].logo===expected,source);
+    const preview=page.frames().find(frame=>frame.url().includes('preview'));
+    await preview.locator('.tl__logo').first().evaluate(image=>image.decode());
+    const reader=await page.context().newPage();
+    const readerData=await journeyFixture(reader);
+    readerData.path=await page.evaluate(()=>window.__RKStudio.getDraft().path);
+    await reader.goto(baseURL+'/?view=about');
+    for(const width of [1440,390,320]) {
+      await reader.setViewportSize({width,height:1000});
+      const logo=reader.locator('.tl__logo').first();
+      await logo.scrollIntoViewIfNeeded();
+      await logo.evaluate(image=>image.decode());
+      const geometry=await logo.evaluate(image=>({width:image.getBoundingClientRect().width,height:image.getBoundingClientRect().height,line:parseFloat(getComputedStyle(image.parentElement).lineHeight),fit:getComputedStyle(image).objectFit}));
+      assert.ok(geometry.width>0 && geometry.width<=24 && geometry.height<=geometry.line+.1,JSON.stringify(geometry));
+      assert.equal(geometry.fit,'contain');assert.equal(await logo.getAttribute('src'),source);
+      await reader.screenshot({path:join(tmpdir(),'rk-journey-logo-'+width+'.png')});
+    }
+    await reader.close();
+    await page.bringToFront();
+    await page.locator('[data-role-logo-url="0"]').fill('javascript:alert(1)');
+    await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+    assert.match(await page.locator('[data-role-logo-error="0"]').textContent(),/direct HTTPS/);
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().path[0].logo),source);
+    await page.locator('[data-act="role-logo-remove"][data-index="0"]').click();
+    await page.locator('[data-role-logo-url="0"]').fill('https://logos.example/company.png');
+    await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+    await page.waitForFunction(expected=>window.__RKStudio.getDraft().path[0].logo===expected,source);
+    await page.locator('.adm__tab[data-tab="work"]').click();
+    await page.reload();
+    await page.waitForFunction(expected=>window.__RKStudio?.getDraft?.()?.path[0].logo===expected,source);
+    const saved=await page.evaluate(()=>window.__RKStudio.getDraft());
+    assert.deepEqual(saved.path.map(({logo,...role})=>role),original.path);
+    assert.deepEqual(saved.journey,original.journey);
+    assert.deepEqual(saved.work,original.work);
+  } finally {await browser.close();}
+});
+
 test('Journey editor tabs preserve the draft and support keyboard navigation', {skip:!baseURL,timeout:30000}, async()=>{
   const browser=await chromium.launch(launchOptions);
   try {
@@ -1683,6 +1829,15 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
     await page.waitForFunction(()=>document.querySelector('[data-journey-tab="journey"]')?.getAttribute('aria-selected')==='true');
     await preview.waitForFunction(()=>!document.querySelector('#journey-detail'));
     assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft()),before);
+    for (const destination of ['work','landing','contact']) {
+      await page.locator('.adm__tab[data-tab="' + destination + '"]').click();
+      assert.equal(await page.locator('[data-l2tabs]').isVisible(),false);
+      assert.equal(await page.locator('[data-journey-tab]').count(),0);
+      assert.equal(await page.locator('[data-l2-back]').isVisible(),false);
+      assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft()),before);
+      await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+      await page.locator('[data-act="aboutsec-edit"][data-key="path"]').click();
+    }
     await tabs.getByRole('tab',{name:'Stories',exact:true}).click();
     assert.equal(await page.locator('.jentry .jedit__body:visible').count(),1);
     await page.locator('[data-act="jentry-add"][data-jc="0"]').click();
