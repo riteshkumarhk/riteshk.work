@@ -1140,7 +1140,27 @@ test('Journey editor tabs preserve the draft and support keyboard navigation', {
       assert.equal(await storyHead(2).locator('[popover]').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.width>0 && bounds.left>=0 && bounds.right<=innerWidth && bounds.bottom<=innerHeight;}),true);
       await page.screenshot({path:join(tmpdir(),'rk-journey-focused-'+width+'.png')});
       await page.keyboard.press('Escape');
+      const mediaRow=page.locator('.jentry .jedit__body:visible .jimg').first();
+      await mediaRow.scrollIntoViewIfNeeded();
+      const mediaLayout=await mediaRow.evaluate(element=>{
+        const source=element.querySelector('[data-jimg="src"]'),replace=element.querySelector('[data-act="jimg-upload"]'),caption=element.querySelector('[data-jimg="caption"]');
+        const sourceBounds=source.getBoundingClientRect(),replaceBounds=replace.getBoundingClientRect(),captionLabel=caption.labels[0].getBoundingClientRect(),bounds=element.getBoundingClientRect();
+        return {labelled:source.labels[0].textContent==='Source' && caption.labels[0].textContent.includes('Caption'),aligned:Math.abs(sourceBounds.top-replaceBounds.top)<1 && sourceBounds.height===replaceBounds.height,replaceWidth:replaceBounds.width,gap:captionLabel.top-sourceBounds.bottom,width:sourceBounds.width,contained:bounds.left>=0 && bounds.right<=innerWidth,framed:getComputedStyle(element).borderTopWidth,fit:getComputedStyle(element.querySelector('.jimg__preview img')).objectFit};
+      });
+      assert.deepEqual({...mediaLayout,gap:undefined,width:undefined},{labelled:true,aligned:true,replaceWidth:38,gap:undefined,width:undefined,contained:true,framed:'0px',fit:'contain'});
+      assert.ok(mediaLayout.gap>=12 && mediaLayout.width>=120,JSON.stringify(mediaLayout));
+      await mediaRow.getByLabel('Source',{exact:true}).focus();
+      await page.keyboard.press('Tab');
+      assert.equal(await mediaRow.getByRole('button',{name:'Replace image 1',exact:true}).evaluate(element=>document.activeElement===element),true);
+      await page.keyboard.press('Tab');
+      assert.equal(await mediaRow.getByLabel('Caption (optional)',{exact:true}).evaluate(element=>document.activeElement===element),true);
+      await mediaRow.locator('.af__msize').evaluate(element=>{element.textContent='';});
+      assert.equal(await mediaRow.locator('.af__msize').isVisible(),false);
+      await mediaRow.screenshot({path:join(tmpdir(),'rk-journey-media-'+width+'.png')});
     }
+    await page.locator('.jentry .jedit__body:visible .jimg').first().getByLabel('Caption (optional)',{exact:true}).fill('Updated copied caption');
+    await preview.waitForFunction(()=>document.querySelector('.jrn-gallery__caption')?.textContent==='Updated copied caption');
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().journey.chapters[0].entries[2].images[0].caption),'Updated copied caption');
     const beforeCancel=await page.evaluate(()=>window.__RKStudio.getDraft());
     await storyHead(2).getByLabel('Story actions',{exact:true}).click();
     await storyHead(2).getByRole('button',{name:'Remove',exact:true}).click();

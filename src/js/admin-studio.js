@@ -11296,14 +11296,16 @@ import { journeyRoleIndex } from "./journey-core.mjs";
   }
   function journeyImageRow(c, e, k, im) {
     var src = (im && im.src) || "";
+    var fieldId = 'journey-media-' + c + '-' + e + '-' + k;
     return '<div class="rep__item jimg">' +
       '<div class="rep__bar"><span class="sortgrip" data-grip data-sortkey="jimg:' + c + ':' + e + '" title="Drag to reorder">' + GRIP_SVG + '</span>' +
-      '<span class="rep__n">Image ' + (k + 1) + '</span><span class="rep__ops">' +
-      '<button class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove">' + IC.trash + '</button></span></div>' +
+      '<span class="rep__n">Image ' + (k + 1) + '</span>' + mediaSizeTag(src) + '<span class="rep__ops">' +
+      '<button type="button" class="iconbtn iconbtn--danger" data-act="jimg-del" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Remove image" aria-label="Remove image ' + (k + 1) + '">' + IC.trash + '</button></span></div>' +
       '<div class="jimg__preview' + (src ? " has" : "") + '">' + (src ? '<img src="' + escAttr(previewSrc(src)) + '" alt="" />' : "<span>No image</span>") + "</div>" +
-      '<input type="text" data-jimg="src" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr(src) + '" placeholder="Paste an image URL\u2026" />' +
-      '<div class="imgblk__row"><button class="btn btn--ghost" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '">Replace\u2026</button>' + mediaSizeTag(src) + "</div>" +
-      '<input type="text" data-jimg="caption" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr((im && im.caption) || "") + '" placeholder="Caption (optional)" /></div>';
+      '<div class="jimg__fields"><div class="af"><label class="af__label" for="' + fieldId + '-source">Source</label><div class="jimg__source">' +
+      '<input type="text" id="' + fieldId + '-source" data-jimg="src" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr(src) + '" placeholder="Image URL" />' +
+      '<button type="button" class="iconbtn" data-act="jimg-upload" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" title="Replace image" aria-label="Replace image ' + (k + 1) + '">' + IC.publish + '</button></div></div>' +
+      '<div class="af"><label class="af__label" for="' + fieldId + '-caption">Caption <span class="jimg__optional">(optional)</span></label><input type="text" id="' + fieldId + '-caption" data-jimg="caption" data-jc="' + c + '" data-je="' + e + '" data-jk="' + k + '" value="' + escAttr((im && im.caption) || "") + '" /></div></div></div>';
   }
   function journeyStorySummary(c, entry) {
     var roleIndex = journeyRoleIndex(data.path || [], journeyData().chapters[c], entry);
