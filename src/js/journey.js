@@ -261,7 +261,7 @@ import { journeyRows } from "./journey-core.mjs";
     panel.innerHTML = '<div class="jrn__top"><nav class="jrn-timeline" aria-label="Journey chapters">' + allStories().map(item =>
       '<button type="button" class="jrn-timeline__item" data-jchapter="' + esc(item.key) + '" aria-label="Open story: ' + esc(item.entry.title || item.chapter.name || "Chapter") + '"' + (item.key === key ? ' aria-current="step"' : '') + '><span class="jrn-tile__period">' + esc(item.entry.period || item.chapter.name) + '</span><span class="jrn-timeline__title">' + esc(item.entry.title || item.chapter.name || "Chapter") + '</span></button>').join('') +
       '</nav><button type="button" class="jrn-control" data-jclose title="Close chapter" aria-label="Close chapter">&#215;</button></div>' +
-      '<div class="jrn__scroll"><div class="jrn-gallery"></div><div class="jrn-detail__body"><header class="jrn-detail__head"><div>' +
+      '<div class="jrn-gallery"></div><div class="jrn__scroll"><div class="jrn-gallery__controls"></div><div class="jrn-detail__body"><header class="jrn-detail__head"><div>' +
       (story.entry.period ? '<span class="jrn-tile__period">' + esc(story.entry.period) + '</span>' : '') +
       '<h4 id="journey-detail-title" tabindex="-1">' + md(story.entry.title || story.chapter.name || "Chapter") + '</h4></div></header>' +
       '<div class="jrn-detail__copy">' + prose(story.entry.body) +
@@ -281,6 +281,9 @@ import { journeyRows } from "./journey-core.mjs";
     if (!story || !gallery) return;
     gallery.querySelectorAll("video").forEach(element => element.pause());
     const images = media(story);
+    const controls = document.querySelector('#journey-detail .jrn-gallery__controls');
+    controls.hidden = images.length < 2;
+    controls.innerHTML = '';
     gallery.hidden = !images.length;
     gallery.closest(".jrn-detail").classList.toggle("jrn-detail--text", !images.length);
     if (!images.length) { gallery.innerHTML = ''; return; }
@@ -289,9 +292,9 @@ import { journeyRows } from "./journey-core.mjs";
     gallery.innerHTML = '<figure class="jrn-gallery__figure"><div class="jrn-gallery__stage">' +
       (video(image) ? '<video src="' + source + '" controls playsinline preload="metadata"></video>' :
         '<button type="button" data-jzoom aria-label="Enlarge image" title="Enlarge image"><img src="' + source + '" alt="' + esc(image.caption || story.entry.title || '') + '" /></button>') +
-      '</div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>' +
-      (images.length > 1 ? '<div class="jrn-gallery__bar"><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex - 1) + '" aria-label="Previous image" title="Previous image"' + (mediaIndex === 0 ? ' disabled' : '') + '>&#8592;</button><span aria-live="polite">' + (mediaIndex + 1) + ' / ' + images.length + '</span><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex + 1) + '" aria-label="Next image" title="Next image"' + (mediaIndex === images.length - 1 ? ' disabled' : '') + '>&#8594;</button></div><div class="jrn-gallery__thumbs">' +
-        images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div>' : '');
+      '</div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>';
+    controls.innerHTML = images.length > 1 ? '<div class="jrn-gallery__bar"><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex - 1) + '" aria-label="Previous image" title="Previous image"' + (mediaIndex === 0 ? ' disabled' : '') + '>&#8592;</button><span aria-live="polite">' + (mediaIndex + 1) + ' / ' + images.length + '</span><button class="jrn-control" type="button" data-jmedia="' + (mediaIndex + 1) + '" aria-label="Next image" title="Next image"' + (mediaIndex === images.length - 1 ? ' disabled' : '') + '>&#8594;</button></div><div class="jrn-gallery__thumbs">' +
+        images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div>' : '';
   }
 
   function open(options = {}) {
@@ -331,8 +334,8 @@ import { journeyRows } from "./journey-core.mjs";
       const label = target.getAttribute("aria-label");
       mediaIndex = Number(target.dataset.jmedia);
       renderMedia();
-      const gallery = document.querySelector(".jrn-gallery");
-      ([...gallery.querySelectorAll("button")].find(button => button.getAttribute("aria-label") === label && !button.disabled) || gallery.querySelector('[aria-pressed="true"]'))?.focus({ preventScroll: true });
+      const controls = document.querySelector(".jrn-gallery__controls");
+      ([...controls.querySelectorAll("button")].find(button => button.getAttribute("aria-label") === label && !button.disabled) || controls.querySelector('[aria-pressed="true"]'))?.focus({ preventScroll: true });
       return;
     }
     if (target.hasAttribute("data-jzoom")) {

@@ -1063,6 +1063,21 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(layout.overflow,false); assert.ok(layout.media.width>100); assert.ok(layout.media.height>=200);
       assert.equal(layout.rect.width,width); assert.equal(layout.rect.height,1000); assert.equal(layout.inert,true);
       assert.ok(layout.timeline.bottom<=layout.media.top); assert.ok(layout.details.top>=layout.media.bottom);
+      const regions=await page.locator('#journey-detail').evaluate(panel=>{
+        const gallery=panel.querySelector('.jrn-gallery').getBoundingClientRect();
+        const footer=panel.querySelector('.jrn__scroll').getBoundingClientRect();
+        const top=panel.querySelector('.jrn__top').getBoundingClientRect();
+        const image=panel.querySelector('.jrn-gallery__stage img');
+        return {top:top.toJSON(),gallery:gallery.toJSON(),footer:footer.toJSON(),bar:panel.querySelector('.jrn-gallery__bar').getBoundingClientRect().toJSON(),position:getComputedStyle(image).objectPosition,cursors:[getComputedStyle(panel).cursor,getComputedStyle(panel.querySelector('.jrn__scroll')).cursor,getComputedStyle(document.elementFromPoint(4,(gallery.top+gallery.bottom)/2)).cursor],zoom:getComputedStyle(image.closest('button')).cursor};
+      });
+      assert.equal(regions.top.top,0);
+      assert.equal(regions.gallery.top,regions.top.bottom);
+      assert.equal(regions.gallery.bottom,regions.footer.top);
+      assert.equal(regions.footer.bottom,1000);
+      assert.ok(regions.bar.top>=regions.footer.top && regions.bar.bottom<regions.footer.bottom);
+      assert.equal(regions.position,'50% 50%');
+      assert.ok(regions.cursors.every(cursor=>cursor==='auto'));
+      assert.equal(regions.zoom,'zoom-in');
       assert.equal(await page.locator('.jrn-gallery__stage').evaluate(stage=>{const image=stage.querySelector('img'),imageBox=image.getBoundingClientRect(),stageBox=stage.getBoundingClientRect();return imageBox.height<=stageBox.height+1 && imageBox.width<=stageBox.width+1 && getComputedStyle(image).objectFit==='contain';}),true);
       await page.evaluate(theme=>document.documentElement.setAttribute('data-theme',theme),width===390?'day':'night');
       await page.screenshot({path:join(tmpdir(),'rk-journey-l2-'+width+'.png')});
@@ -1074,6 +1089,27 @@ test('Journey L2 preserves About tiles, original media and return position acros
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('#journey-detail').count(),0);
     }
+    await page.evaluate(()=>{
+      const data=structuredClone(RK.data);
+      data.journey.chapters[0].entries[0].body='<p>'+('Long original story description. '.repeat(160))+'</p>';
+      RK.renderJourney(data);
+    });
+    for(const viewport of [{width:1440,height:900},{width:390,height:844},{width:844,height:390},{width:320,height:568}]) {
+      await page.setViewportSize(viewport);
+      await page.getByRole('button',{name:'Edge onboarding',exact:true}).click();
+      const gallery=await page.locator('.jrn-gallery').boundingBox();
+      const footer=await page.locator('.jrn__scroll').evaluate(element=>({rect:element.getBoundingClientRect().toJSON(),scrollHeight:element.scrollHeight,clientHeight:element.clientHeight}));
+      assert.ok(gallery.height>40 && gallery.width>100);
+      assert.equal(footer.rect.bottom,viewport.height);
+      assert.ok(footer.rect.height<=viewport.height*.42+1);
+      assert.ok(footer.scrollHeight>footer.clientHeight);
+      await page.locator('.jrn__scroll').evaluate(element=>element.scrollTop=element.scrollHeight);
+      assert.deepEqual(await page.locator('.jrn-gallery').boundingBox(),gallery);
+      assert.equal(await page.locator('#journey-detail').evaluate(panel=>panel.scrollHeight===panel.clientHeight),true);
+      await page.screenshot({path:join(tmpdir(),'rk-journey-l2-long-'+viewport.width+'x'+viewport.height+'.png')});
+      await page.getByRole('button',{name:'Close chapter',exact:true}).click();
+    }
+    await page.evaluate(()=>RK.renderJourney(RK.data));
     await page.getByRole('button',{name:'fourth chapter',exact:true}).click();
     await page.setViewportSize({width:1440,height:1000});
     await page.getByRole('button',{name:'Open story: second chapter',exact:true}).click();
