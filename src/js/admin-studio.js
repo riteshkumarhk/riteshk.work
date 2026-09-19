@@ -394,6 +394,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function previewApply() {
     const w = frame && frame.contentWindow;
     if (w && w.RK && w.RK.render) {
+      bindPreviewNavigation(w.document);
       try {
         const pd = resolvePreviewData(data);
         w.RK.render(pd);
@@ -413,12 +414,146 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   // Keep the preview on the page whose content the active tab edits, so About-page
   // tabs (layout, path, recognition, education, capabilities) show the About page.
   const ABOUT_TABS = { aboutpage: 1, path: 1, recognition: 1, education: 1, capabilities: 1 };
+  let previewNavigation = 0;
+  function bindPreviewNavigation(doc) {
+    if (doc.__rkStudioNavigation) return;
+    doc.__rkStudioNavigation = true;
+    doc.addEventListener("click", function (event) {
+      if (!root.classList.contains("is-open") || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      const target = event.target.closest?.("a,button"), page = target?.dataset.pageLink;
+      const workId = target?.dataset.work || target?.dataset.jpeekWork || target?.dataset.jwork;
+      const action = target?.dataset.pj;
+      const resume = target?.matches('#navResume,#menuResume,#dockResume,#contactResume,[data-pj="resume"]');
+      let destination;
+      if (workId) destination = { workId };
+      else if (page === "work" || page === "about") destination = { page };
+      else if (resume || action === "contact" || target?.getAttribute("href") === "#contact") destination = { page: "contact" };
+      else if (action === "back" || action === "close") destination = { page: "work" };
+      else if ((action === "prev" || action === "next") && openStudy >= 0) {
+        const works = frameWin().RK.data.work || [], current = data.work[openStudy]?.id;
+        const featured = works.filter(work => work.featured), siblings = featured.some(work => work.id === current) ? featured : works;
+        const index = siblings.findIndex(work => work.id === current);
+        if (index >= 0 && siblings.length > 1) destination = { workId: siblings[(index + (action === "next" ? 1 : -1) + siblings.length) % siblings.length].id };
+      }
+      else if (target?.dataset.jstory || target?.dataset.jchapter) destination = { page: "about", storyKey: target.dataset.jstory || target.dataset.jchapter };
+      else if (target?.hasAttribute("data-jclose")) destination = { page: "about", section: "path" };
+      else if (!event.target.closest('a,button,input,select,textarea,video,audio,iframe,[data-fs],[data-zoom]')) {
+        const section = event.target.closest('#aboutSections > [id^="sec-"]');
+        if (section) {
+          destination = { page: "about", section: section.id.slice(4) };
+          const row = event.target.closest('#timeline > .tl,#recognitionList > *,#educationList > *,#aboutGallery > *');
+          if (row) destination.index = [...row.parentElement.children].indexOf(row);
+        } else {
+          const landing = event.target.closest('[id^="wsec-"]');
+          if (landing) destination = { page: "work", landing: landing.id.slice(5) };
+          else if (event.target.closest('#contact')) destination = { page: "contact" };
+        }
+      }
+      if (!destination) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (target?.closest("#menu")) doc.querySelector('#navToggle[aria-expanded="true"]')?.click();
+      navigateFromPreview(destination);
+    }, true);
+  }
+  async function navigateFromPreview(destination) {
+    const navigation = ++previewNavigation;
+    try {
+      if (nativeSlideSession?.editor && !nativeSlideSession.loadFailed) await nativeSlideSession.editor.flush();
+      if (navigation !== previewNavigation || !root.classList.contains("is-open")) return;
+      clearTimeout(l2PreviewTimer); clearTimeout(jrnPreviewTimer); clearTimeout(blockRenameTimer);
+      if (destination.workId) {
+        const index = data.work.findIndex(work => work.id === destination.workId && !work.encWork);
+        if (index < 0) return;
+        if (journeyOpen) closeJourneyEditor({ render: false });
+        if (openStudy >= 0 && openStudy !== index) closeL2({ render: false });
+        activeTab = "work";
+        root.querySelectorAll('.adm__tab').forEach(button => button.classList.toggle('is-active', button.dataset.tab === activeTab));
+        await openL2(index, "story");
+      } else if (destination.section || destination.storyKey) {
+        if (openStudy >= 0) closeL2({ render: false });
+        const story = destination.storyKey && journeyStories().find(item => journeyEntryKey(item.chapter, item.entry, item.chapterIndex, item.entryIndex) === destination.storyKey);
+        if (destination.storyKey && !story) return;
+        if (story) {
+          if (!journeyOpen) openJourneyEditor("stories");
+          journeyTab = "stories"; journeyStory = story.entry; openJC = story.chapterIndex; journeyPreviewMode = "story";
+          renderJourneyEditor();
+          revealEditorSelection(l2body.querySelector('[data-act="jstory-toggle"][data-jc="' + story.chapterIndex + '"][data-je="' + story.entryIndex + '"]'));
+          clearTimeout(jrnPreviewTimer); previewJourney({ scroll: true });
+        } else {
+          if (destination.section === "path") journeyRole = journeyRoles(data)[destination.index]?.role || null;
+          editAboutSection(destination.section);
+          const photo = destination.section === "photos" && (data.aboutGallery || []).filter(item => item?.src)[destination.index];
+          const selector = photo ? '[data-galedit="' + data.aboutGallery.indexOf(photo) + '"]' : destination.section === "path" && journeyRole ? '[data-act="jrole-toggle"][data-index="' + data.path.indexOf(journeyRole) + '"]' : '[data-list="' + destination.section + '"][data-index="' + destination.index + '"]';
+          revealEditorSelection(l2body.querySelector(selector));
+          clearTimeout(jrnPreviewTimer); previewJourney({ scroll: true, section: destination.section, index: destination.index });
+        }
+      } else {
+        if (openStudy >= 0) closeL2({ render: false });
+        if (journeyOpen) closeJourneyEditor({ render: false });
+        activeTab = destination.page === "about" ? "aboutpage" : destination.page === "contact" ? "contact" : "work";
+        if (destination.landing && destination.landing !== "work") activeTab = "landing";
+        renderBody();
+        if (destination.landing) {
+          revealEditorSelection(body.querySelector('[data-landing-section="' + destination.landing + '"]'));
+          revealPreviewElement(frameWin().document.getElementById('wsec-' + destination.landing));
+        }
+      }
+    } catch (error) { status("Not saved: " + error.message); }
+  }
+  function revealEditorSelection(element) {
+    if (!element) return;
+    const editor = root.querySelector('.adm__editor'), row = element.closest('.study__block,.card,.adm__gal-item,.l2grp') || element;
+    editor.scrollTop += row.getBoundingClientRect().top - editor.getBoundingClientRect().top - 24;
+    row.classList.add('is-flash');
+    setTimeout(() => row.classList.remove('is-flash'), 1100);
+  }
+  function revealPreviewElement(element) {
+    if (!element || element.hidden || !element.getClientRects().length) return;
+    const doc = element.ownerDocument, view = doc.defaultView;
+    doc.querySelectorAll('[data-studio-selected]').forEach(item => { item.__rkSelectionAnimation?.cancel(); item.removeAttribute('data-studio-selected'); });
+    element.setAttribute('data-studio-selected', '');
+    const bounds = element.getBoundingClientRect();
+    view.scrollTo({ top: Math.max(0, view.scrollY + bounds.top - Math.max(32, (view.innerHeight - bounds.height) / 2)), behavior: 'instant' });
+    const outline = '2px solid ' + view.getComputedStyle(doc.documentElement).getPropertyValue('--accent').trim();
+    element.__rkSelectionAnimation = element.animate([{ outline, outlineOffset: '4px' }, { outline: view.matchMedia('(prefers-reduced-motion: reduce)').matches ? outline : '2px solid transparent', outlineOffset: '4px' }], { duration: 1100 });
+  }
+  function previewAboutElement(key, index) {
+    const doc = frameWin()?.document;
+    if (!doc) return null;
+    const lists = { path: '#timeline', recognition: '#recognitionList', education: '#educationList', photos: '#aboutGallery' };
+    return (Number.isInteger(index) && lists[key] ? doc.querySelector(lists[key])?.children[index] : null) || doc.getElementById('sec-' + key);
+  }
+  function previewEditorSelection(event) {
+    if (openStudy >= 0 || !frameWin()?.RK) return;
+    if (event.target.closest('[data-act],[data-journey-tab]') || event.target.matches('[data-about-editor]')) return;
+    const field = event.target.closest('[data-list][data-index]'), section = event.target.closest('[data-about-editor],[data-about-section]');
+    const photo = event.target.closest('[data-galedit]'), landing = event.target.closest('[data-landing-section]');
+    if (photo) {
+      if (journeyOpen) { clearTimeout(jrnPreviewTimer); previewJourney(); }
+      const index = (data.aboutGallery || []).filter(item => item?.src).indexOf(data.aboutGallery?.[+photo.dataset.galedit]);
+      if (index >= 0) revealPreviewElement(previewAboutElement('photos', index));
+    } else if (field && field.dataset.list === 'work') {
+      const work = data.work[+field.dataset.index];
+      const link = [...frameWin().document.querySelectorAll('a[data-work]')].find(item => item.dataset.work === work?.id);
+      revealPreviewElement(link?.closest('.case') || link);
+    } else if (landing) revealPreviewElement(frameWin().document.getElementById('wsec-' + landing.dataset.landingSection));
+    else if (field && ['path', 'recognition', 'education'].includes(field.dataset.list)) {
+      const index = field.dataset.list === 'path' ? journeyRoles(data).findIndex(item => item.index === +field.dataset.index) : +field.dataset.index;
+      if (journeyOpen) { clearTimeout(jrnPreviewTimer); previewJourney(); }
+      revealPreviewElement(previewAboutElement(field.dataset.list, index));
+    } else if (section) {
+      if (journeyOpen) { clearTimeout(jrnPreviewTimer); previewJourney(); }
+      revealPreviewElement(previewAboutElement(section.dataset.aboutEditor || section.dataset.aboutSection));
+    }
+  }
   function syncPreviewPage() {
     const w = frame && frame.contentWindow;
     if (!(w && typeof w.__rkShowPage === "function")) return;
+    bindPreviewNavigation(w.document);
     if (journeyOpen) { previewJourney(); return; }
     if (openStudy >= 0) return; // a case study owns the preview
     try { w.__rkShowPage(ABOUT_TABS[activeTab] ? "about" : "work"); } catch (e) {}
+    if (activeTab === "contact") revealPreviewElement(w.document.getElementById("contact"));
   }
 
   function forceRevealDoc(doc) {
@@ -11071,7 +11206,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     let html = "";
     layout.forEach((s, i) => {
       const body = landingSectionFields(s.key);
-      html += '<section class="adm__group adm__lsec' + (s.on ? "" : " is-off") + '">' +
+      html += '<section class="adm__group adm__lsec' + (s.on ? "" : " is-off") + '" data-landing-section="' + escAttr(s.key) + '">' +
         '<div class="adm__lsec-head">' +
           '<span class="sortgrip" data-grip data-sortkey="lsec" title="Drag to reorder" aria-label="Drag to reorder" style="position:absolute;left:0;top:0">' + GRIP_SVG + "</span>" +
           '<div class="adm__lsec-titles"><span class="adm__lsec-title">' + escHtml(labels[s.key] || s.key) + "</span>" +
@@ -11184,11 +11319,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       if (!selected && selection?.scroll) {
         if (journeyTab === "journey" && journeyRole) {
           var roleIndex = journeyRoles(data).findIndex(item => item.role === journeyRole);
-          w.document.querySelectorAll('#timeline > .tl')[roleIndex]?.scrollIntoView({ behavior: "instant", block: "center" });
+          revealPreviewElement(previewAboutElement("path", roleIndex));
         } else {
           var key = selection.section || ({ journey: "path", photos: "photos", more: journeyMoreSection })[journeyTab];
-          var section = w.document.getElementById(key ? "sec-" + key : "aboutSections");
-          if (section && !section.hidden) section.scrollIntoView({ behavior: "instant", block: "start" });
+          var section = key ? previewAboutElement(key, selection.index) : w.document.getElementById("aboutSections");
+          revealPreviewElement(section);
         }
       }
     } catch (e) {}
@@ -11203,6 +11338,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (bk) { bk.innerHTML = IC.back; bk.setAttribute("aria-label", txt); bk.setAttribute("title", txt); }
   }
   function openJourneyEditor(tab) {
+    ++previewNavigation;
     journeyData();
     journeyOpen = true;
     journeyTab = tab || "journey";
@@ -11233,6 +11369,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   function closeJourneyEditor(opts) {
     opts = opts || {};
+    ++previewNavigation;
     journeyOpen = false;
     paintL2Tabs();
     if (l2) { l2.hidden = true; l2.classList.remove("is-open"); }
@@ -11530,6 +11667,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function previewProject(id, keep) {
     const w = frameWin();
     if (!(w && w.RK)) return;
+    bindPreviewNavigation(w.document);
     const pd = resolvePreviewData(data);
     try { w.RK.data = pd; } catch (e) {}
     if (!keep) { try { w.RK.render(pd); forceRevealDoc(w.document); } catch (e) {} }
@@ -11551,6 +11689,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     }, 180);
   }
   async function openL2(i, landOn) {
+    const navigation = ++previewNavigation;
     if (!data.work[i]) return;
     if (!data.work[i].study) data.work[i].study = blankStudy();
     const ownerWork = data.work[i], ownerStudy = ownerWork.study;
@@ -11558,14 +11697,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     try {
       if (ownerStudy.authorSectionsEnc && !ownerStudy.authorSectionsRestored) {
         const saved = await decryptStudioOwner(ownerStudy.authorSectionsEnc);
-        if (data.work[i] !== ownerWork) return;
+        if (data.work[i] !== ownerWork || navigation !== previewNavigation) return;
         if (saved?.version !== 1 || saved.caseStudyId !== ownerWork.id || !Array.isArray(saved.blocks)) throw new Error("The private case-study copy is invalid");
         ownerStudy.blocks = saved.blocks; ownerStudy.authorSectionsRestored = true;
       }
       if (!landOn) targetTab = studyLandingTab(ownerWork);
       if (targetTab === "slides" && ownerStudy.slidesOwnerEnc && !ownerStudy.legacyDeckRestored) {
         const slides = await decryptStudioOwner(ownerStudy.slidesOwnerEnc);
-        if (data.work[i] !== ownerWork) return;
+        if (data.work[i] !== ownerWork || navigation !== previewNavigation) return;
         if (!Array.isArray(slides)) throw new Error("The private slideshow copy is invalid");
         ownerStudy.slides = slides; ownerStudy.legacyDeckRestored = true;
       }
@@ -11598,7 +11737,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     previewProject(w.id, false);
     l2PreviewApply();
   }
-  function renderL2() {
+  function renderL2(options) {
     if (openStudy < 0 || !data.work[openStudy]) return;
     var slides = data.work[openStudy].study && data.work[openStudy].study.slides;
     if (l2Tab === "slides" && slides && slides.length && !slides[openSlide]) openSlide = 0;
@@ -11616,10 +11755,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     slidePvSetup();
     setupStoryLazyThumbs();
     parxScheduleDemo();
-    previewProject(w.id, true);
+    if (options?.preview !== false) previewProject(w.id, true);
   }
   function closeL2(opts) {
     opts = opts || {};
+    ++previewNavigation;
     disposeNativeSlides();
     openStudy = -1;
     openBlock = -1;
@@ -11831,9 +11971,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (openStudy < 0 || !data.work[openStudy] || !data.work[openStudy].study) return;
     var blocks = data.work[openStudy].study.blocks || [];
     if (!(idx >= 0 && idx < blocks.length)) return;
+    l2Tab = "story";
     openBlock = idx;
     // Accordion: re-render so the picked section expands inline, then scroll to it and flash it.
-    renderL2();
+    renderL2({ preview: false });
     var target = l2body && l2body.querySelector(".study__block.is-open");
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -19548,6 +19689,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     }, { passive: false, capture: true });
 
     root.addEventListener("click", nativeSlideClickGate, true);
+    root.addEventListener("click", () => { ++previewNavigation; }, true);
     window.addEventListener("beforeunload", event => {
       if (!root.classList.contains("is-open")) return;
       if (!nativeSlideSession && saveTimer) saveDraft(true);
@@ -19560,6 +19702,8 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     root.addEventListener("change", onChange);
     root.addEventListener("pointerdown", faPointerDown);
     root.addEventListener("click", onClick);
+    root.addEventListener("click", previewEditorSelection);
+    root.addEventListener("focusin", previewEditorSelection);
     root.addEventListener("dblclick", onDblClick);
     // Live thumbnail-parallax demo: reflect the effect on the cover preview as the editor scrolls.
     root.addEventListener("scroll", parxScheduleDemo, true);

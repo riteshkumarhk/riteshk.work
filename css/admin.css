@@ -3527,6 +3527,7 @@ body.adm-sorting .slides__thumbgrip { cursor: grabbing; }
 }
 /* Preview layout modes: Split (default) · Editor only (is-prevoff) · Preview only (is-prevfull) */
 .adm.is-prevfull .adm__main { grid-template-columns: minmax(0, 1fr) !important; }
+.adm.is-prevfull:not(.is-slidestage) .adm__preview { display: flex; }
 .adm.is-prevfull .adm__editor,
 .adm.is-prevfull .adm__casestage { display: none !important; }
 .adm.is-prevfull .adm__resizer { display: none !important; }

@@ -684,6 +684,123 @@ test("Media columns Studio adds, reorders and persists nested cells", { skip: !b
   } finally { await browser.close(); }
 });
 
+test('Studio preview navigation waits for saved slides and ignores stale requests', async()=>{
+    const {runInNewContext}=await import('node:vm');
+    const source=readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+    const start=source.indexOf('  async function navigateFromPreview(destination) {');
+    const end=source.indexOf('  function revealEditorSelection',start);
+    const pending=[],rendered=[],errors=[];
+    const scope={previewNavigation:0,nativeSlideSession:{editor:{flush:()=>new Promise((resolve,reject)=>pending.push({resolve,reject}))}},root:{classList:{contains:()=>true}},clearTimeout,l2PreviewTimer:null,jrnPreviewTimer:null,blockRenameTimer:null,openStudy:-1,journeyOpen:false,activeTab:'work',renderBody:()=>rendered.push(scope.activeTab),status:message=>errors.push(message)};
+    runInNewContext(source.slice(start,end),scope);
+    const first=scope.navigateFromPreview({page:'about'}),second=scope.navigateFromPreview({page:'contact'});
+    assert.deepEqual(rendered,[]);
+    pending[1].resolve(); await second;
+    pending[0].resolve(); await first;
+    assert.deepEqual(rendered,['contact']);
+    const failed=scope.navigateFromPreview({page:'about'});
+    pending[2].reject(new Error('offline')); await failed;
+    assert.deepEqual(rendered,['contact']);
+    assert.deepEqual(errors,['Not saved: offline']);
+  });
+
+test('Studio editor and preview synchronize case sections and navigation without changing drafts', {skip:!baseURL,timeout:60000}, async()=>{
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+    const errors=[]; page.on('pageerror',error=>errors.push(error.message));
+    page.setDefaultTimeout(12000);
+    const published=await journeyFixture(page);
+    published.caseNav='rail'; published.caseNavM='rail';
+    published.aboutSections=['about','recognition','path','capabilities','education','photos'].map(key=>({key,on:true}));
+    published.aboutGallery=structuredClone(published.journey.chapters[0].entries[0].images);
+    published.work.push({id:'second-fixture',client:'Second client',title:'Second project',featured:true,study:{blocks:[{type:'text',body:'Unchanged second project'}]}});
+    published.work[0].study.blocks=Array.from({length:8},(_,index)=>({type:'text',heading:'Section '+index,body:'<p>'+('Section content '+index+' ').repeat(150)+'</p>'}));
+    await page.addInitScript(()=>localStorage.setItem('rk:dev:stub','1'));
+    await page.goto(baseURL+'/studio/?devstub=1');
+    await page.waitForFunction(()=>!!window.__RKStudio?.getDraft?.());
+    await page.locator('.adm__tab[data-tab="work"]').click();
+    await page.locator('[data-act="study-toggle"][data-index="0"]').click();
+    await page.locator('[data-l2tab="story"]').click();
+    const preview=page.frameLocator('.adm__frame');
+    const previewLink=async selector=>{
+      await preview.locator('body').evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+      await preview.locator('#nav:not(.is-hidden)').waitFor();
+      assert.equal(await page.evaluate(()=>document.querySelector('.adm__frame').getBoundingClientRect().top>=document.querySelector('.adm__workbar').getBoundingClientRect().bottom-1),true);
+      const toggle=preview.locator('#navToggle');
+      if (await toggle.isVisible()) {
+        if (await toggle.getAttribute('aria-expanded')!=='true') await toggle.click();
+        await preview.locator('#menu').locator(selector).first().click();
+      } else await preview.locator('#nav').locator(selector).first().click();
+    };
+    await preview.locator('[data-block="7"]').waitFor();
+    const before=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-act="study-blocktoggle"][data-bindex="7"]').click();
+    await page.waitForFunction(()=>{const frame=document.querySelector('.adm__frame'),section=frame.contentDocument.querySelector('[data-block="7"]'),rect=section.getBoundingClientRect();return rect.top<frame.contentWindow.innerHeight && rect.bottom>0;});
+    await preview.locator('[data-block="1"] .pjb__h').click();
+    await page.waitForFunction(()=>document.querySelector('.study__block.is-open [data-act="study-blocktoggle"]')?.dataset.bindex==='1');
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
+    await page.locator('[data-l2tab="details"]').click();
+    await preview.locator('[data-block="2"] .pjb__h').click();
+    await page.locator('[data-l2tab="story"][aria-selected="true"]').waitFor();
+    await page.locator('.study__block.is-open [data-act="study-blocktoggle"][data-bindex="2"]').waitFor();
+    assert.equal(await page.evaluate(()=>!!document.querySelector('.adm__frame').contentDocument.__rkStudioNavigation),true);
+    await preview.locator('[data-pj="close"]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__l2').hidden);
+    await preview.locator('a[data-work="second-fixture"]').click();
+    await preview.locator('[data-block="0"]').waitFor();
+    assert.match(await preview.locator('[data-block="0"]').innerText(),/Unchanged second project/);
+    assert.equal(await page.locator('.adm__l2-title').textContent(),'Second client');
+    await preview.locator('[data-pj="prev"]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__l2-title')?.textContent==='Synthetic');
+    await preview.locator('[data-block="7"]').waitFor();
+    await preview.locator('[data-pj="next"]').click();
+    await page.waitForFunction(()=>document.querySelector('.adm__l2-title')?.textContent==='Second client');
+    assert.match(page.frames().find(frame=>frame.url().includes('preview=1')).url(),/preview=1/);
+    await preview.locator('[data-pj="close"]').click();
+    await previewLink('[data-page-link="about"]');
+    await page.locator('.adm__tab[data-tab="aboutpage"].is-active').waitFor();
+    await preview.locator('[data-page="about"].is-active').waitFor();
+    await previewLink('a[aria-label="Open r\u00e9sum\u00e9"],#menuResume');
+    await page.locator('.adm__tab[data-tab="contact"].is-active').waitFor();
+    await page.locator('.adm__tab[data-tab="aboutpage"]').click();
+    await preview.locator('[data-page="about"].is-active').waitFor();
+    await preview.locator('#timeline > .tl').nth(1).locator('h3').click();
+    await page.locator('[data-act="jrole-toggle"][data-index="1"][aria-expanded="true"]').first().waitFor();
+    await preview.locator('#timeline > .tl[data-studio-selected]').waitFor();
+    await page.locator('[data-act="jrole-toggle"][data-index="0"]').first().click();
+    await preview.locator('#timeline > .tl[data-studio-selected]').filter({hasText:'Senior Designer - Edge Growth'}).waitFor();
+    await preview.locator('[data-jstory]').filter({hasText:'second chapter'}).click();
+    await page.locator('[data-act="jstory-toggle"][data-je="1"][aria-expanded="true"]').first().waitFor();
+    await preview.locator('#journey-detail').waitFor();
+    await page.locator('[data-journey-tab="more"]').click();
+    await page.locator('[data-list="recognition"][data-index="0"][data-field="title"]').click();
+    await preview.locator('#recognitionList > [data-studio-selected]').waitFor();
+    await preview.locator('#educationList').click();
+    await page.locator('[data-about-editor="education"]').waitFor();
+    await preview.locator('#aboutGallery .gallery__cap').nth(1).click();
+    await page.locator('[data-journey-tab="photos"][aria-selected="true"]').waitFor();
+    await page.locator('[data-galedit="2"]').click();
+    await preview.locator('#aboutGallery > [data-studio-selected]').filter({hasText:'Original image 3'}).waitFor();
+    await page.screenshot({path:join(tmpdir(),'rk-preview-sync-1440.png')});
+    await previewLink('[data-page-link="work"]');
+    await page.locator('.adm__tab[data-tab="work"].is-active').waitFor();
+    await page.setViewportSize({width:390,height:844});
+    while (!await page.locator('.adm.is-prevfull').count()) await page.locator('[data-prevtoggle]').click();
+    await previewLink('[data-page-link="about"]');
+    await preview.locator('#timeline > .tl').nth(1).locator('h3').click();
+    assert.equal(await page.locator('[data-act="jrole-toggle"][data-index="1"]').first().getAttribute('aria-expanded'),'true');
+    await page.screenshot({path:join(tmpdir(),'rk-preview-sync-390.png')});
+    await page.locator('[data-prevtoggle]').click();
+    await page.locator('[data-act="jrole-toggle"][data-index="1"][aria-expanded="true"]').first().waitFor();
+    const after=await page.evaluate(()=>window.__RKStudio.getDraft());
+    const baseline=JSON.parse(before);
+    for (const key of ['path','journey','aboutSections','aboutGallery']) assert.deepEqual(after[key],baseline[key],key+' unchanged');
+    assert.deepEqual(after.work.map(work=>work.study.blocks),baseline.work.map(work=>work.study.blocks));
+    assert.doesNotMatch(await page.locator('.adm__status').textContent(),/Not saved|not defined/);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
 test("built Studio refuses foreign draft commands and preserves trusted preview actions", { skip: !baseURL, timeout: 60000 }, async () => {
   const browser = await chromium.launch(launchOptions);
   const studio = await build({ entryPoints: ["src/js/admin-studio.js"], bundle: true, write: false, format: "iife" });
@@ -2365,7 +2482,9 @@ test('Journey Studio picks configured stories and preserves case links through e
     await page.locator('[data-act="jentry-edit"][data-jc="0"][data-je="0"]').click();
     await preview.locator('#journey-detail .jrn-case').click();
     await preview.getByText('Linked case content',{exact:true}).waitFor();
-    await page.getByRole('tab',{name:'Journey',exact:true}).click();
+    await page.locator('[data-l2tab="story"][aria-selected="true"]').waitFor();
+    assert.equal(await page.locator('.adm__l2-title').textContent(),'Synthetic');
+    await open();
     for(const width of [1440,390]) {
       await page.setViewportSize({width,height:1000});
       const trigger=page.locator('[data-act="jstories-add"][data-index="0"]');
