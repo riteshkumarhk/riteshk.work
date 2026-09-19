@@ -1874,9 +1874,41 @@ test('Journey experience logos upload original bytes, fetch safely and fit the o
     await page.locator('[data-role-logo-url="0"]').fill('https://logos.example/company.png');
     await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
     await page.waitForFunction(expected=>window.__RKStudio.getDraft().path[0].logo===expected,source);
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path fill="#f25022" d="M0 0h24v24H0z"/></svg>';
+    const svgSource='data:image/svg+xml;base64,'+Buffer.from(svg).toString('base64');
+    let resolvedTitle='',metadataResult={query:{pages:[{imageinfo:[{url:'https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg'}]}]}};
+    await page.route('https://commons.wikimedia.org/w/api.php?**',route=>{
+      const request=new URL(route.request().url());resolvedTitle=request.searchParams.get('titles');
+      assert.equal(request.searchParams.get('origin'),'*');assert.equal(request.searchParams.get('redirects'),'1');assert.equal(request.searchParams.get('iiprop'),'url');
+      return route.fulfill({contentType:'application/json',body:JSON.stringify(metadataResult)});
+    });
+    await page.route('https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg',route=>route.fulfill({contentType:'image/svg+xml',body:svg}));
+    await page.locator('[data-role-logo-url="0"]').fill('https://commons.wikimedia.org/wiki/File:Microsoft_logo.svg');
+    await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+    await page.waitForFunction(expected=>window.__RKStudio.getDraft().path[0].logo===expected,svgSource);
+    assert.equal(resolvedTitle,'File:Microsoft_logo.svg');
+    await page.locator('.adm__brand-logo').evaluate(image=>image.decode());
+    for(const [result,message] of [[{query:{pages:[{missing:true}]}},'No original image'],[{query:{pages:[{imageinfo:[{url:'https://untrusted.example/logo.svg'}]}]}},'valid original image URL']]) {
+      metadataResult=result;
+      await page.locator('[data-role-logo-url="0"]').fill('https://commons.wikimedia.org/w/index.php?title=File%3AMicrosoft_logo.svg');
+      await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+      await page.waitForFunction(message=>document.querySelector('[data-role-logo-error="0"]').textContent.includes(message),message);
+      assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().path[0].logo),svgSource);
+    }
+    await page.route('https://logos.example/page',route=>route.fulfill({contentType:'text/html',body:'<html>File page</html>'}));
+    await page.locator('[data-role-logo-url="0"]').fill('https://logos.example/page');
+    await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-role-logo-error="0"]').textContent.includes('webpage'));
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().path[0].logo),svgSource);
+    await page.route('https://logos.example/blocked.svg',route=>route.abort('failed'));
+    await page.locator('[data-role-logo-url="0"]').fill('https://logos.example/blocked.svg');
+    await page.locator('[data-act="role-logo-fetch"][data-index="0"]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-role-logo-error="0"]').textContent.includes('host blocks downloads'));
+    assert.equal(await page.locator('[data-act="role-logo-fetch"][data-index="0"]').isEnabled(),true);
+    assert.equal(await page.evaluate(()=>window.__RKStudio.getDraft().path[0].logo),svgSource);
     await page.locator('.adm__tab[data-tab="work"]').click();
     await page.reload();
-    await page.waitForFunction(expected=>window.__RKStudio?.getDraft?.()?.path[0].logo===expected,source);
+    await page.waitForFunction(expected=>window.__RKStudio?.getDraft?.()?.path[0].logo===expected,svgSource);
     const saved=await page.evaluate(()=>window.__RKStudio.getDraft());
     assert.deepEqual(saved.path.map(({logo,...role})=>role),original.path);
     assert.deepEqual(saved.journey,original.journey);

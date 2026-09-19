@@ -14841,11 +14841,27 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     const error = root.querySelector('[data-' + prefix + '-error="' + index + '"]');
     try {
       error.textContent = ""; button.disabled = true;
-      const url = new URL(field.value.trim());
+      let url = new URL(field.value.trim());
       if (url.protocol !== "https:" || url.username || url.password) throw new Error("Use a direct HTTPS image URL.");
-      const response = await fetch(url.href, { credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(15000) });
+      const options = { credentials: "omit", referrerPolicy: "no-referrer", cache: "reload", signal: AbortSignal.timeout(15000) };
+      if (url.hostname === 'commons.wikimedia.org') {
+        const title = url.pathname.startsWith('/wiki/') ? decodeURIComponent(url.pathname.slice(6)) : url.pathname === '/w/index.php' ? url.searchParams.get('title') : '';
+        if (!/^File:.+/i.test(title || '')) throw new Error('Use a Wikimedia Commons file page or a direct HTTPS image URL.');
+        const api = new URL('https://commons.wikimedia.org/w/api.php');
+        api.search = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', origin: '*', prop: 'imageinfo', iiprop: 'url', redirects: '1', titles: title }).toString();
+        const metadata = await fetch(api.href, options);
+        if (!metadata.ok) throw new Error('Wikimedia could not resolve this file. Try again or upload the original image.');
+        const result = await metadata.json();
+        const original = result.query?.pages?.[0]?.imageinfo?.[0]?.url;
+        if (!original) throw new Error('No original image was found on that Wikimedia file page.');
+        url = new URL(original);
+        if (url.origin !== 'https://upload.wikimedia.org' || url.username || url.password || !url.pathname.startsWith('/wikipedia/commons/') || url.pathname.startsWith('/wikipedia/commons/thumb/')) throw new Error('Wikimedia did not return a valid original image URL.');
+        if (!current()) return;
+      }
+      const response = await fetch(url.href, options);
       if (!response.ok) throw new Error("The logo could not be fetched. Upload the image instead.");
       const blob = await response.blob();
+      if (/^text\/html\b/i.test(blob.type)) throw new Error('This link opens a webpage. Use its original image URL or a Wikimedia Commons file page.');
       if (!/^image\/(png|jpeg|webp|gif|svg\+xml|avif)$/.test(blob.type) || blob.size > 20 * 1024 * 1024) throw new Error("Choose an image up to 20 MB.");
       const preview = URL.createObjectURL(blob);
       try { const image = new Image(); image.src = preview; await image.decode(); } finally { URL.revokeObjectURL(preview); }
@@ -14853,7 +14869,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       const uri = await fileToDataUri(blob);
       accept(uri);
       hostUploaded(uri, blob, accept);
-    } catch (failure) { if (current()) { error.textContent = failure.message || "The logo could not be fetched. Upload it instead."; status(error.textContent); } }
+    } catch (failure) { if (current()) { error.textContent = failure instanceof TypeError ? 'The logo could not be fetched. Check the link and connection, or upload the original image if the host blocks downloads.' : failure.message || "The logo could not be fetched. Upload it instead."; status(error.textContent); } }
     finally { button.disabled = false; }
   }
   function pickImage(cb, settled) {
