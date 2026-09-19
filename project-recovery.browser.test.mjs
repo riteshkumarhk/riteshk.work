@@ -733,9 +733,11 @@ test('Studio editor and preview synchronize case sections and navigation without
       } else await preview.locator('#nav').locator(selector).first().click();
     };
     await preview.locator('[data-block="7"]').waitFor();
+    await preview.locator('[data-block="7"]').evaluate(section=>{window.__syncPreviewSection=section;});
     const before=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
     await page.locator('[data-act="study-blocktoggle"][data-bindex="7"]').click();
     await page.waitForFunction(()=>{const frame=document.querySelector('.adm__frame'),section=frame.contentDocument.querySelector('[data-block="7"]'),rect=section.getBoundingClientRect();return rect.top<frame.contentWindow.innerHeight && rect.bottom>0;});
+    assert.equal(await preview.locator('[data-block="7"]').evaluate(section=>section===window.__syncPreviewSection),true);
     await preview.locator('[data-block="1"] .pjb__h').click();
     await page.waitForFunction(()=>document.querySelector('.study__block.is-open [data-act="study-blocktoggle"]')?.dataset.bindex==='1');
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);

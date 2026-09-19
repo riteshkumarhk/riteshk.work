@@ -11303,6 +11303,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function previewJourney(selection) {
     var w = frameWin();
     if (!(w && w.RK && w.RK.openJourney)) return;
+    bindPreviewNavigation(w.document);
     try {
       var previewData = resolvePreviewData(data);
       var story = journeyStories().find(function (item) { return item.entry === journeyStory || (journeyStory?.id && item.entry.id === journeyStory.id); });
@@ -12965,8 +12966,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     }
     if (act === "story-nav") {
       if (e.target.closest("button, [data-grip]")) return;
-      var _snj = +b.dataset.bindex; openBlock = _snj; renderL2();
+      var _snj = +b.dataset.bindex; openBlock = _snj; renderL2({ preview: false });
       try { var _snfw = frameWin(); if (_snfw) _snfw.postMessage({ __rk: "gotoBlock", index: _snj }, "*"); } catch (err) {}
+      syncPreviewSelection();
       var _snob = root.querySelector(".study__blocks .study__block.is-open"); if (_snob && _snob.scrollIntoView) _snob.scrollIntoView({ block: "nearest" });
       return;
     }
@@ -12982,7 +12984,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       clearTimeout(blockRenameTimer);
       blockRenameTimer = setTimeout(function () {
         // Accordion: click an open section's head to collapse it, otherwise expand it inline.
-        openBlock = (openBlock === j) ? -1 : j; renderL2();
+        openBlock = (openBlock === j) ? -1 : j; renderL2({ preview: false });
         try { const fw = frameWin(); if (fw) fw.postMessage({ __rk: "gotoBlock", index: j }, "*"); } catch (err) {}
         syncPreviewSelection();
       }, 220);
