@@ -2024,8 +2024,34 @@ test('Mobile banners wrap text and keep actions and expiry inside one surface', 
       assert.ok(dock.y+dock.height<=surface.y-12);
       assert.ok(Math.abs(await page.evaluate(()=>parseFloat(getComputedStyle(document.body).paddingBottom))-surface.height)<.01);
       assert.equal(await page.locator('.sv-surface').evaluate(element=>getComputedStyle(element).backgroundColor===getComputedStyle(document.body).backgroundColor),true);
+      assert.deepEqual(await page.locator('.sv-surface').evaluate(element=>{const curve=getComputedStyle(element,'::before'),banner=getComputedStyle(element.firstElementChild);return {top:curve.top,height:curve.height,pointer:curve.pointerEvents,radius:banner.borderRadius,round:banner.cornerShape===getComputedStyle(element.querySelector('.sv-banner__exit')).cornerShape};}),{top:'-40px',height:'40px',pointer:'none',radius:'16px',round:true});
       await page.screenshot({path:join(tmpdir(),'rk-mobile-preview-surface-'+width+'.png')});
     }
+    for(const width of [390,320]) {
+      await page.setViewportSize({width,height:844});
+      for(const appearance of ['dark','light']) {
+        await page.evaluate(appearance=>document.documentElement.dataset.appearance=appearance,appearance);
+        await page.waitForFunction(()=>parseFloat(document.body.style.getPropertyValue('--sv-surface-height'))===document.querySelector('.sv-surface').getBoundingClientRect().height);
+        const surface=await page.locator('.sv-surface').boundingBox();
+        await page.screenshot({path:join(tmpdir(),'rk-mobile-curved-backing-'+width+'-'+appearance+'.png')});
+        await page.evaluate(()=>{const surface=document.querySelector('.sv-surface').getBoundingClientRect(),band=document.createElement('div');band.id='curve-pixel-fixture';Object.assign(band.style,{position:'fixed',left:'0',right:'0',top:surface.top-40+'px',height:'40px',background:'rgb(199,80,97)',zIndex:'839',pointerEvents:'none'});document.body.append(band);document.querySelector('.sv-banner').style.boxShadow='none';});
+        const pixels=await page.evaluate(async({imageURL,surfaceTop})=>{
+          const image=new Image();image.src=imageURL;await image.decode();
+          const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+          const context=canvas.getContext('2d');context.drawImage(image,0,0);
+          const sample=(left,top)=>[...context.getImageData(left,Math.floor(top),1,1).data];
+          const edges=[sample(2,surfaceTop-2),sample(image.width-3,surfaceTop-2)];
+          const open=[sample(2,surfaceTop-38),sample(image.width-3,surfaceTop-38),sample(Math.floor(image.width/2),surfaceTop-2)];
+          context.fillStyle=getComputedStyle(document.querySelector('.sv-surface')).backgroundColor;context.fillRect(0,0,1,1);
+          return {edges,open,backing:sample(0,0)};
+        },{imageURL:'data:image/png;base64,'+(await page.screenshot()).toString('base64'),surfaceTop:surface.y});
+        assert.deepEqual(pixels.edges,[pixels.backing,pixels.backing]);
+        assert.deepEqual(pixels.open,Array.from({length:3},()=>[199,80,97,255]));
+        await page.evaluate(()=>{document.querySelector('#curve-pixel-fixture').remove();document.querySelector('.sv-banner').style.removeProperty('box-shadow');});
+        assert.equal(await page.locator('.dock').evaluate(element=>{const button=element.lastElementChild,rect=button.getBoundingClientRect();return button.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true);
+      }
+    }
+    await page.setViewportSize({width:390,height:844});
     await page.locator('.preview-banner .sv-banner__txt').evaluate(element=>element.textContent+=' Long feedback updates must resize the reserved surface without covering the contact controls.'.repeat(2));
     await page.waitForFunction(()=>{const surface=document.querySelector('.sv-surface').getBoundingClientRect();return parseFloat(document.body.style.getPropertyValue('--sv-surface-height'))===surface.height && document.querySelector('.dock').getBoundingClientRect().bottom<=surface.top-12;});
     await page.getByRole('button',{name:'Dismiss preview banner',exact:true}).click();
