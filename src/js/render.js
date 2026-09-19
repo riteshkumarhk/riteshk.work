@@ -1004,6 +1004,18 @@ import { contentRevision } from "./content-revision.mjs";
     render(baseData());
     revealAll();
   }
+  let svSurfaceObserver = null;
+  function mountSvBanner(banner) {
+    const surface = document.createElement('div');
+    surface.className = 'sv-surface';
+    surface.appendChild(banner);
+    document.body.appendChild(surface);
+    document.body.classList.add('has-sv');
+    const measure = () => document.body.style.setProperty('--sv-surface-height', surface.getBoundingClientRect().height + 'px');
+    measure();
+    svSurfaceObserver = new ResizeObserver(measure);
+    svSurfaceObserver.observe(surface);
+  }
   function showSvBanner(sv) {
     removeSvBanner();
     const left = svDaysLeft(sv);
@@ -1016,13 +1028,16 @@ import { contentRevision } from "./content-revision.mjs";
       (exp ? '<span class="sv-banner__exp">' + exp + "</span>" : "") +
       '<button class="sv-banner__exit" type="button">Exit \u2715</button>';
     b.querySelector(".sv-banner__exit").addEventListener("click", clearSpecialView);
-    document.body.appendChild(b);
-    document.body.classList.add("has-sv");
+    mountSvBanner(b);
   }
   function removeSvBanner() {
+    if (svSurfaceObserver) { svSurfaceObserver.disconnect(); svSurfaceObserver = null; }
+    const surface = document.querySelector('.sv-surface');
+    if (surface) surface.remove();
     const b = document.querySelector(".sv-banner");
     if (b) b.remove();
     document.body.classList.remove("has-sv");
+    document.body.style.removeProperty('--sv-surface-height');
   }
   // Transient “working” banner (spinner + label) shown while a present/curated view is being
   // decrypted. It occupies the same spot as the final banner; showSvBanner/showPresentBanner
@@ -1034,8 +1049,7 @@ import { contentRevision } from "./content-revision.mjs";
     b.innerHTML =
       '<span class="sv-banner__spin" aria-hidden="true"></span>' +
       '<span class="sv-banner__txt">' + esc(txt || "Unlocking\u2026") + "</span>";
-    document.body.appendChild(b);
-    document.body.classList.add("has-sv");
+    mountSvBanner(b);
   }
 
   /* ---------- present mode (owner) ----------
@@ -1175,8 +1189,7 @@ import { contentRevision } from "./content-revision.mjs";
       '<span class="sv-banner__txt">Present mode on - every case study is unlocked. Click any project to present.</span>' +
       '<button class="sv-banner__exit" type="button">Exit \u2715</button>';
     b.querySelector(".sv-banner__exit").addEventListener("click", exitPresent);
-    document.body.appendChild(b);
-    document.body.classList.add("has-sv");
+    mountSvBanner(b);
   }
   // Owner-only heads-up shown ONLY in a standalone preview tab (?preview / ?draft opened from the studio's
   // "open in a new tab") - never inside the studio's live-preview iframe, which already frames it.
@@ -1192,8 +1205,7 @@ import { contentRevision } from "./content-revision.mjs";
         : "Preview \u2014 no local draft found \u00b7 showing your published site") + "</span>" +
       '<button class="sv-banner__exit" type="button" aria-label="Dismiss preview banner">Dismiss \u2715</button>';
     b.querySelector(".sv-banner__exit").addEventListener("click", removeSvBanner);
-    document.body.appendChild(b);
-    document.body.classList.add("has-sv");
+    mountSvBanner(b);
   }
 
   /* ---------- data loading ---------- */

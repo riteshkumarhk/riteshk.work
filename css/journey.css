@@ -15,7 +15,7 @@
 :is(.jrn-tile, .jrn-detail) .jrn-tile__case span[aria-hidden] { flex: 0 0 auto; color: var(--accent); font-size: 1rem; }
 :is(.jrn-tile, .jrn-detail) .jrn-tile__case:hover, :is(.jrn-tile, .jrn-detail) .jrn-tile__case:focus-visible { color: var(--accent); background: var(--bg-elev); }
 :is(.jrn-tile, .jrn-detail) .jrn-tile__case:focus-visible { outline-offset: -4px; }
-.jrn-tile__preview { position: absolute; top: 0; left: 0; width: 100%; display: block; border-radius: 20px; corner-shape: squircle; transform: translate3d(0, var(--jrn-par-y, 0px), 0); }
+.jrn-tile__preview { position: absolute; top: 0; left: 0; width: 100%; display: block; border-radius: 20px; corner-shape: squircle; }
 .jrn-tile__case { position: relative; }
 .jrn-stories:not(.is-peeking) .is-case-unseen .jrn-tile__preview::before, .jrn-stories.is-peeking .is-case-unseen .jrn-tile__case::before { content: ''; position: absolute; inset: -5px; padding: 2px; border-radius: inherit; corner-shape: inherit; pointer-events: none; background: conic-gradient(from var(--jrn-ring-angle, 0deg), color-mix(in srgb, var(--accent) 68%, var(--bg)) 0deg 215deg, var(--accent) 255deg, #fff0cf 280deg, #a8e4d7 295deg, #5bafa7 310deg, var(--accent) 335deg, color-mix(in srgb, var(--accent) 68%, var(--bg)) 360deg); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude; }
 .jrn-tile__details { display: none; padding: 18px 16px; }
@@ -37,6 +37,9 @@
 .jrn-stories__preview > .jrn-control:disabled:hover { visibility: visible; }
 .jrn-tile__image { position: relative; display: grid; place-items: center; aspect-ratio: 4 / 3; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; corner-shape: squircle; background: var(--bg-elev); transition: border-color .2s; }
 .jrn-tile img, .jrn-tile video, .jrn-gallery__thumbs img, .jrn-gallery__thumbs video { width: 100%; height: 100%; object-fit: contain; }
+@media (prefers-reduced-motion: no-preference) {
+	html:not(.lite) .jrn-stories:not(.is-peeking) .jrn-tile__image > :is(img, video) { object-fit: cover; transform: translate3d(0, var(--jrn-par-y, 0px), 0) scale(var(--jrn-par-scale, 1)); }
+}
 .jrn-tile [aria-expanded="true"] .jrn-tile__image { border-color: var(--accent); }
 .jrn-tile__period { display: block; font-family: var(--mono); font-size: .65rem; color: var(--text-dim); line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
 .jrn-tile__title { font-family: var(--sans); font-size: 1rem; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }

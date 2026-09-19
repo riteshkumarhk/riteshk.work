@@ -269,6 +269,8 @@ import { initNodeWeb } from "./particles.js";
         const anchor = pars[i].getBoundingClientRect();
         const steady = matchMedia('(prefers-reduced-motion: reduce)').matches || pars[i].closest('.is-peeking');
         const drift = steady ? 0 : Math.max(-16, Math.min(16, (anchor.top + anchor.height / 2 - vh / 2) / vh * 48));
+        const frame = pars[i].querySelector('.jrn-tile__image');
+        pars[i].style.setProperty('--jrn-par-scale', steady || !frame?.clientHeight ? '1' : String(1 + 32 / frame.clientHeight));
         pars[i].style.setProperty('--jrn-par-y', drift.toFixed(1) + 'px');
         continue;
       }

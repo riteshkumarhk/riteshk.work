@@ -783,6 +783,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .mus__sub a:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- curated-view banner (visitor) ---------- */
+.sv-surface { display: contents; }
 .sv-banner {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 8500;
   display: flex; align-items: center; gap: .7rem; padding: .55rem .6rem .55rem 1rem;
@@ -983,6 +984,10 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .rk-flash.is-on { opacity: 1; transform: translate(-50%, 0); }
 @media (max-width: 600px) {
   .sv-banner, .rk-flash { box-sizing: border-box; width: calc(100% - 32px); max-width: none; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); border-radius: 12px; corner-shape: squircle; padding: 12px; line-height: 1.6; }
+  .sv-surface { display: block; position: fixed; inset: auto 0 0; z-index: 8500; padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
+  .sv-surface > .sv-banner { position: relative; left: auto; bottom: auto; width: 100%; transform: none; animation: none; }
+  body.has-sv { padding-bottom: var(--sv-surface-height, 0px); }
+  body.has-sv .dock { bottom: calc(var(--sv-surface-height, 0px) + 12px); }
   .sv-banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 12px; }
   .sv-banner__txt { white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; }
   .sv-banner__exp { grid-column: 2; grid-row: 2; border-left: 0; padding-left: 0; white-space: normal; overflow-wrap: anywhere; }

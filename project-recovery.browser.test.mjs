@@ -1166,10 +1166,12 @@ test('Journey L2 preserves About tiles, original media and return position acros
     for(const width of [390,320]) {
       await page.setViewportSize({width,height:844});
       const banner=page.locator('.present-banner');
+      await page.waitForFunction(()=>{const surface=document.querySelector('.sv-surface').getBoundingClientRect();return document.querySelector('.dock').getBoundingClientRect().bottom<=surface.top-12 && parseFloat(document.body.style.getPropertyValue('--sv-surface-height'))===surface.height;});
       assert.equal(await banner.locator('.sv-banner__txt').textContent(),'Present mode on - every case study is unlocked. Click any project to present.');
       assert.equal(await banner.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=16 && bounds.right<=innerWidth-16 && Array.from(element.children).every(child=>{const rect=child.getBoundingClientRect();return rect.left>=bounds.left && rect.right<=bounds.right && rect.top>=bounds.top && rect.bottom<=bounds.bottom;});}),true);
       assert.equal(await page.locator('.rk-flash.is-on').count(),0);
       await banner.screenshot({path:join(tmpdir(),'rk-mobile-present-banner-'+width+'.png')});
+      await page.screenshot({path:join(tmpdir(),'rk-mobile-present-surface-'+width+'.png')});
     }
     await page.setViewportSize({width:1440,height:1000});
     await page.getByRole('button',{name:'Presentation-only story',exact:true}).click();
@@ -1178,6 +1180,8 @@ test('Journey L2 preserves About tiles, original media and return position acros
     await page.getByRole('button',{name:'Close chapter',exact:true}).click();
     await page.locator('.present-banner .sv-banner__exit').click();
     await page.waitForFunction(()=>!!window.RK?.renderJourney && typeof window.RK.isOwnerPresentation==='function' && !window.RK.isOwnerPresentation());
+    assert.equal(await page.locator('.sv-surface').count(),0);
+    assert.equal(await page.evaluate(()=>document.body.style.getPropertyValue('--sv-surface-height')),'');
     assert.equal(await page.getByRole('button',{name:'Presentation-only story',exact:true}).count(),0);
     assert.equal(await page.locator('#journey-detail').count(),0);
     assert.deepEqual(errors,[]);
@@ -1362,7 +1366,7 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await page.evaluate(()=>{window.__nativeRingRandom=Math.random;const values=[.5,.2,.3,.5,.9,.7,.1,.4];let index=0;Math.random=()=>values[index++%values.length];});
     await page.emulateMedia({reducedMotion:'no-preference'});
     await first.scrollIntoViewIfNeeded();
-    await page.evaluate(()=>document.activeElement.blur());
+    await page.evaluate(()=>{document.activeElement.blur();window.scrollTo({top:document.querySelector('.jrn-tile').getBoundingClientRect().top+scrollY-400,behavior:'instant'});});
     await page.waitForFunction(()=>!!document.querySelector('.jrn-tile.is-case-unseen').style.getPropertyValue('--jrn-ring-angle'));
     await page.waitForFunction(()=>{
       const tile=document.querySelector('.jrn-tile.is-case-unseen');
@@ -1410,16 +1414,42 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await page.evaluate(()=>window.scrollTo({top:document.querySelector('[data-jstory]').getBoundingClientRect().top+scrollY-400,behavior:'instant'}));
     await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
     const drift=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y'));
+    const parallaxGeometry=()=>tile.evaluate(element=>{
+      const anchor=element.getBoundingClientRect(),frame=element.querySelector('.jrn-tile__image').getBoundingClientRect(),image=element.querySelector('.jrn-tile__image img').getBoundingClientRect();
+      return {frame:[frame.x-anchor.x,frame.y-anchor.y,frame.width,frame.height],imageY:image.y-frame.y,filled:image.top<=frame.top+1 && image.bottom>=frame.bottom-1 && image.left<=frame.left+1 && image.right>=frame.right-1,previewTransform:getComputedStyle(element.querySelector('.jrn-tile__preview')).transform,overflow:getComputedStyle(element.querySelector('.jrn-tile__image')).overflow};
+    });
+    const beforeParallax=await parallaxGeometry();
     await page.evaluate(()=>window.scrollBy({top:140,behavior:'instant'}));
     await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
     assert.ok(Math.abs(parseFloat(await tile.evaluate(element=>element.style.getPropertyValue('--jrn-par-y')))-parseFloat(drift))>5,'A 140px scroll must produce visible thumbnail parallax');
-    assert.notEqual(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    const afterParallax=await parallaxGeometry();
+    assert.deepEqual(afterParallax.frame,beforeParallax.frame,'The frame and its ring must stay anchored to the tile');
+    assert.ok(Math.abs(afterParallax.imageY-beforeParallax.imageY)>5,'Only the artwork moves within the frame');
+    assert.equal(afterParallax.previewTransform,'none');
+    assert.equal(afterParallax.overflow,'hidden');
+    assert.equal(afterParallax.filled,true,'The moving media must cover the entire clipped frame');
+    await tile.screenshot({path:join(tmpdir(),'rk-journey-inner-parallax.png')});
+    for(const width of [390,320]) {
+      await page.setViewportSize({width,height:1000});
+      await page.evaluate(()=>window.scrollTo({top:document.querySelector('.jrn-tile').getBoundingClientRect().top+scrollY-400,behavior:'instant'}));
+      await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
+      const before=await parallaxGeometry();
+      await page.evaluate(()=>window.scrollBy({top:140,behavior:'instant'}));
+      await page.waitForFunction(()=>{const tile=document.querySelector('.jrn-tile'),rect=tile.getBoundingClientRect();return tile.style.getPropertyValue('--jrn-par-y')===Math.max(-16,Math.min(16,(rect.top+rect.height/2-innerHeight/2)/innerHeight*48)).toFixed(1)+'px';});
+      const after=await parallaxGeometry();
+      assert.deepEqual(after.frame,before.frame);assert.equal(after.filled,true);assert.equal(after.previewTransform,'none');
+      assert.ok(Math.abs(after.imageY-before.imageY)>5);
+      await tile.screenshot({path:join(tmpdir(),'rk-journey-inner-parallax-'+width+'.png')});
+    }
+    await page.setViewportSize({width:1440,height:1000});
     await first.hover();
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    assert.equal(await tile.locator('.jrn-tile__image img').evaluate(element=>getComputedStyle(element).transform),'none');
     assert.equal(await link.evaluate(element=>getComputedStyle(element,'::before').getPropertyValue('--jrn-ring-angle')===element.closest('.jrn-tile').style.getPropertyValue('--jrn-ring-angle')),true);
     await page.keyboard.press('Escape');
     await page.emulateMedia({reducedMotion:'reduce'});
     assert.equal(await tile.locator('.jrn-tile__preview').evaluate(element=>getComputedStyle(element).transform),'none');
+    assert.equal(await tile.locator('.jrn-tile__image img').evaluate(element=>getComputedStyle(element).transform),'none');
     assert.equal(await ring.evaluate(element=>getComputedStyle(element,'::before').animationName),'none');
     const frozen=await tile.evaluate(element=>element.style.getPropertyValue('--jrn-ring-angle'));
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
@@ -1982,6 +2012,26 @@ test('Mobile banners wrap text and keep actions and expiry inside one surface', 
     await journeyFixture(page);
     await page.goto(baseURL+'/about');
     await page.waitForFunction(()=>!!window.RK?.data);
+    const dockBottom=await page.locator('.dock').evaluate(element=>getComputedStyle(element).bottom);
+    await page.goto(baseURL+'/?preview=1');
+    await page.locator('.preview-banner').waitFor();
+    for(const width of [390,320,600,1440,390]) {
+      await page.setViewportSize({width,height:844});
+      await page.waitForFunction(()=>{const surface=document.querySelector('.sv-surface').getBoundingClientRect();return parseFloat(document.body.style.getPropertyValue('--sv-surface-height'))===surface.height;});
+      if(width>600) {assert.equal(await page.locator('.sv-surface').evaluate(element=>getComputedStyle(element).display),'contents');continue;}
+      const surface=await page.locator('.sv-surface').boundingBox(),dock=await page.locator('.dock').boundingBox();
+      assert.equal(surface.x,0);assert.equal(surface.width,width);assert.equal(surface.y+surface.height,844);
+      assert.ok(dock.y+dock.height<=surface.y-12);
+      assert.ok(Math.abs(await page.evaluate(()=>parseFloat(getComputedStyle(document.body).paddingBottom))-surface.height)<.01);
+      assert.equal(await page.locator('.sv-surface').evaluate(element=>getComputedStyle(element).backgroundColor===getComputedStyle(document.body).backgroundColor),true);
+      await page.screenshot({path:join(tmpdir(),'rk-mobile-preview-surface-'+width+'.png')});
+    }
+    await page.locator('.preview-banner .sv-banner__txt').evaluate(element=>element.textContent+=' Long feedback updates must resize the reserved surface without covering the contact controls.'.repeat(2));
+    await page.waitForFunction(()=>{const surface=document.querySelector('.sv-surface').getBoundingClientRect();return parseFloat(document.body.style.getPropertyValue('--sv-surface-height'))===surface.height && document.querySelector('.dock').getBoundingClientRect().bottom<=surface.top-12;});
+    await page.getByRole('button',{name:'Dismiss preview banner',exact:true}).click();
+    assert.equal(await page.locator('.sv-surface').count(),0);
+    assert.equal(await page.locator('.dock').evaluate(element=>getComputedStyle(element).bottom),dockBottom);
+    assert.equal(await page.evaluate(()=>document.body.style.getPropertyValue('--sv-surface-height')),'');
     for(const width of [390,320]) {
       await page.setViewportSize({width,height:844});
       for(const appearance of ['dark','light']) {
