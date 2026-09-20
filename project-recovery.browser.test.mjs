@@ -15,6 +15,56 @@ const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "ut
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
 
+test('Overview to Full releases its scroll pin on the first upward wheel gesture', { timeout: 60000 }, async () => {
+  const bundle = await build({ entryPoints: ['src/js/project.js'], bundle: true, write: false, format: 'iife' });
+  const browser = await chromium.launch(launchOptions);
+  try {
+    for (const mode of [{ lenis: true, motion: 'no-preference' }, { lenis: true, motion: 'reduce' }, { lenis: false, motion: 'no-preference' }, { lenis: true, motion: 'no-preference', duringGlide: true }]) {
+      const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: mode.motion });
+      await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Scroll fixture</title>' }));
+      await page.goto('https://scroll.example.test/');
+      await page.addStyleTag({ content: readFileSync('css/styles.css', 'utf8') + readFileSync('css/project.css', 'utf8') });
+      await page.evaluate(mode => {
+        window.RK = { data: { work: [{ id: 'scroll-fixture', title: 'Scroll fixture', client: 'Synthetic', study: { blocks: [{ type: 'text', heading: 'Full case', body: 'Fictional content.' }] } }] } };
+        window.__siteRendered = true;
+        if (mode.lenis) window.__lenis = { stop() {}, start() {} };
+      }, mode);
+      await page.addScriptTag({ content: bundle.outputFiles[0].text });
+      await page.evaluate(() => {
+        RK.openProject('scroll-fixture', { push: false });
+        const body = document.querySelector('.pj__body');
+        const overview = document.createElement('div');
+        overview.id = 'synthetic-overview';
+        overview.style.height = '1200px';
+        overview.textContent = 'Synthetic overview';
+        body.before(overview);
+        body.style.minHeight = '2200px';
+        document.querySelector('[data-viewseg]').hidden = false;
+      });
+      await page.locator('.pj.is-open').waitFor();
+      await page.getByRole('button', { name: 'Full', exact: true }).click();
+      if (mode.duringGlide) {
+        await page.waitForFunction(() => document.querySelector('.pj__scroll').scrollTop > 400 && document.querySelector('.pj__body').getBoundingClientRect().top > 80);
+      } else {
+        await page.waitForFunction(() => Math.abs(document.querySelector('.pj__body').getBoundingClientRect().top - document.querySelector('.pj__scroll').getBoundingClientRect().top - 24) <= 2);
+        await page.waitForTimeout(100);
+        await page.locator('#synthetic-overview').evaluate(element => { element.style.height = '1400px'; });
+        await page.waitForFunction(() => Math.abs(document.querySelector('.pj__body').getBoundingClientRect().top - document.querySelector('.pj__scroll').getBoundingClientRect().top - 24) <= 2);
+      }
+      await page.evaluate(() => document.addEventListener('wheel', () => { window.wheelBefore = document.querySelector('.pj__scroll').scrollTop; }, { capture: true, once: true }));
+      await page.mouse.move(800, 450);
+      await page.mouse.wheel(0, -180);
+      await page.waitForFunction(() => document.querySelector('.pj__scroll').scrollTop < window.wheelBefore - 100);
+      await page.waitForTimeout(700);
+      const before = await page.evaluate(() => window.wheelBefore);
+      const after = await page.locator('.pj__scroll').evaluate(element => element.scrollTop);
+      assert.ok(after < before - 100, `First upward gesture must remain effective: ${JSON.stringify({ mode, before, after })}`);
+      await page.screenshot({ path: join(tmpdir(), `rk-full-scroll-${mode.lenis}-${mode.motion}-${!!mode.duringGlide}.png`), fullPage: true });
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('platform squircle corners preserve radii geometry circles pills and authored content', async () => {
   const browser = await chromium.launch(launchOptions);
   const css = ['styles','admin','project','journey','resume-preview','slide-merge-theme','slide-merge-properties','workflow'].map(name => readFileSync(new URL('./css/' + name + '.css', import.meta.url), 'utf8')).join('\n') + presenterPanelStyles + applyUiCorners(readFileSync('node_modules/@excalidraw/excalidraw/dist/prod/index.css', 'utf8'));

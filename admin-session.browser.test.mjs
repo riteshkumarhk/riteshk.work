@@ -98,6 +98,52 @@ async function login(page, remember = false) {
   await page.locator('.adm.is-open').waitFor();
 }
 
+test('Remember information toggles independently by pointer and keyboard on desktop and phone', { timeout: 60000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    for (const width of [1440, 390, 320]) {
+      const run = await fixture(browser, { viewport: { width, height: width === 1440 ? 1000 : 844 }, hasTouch: width < 400 });
+      const page = await run.page();
+      await page.goto('https://riteshk.work/studio/');
+      const info = page.getByRole('button', { name: 'About remembering this device' });
+      const remember = page.getByRole('switch', { name: 'Remember this device' });
+      const note = page.locator('#admin-remember-note');
+      await info.waitFor();
+      assert.equal(await info.getAttribute('aria-controls'), await note.getAttribute('id'));
+      assert.equal(await info.getAttribute('aria-expanded'), 'false');
+      assert.equal(await note.isVisible(), false);
+      assert.equal(await remember.getAttribute('aria-checked'), 'false');
+      const iconBounds = await info.boundingBox(), labelBounds = await remember.boundingBox();
+      assert.ok(iconBounds.x + iconBounds.width <= labelBounds.x);
+      if (width < 400) await info.tap(); else await info.click();
+      assert.equal(await note.isVisible(), true);
+      assert.equal(await info.getAttribute('aria-expanded'), 'true');
+      assert.equal(await remember.getAttribute('aria-checked'), 'false');
+      assert.equal(await note.textContent(), '7-day maximum. Locks after 30 minutes of inactivity. Local drafts remain on this browser.');
+      assert.equal(await page.locator('.pass__box').evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.x >= 0 && bounds.right <= innerWidth && element.scrollWidth <= element.clientWidth;
+      }), true);
+      await page.screenshot({ path: join(tmpdir(), `rk-remember-info-${width}-open.png`), fullPage: true });
+      await info.press('Enter');
+      assert.equal(await note.isVisible(), false);
+      assert.equal(await info.getAttribute('aria-expanded'), 'false');
+      await remember.click();
+      await info.press('Space');
+      assert.equal(await note.isVisible(), true);
+      assert.equal(await remember.getAttribute('aria-checked'), 'true');
+      await info.click();
+      assert.equal(await note.isVisible(), false);
+      assert.equal(await remember.getAttribute('aria-checked'), 'true');
+      await page.screenshot({ path: join(tmpdir(), `rk-remember-info-${width}-closed.png`), fullPage: true });
+      await page.reload(); await info.waitFor();
+      assert.equal(await note.isVisible(), false);
+      assert.equal(await remember.getAttribute('aria-checked'), 'false');
+      await run.context.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('Admin default-off sign-in stays in memory and remember restores an HttpOnly session', { timeout: 90000 }, async () => {
   const browser = await chromium.launch(launchOptions);
   try {

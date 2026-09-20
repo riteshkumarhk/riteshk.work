@@ -1544,8 +1544,9 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
     // Lenis owns the page wheel and preventDefaults it, so we scroll the overlay
     // ourselves (only when Lenis is active — native scroll is fine in lite mode).
     overlay.addEventListener("wheel", function (e) {
-      if (!window.__lenis) return;
       if (!scroller.contains(e.target)) return;
+      cancelPin();
+      if (!window.__lenis) return;
       // A horizontal wheel / trackpad swipe over a slideshow scrolls it sideways — otherwise
       // the block below eats every wheel event in the overlay and only moves the page vertically.
       var gal = e.target.closest && e.target.closest(".pjb__gallery[data-gallery]");

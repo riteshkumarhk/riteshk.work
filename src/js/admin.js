@@ -199,8 +199,9 @@ import {
       (creating ? "" : '<button class="btn btn--primary" data-passkey hidden style="width:100%;justify-content:center;gap:.4rem;margin-bottom:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>Sign in with a passkey</button><div class="pass__or" data-or hidden style="text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.4;margin:0 0 12px">or use your admin key</div>') +
       '<input type="password" placeholder="Key" autofocus />' +
       (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
-      '<button class="pass__remember" type="button" role="switch" aria-checked="false" data-remember><span>Remember this device</span><span class="rksw rksw--sm" aria-hidden="true"><span class="rksw__knob"></span></span></button>' +
-      '<div class="pass__note">7-day maximum. Locks after 30 minutes of inactivity. Local drafts remain on this browser.</div>' +
+      '<div class="pass__remember-row"><button class="pass__remember-info" type="button" aria-label="About remembering this device" title="About remembering this device" aria-expanded="false" aria-controls="admin-remember-note" data-remember-info><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg></button>' +
+      '<button class="pass__remember" type="button" role="switch" aria-checked="false" data-remember><span>Remember this device</span><span class="rksw rksw--sm" aria-hidden="true"><span class="rksw__knob"></span></span></button></div>' +
+      '<div class="pass__note" id="admin-remember-note" hidden>7-day maximum. Locks after 30 minutes of inactivity. Local drafts remain on this browser.</div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div>" +
@@ -220,6 +221,12 @@ import {
     const err = modal.querySelector(".pass__err");
     const remember = modal.querySelector("[data-remember]");
     remember.addEventListener("click", () => remember.setAttribute("aria-checked", remember.getAttribute("aria-checked") === "true" ? "false" : "true"));
+    const rememberInfo = modal.querySelector("[data-remember-info]");
+    const rememberNote = modal.querySelector("#admin-remember-note");
+    rememberInfo.addEventListener("click", () => {
+      rememberNote.hidden = !rememberNote.hidden;
+      rememberInfo.setAttribute("aria-expanded", String(!rememberNote.hidden));
+    });
     const rememberDevice = () => remember.getAttribute("aria-checked") === "true";
     pass.focus();
 
