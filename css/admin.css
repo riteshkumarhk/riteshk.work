@@ -46,7 +46,7 @@
 .pass__actions { display: flex; gap: .6rem; }
 .pass__actions .btn { flex: 1; }
 .pass__remember-row { display: flex; align-items: center; gap: 6px; }
-.pass__remember-info { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 40px; padding: 0; border: 0; border-radius: 6px; color: var(--text-dim); background: transparent; cursor: pointer; }
+.pass__remember-info { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 40px; padding: 0; border: 0; border-radius: 6px; corner-shape: squircle; color: var(--text-dim); background: transparent; cursor: pointer; }
 .pass__remember-info:hover { color: var(--text); background: var(--line); }
 .pass__remember-info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pass__remember-row .pass__remember { flex: 1; min-width: 0; width: auto; }
