@@ -402,6 +402,76 @@ test("native bound text formatting preserves container geometry history and read
   } finally { await browser.close(); }
 });
 
+test("cover theme follows editor audience and public previews without changing saved colours", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await page.addInitScript(() => localStorage.setItem('rk:theme', 'night'));
+    await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
+    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await page.locator('summary[aria-label="Add a slide"]').click();
+    await page.getByRole('button', { name: 'Add cover', exact: true }).click();
+    await page.getByLabel('Cover title', { exact: true }).waitFor();
+    await page.evaluate(async () => {
+      const api = window.__slideMerge.api;
+      api.updateScene({ elements: api.getSceneElements().map(element => element.customData?.slideCover === 'rail' ? { ...element, backgroundColor: '#123456', version: element.version + 1 } : element) });
+      await window.__slideMerge.save();
+    });
+    const saved = await page.evaluate(() => window.__slideMerge.deck());
+    const artwork = deck => ({ ...deck, slides: deck.slides.map(slide => {
+      const { scrollX, scrollY, zoom, ...appState } = slide.scene.appState;
+      return { ...slide, scene: { ...slide.scene, appState } };
+    }) });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+      for (const [mode, channels] of [['day', [242, 238, 230]], ['night', [8, 8, 10]]]) {
+        await page.evaluate(mode => window.__theme.set(mode), mode);
+        await assertCoverPixel(page, [400, 660], channels);
+        await assertCoverPixel(page, [60, 500], [18, 52, 86]);
+        await page.screenshot({ path: join(tmpdir(), `rk-cover-theme-${mode}-${width}.png`) });
+        assert.deepEqual(artwork(await page.evaluate(() => window.__slideMerge.deck())), artwork(saved), 'Theme switching preserves all artwork; responsive camera fitting is excluded');
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const authored = saved.slides.find(slide => slide.id === saved.selected);
+    const published = publicDeckPayload(setDeckVisibility({ ...saved, slides: [authored] }, 'public'), { reviewedSources: true, production: true });
+    assert.equal(published.slides[0].scene.elements.find(element => element.id === 'lab-slide').customData.slideSettings.cover, undefined);
+    for (const legacy of [false, true]) {
+      const document = structuredClone(published);
+      if (legacy) for (const element of document.slides[0].scene.elements) if (element.customData) delete element.customData.slideCover;
+      document.slides.push({ ...structuredClone(document.slides[0]), id: 'theme-next-preview' });
+      await page.evaluate(async document => {
+        const { presentNativeDocument } = await import('/studio/slide-lab/assets/audience.js');
+        window.coverPlayer = await presentNativeDocument({}, document, { audienceOnly: true, autoStart: true });
+      }, document);
+      await page.locator('.pjp .excalidraw__canvas.static').waitFor();
+      for (const [mode, channels] of [['day', [242, 238, 230]], ['night', [8, 8, 10]]]) {
+        await page.evaluate(mode => window.__theme.set(mode), mode);
+        await page.waitForFunction(channels => {
+          const canvas = document.querySelector('.pjp .excalidraw__canvas.static');
+          const pixel = canvas.getContext('2d').getImageData(Math.floor(canvas.width * 400 / 1280), Math.floor(canvas.height * 660 / 720), 1, 1).data;
+          return channels.every((channel, index) => channel === pixel[index]);
+        }, channels);
+        await page.waitForFunction(color => document.querySelector('[data-pjp-nextthumb] svg')?.outerHTML.includes(color), mode === 'day' ? '#f2eee6' : '#08080a');
+        const html = await page.locator('[data-pjp-nextthumb]').innerHTML();
+        assert.ok(html.includes(mode === 'day' ? '#f2eee6' : '#08080a'));
+        assert.ok(html.includes('#123456'));
+        await page.screenshot({ path: join(tmpdir(), `rk-cover-audience-${legacy ? 'legacy' : 'current'}-${mode}.png`) });
+      }
+      await page.evaluate(() => window.coverPlayer.close());
+      await page.locator('.pjp').waitFor({ state: 'detached' });
+    }
+    await page.evaluate(() => window.__slideMerge.save());
+    assert.deepEqual(await page.evaluate(() => window.__slideMerge.deck().slides.find(slide => slide.id === window.__slideMerge.deck().selected).scene.elements), authored.scene.elements);
+    await page.reload();
+    await page.getByLabel('Cover title', { exact: true }).waitFor();
+    await page.evaluate(() => window.__theme.set('day'));
+    await assertCoverPixel(page, [400, 660], [242, 238, 230]);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
 test("fixed cover edits from the right panel preserve media, other slides and history", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];

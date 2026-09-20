@@ -196,6 +196,7 @@ export function publicDeckPayload(deck, { reviewedSources = false, production = 
       if (custom.labCorners) safe.labCorners = pickScalars(custom.labCorners, ["mode", "radius", "topLeftCornerRadius", "topRightCornerRadius", "bottomRightCornerRadius", "bottomLeftCornerRadius"]);
       if (typeof custom.labTextColor === "string") safe.labTextColor = custom.labTextColor;
       if (custom.slideBackground === true) safe.slideBackground = true;
+      if (custom.slideCover) safe.slideCover = true;
       if (custom.slideSettings) {
         safe.slideSettings = { transition:["none", "fade", "push", "magic"].includes(custom.slideSettings.transition) ? custom.slideSettings.transition : "fade" };
         if (custom.slideSettings.background?.type === "color") safe.slideSettings.background = { type:"color", ...pickScalars(custom.slideSettings.background, ["color"]) };

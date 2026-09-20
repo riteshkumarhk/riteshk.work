@@ -36,7 +36,7 @@ import "../../css/slide-lab.css";
 import "../../css/slide-merge.css";
 import "../../css/slide-merge-theme.css";
 import { useMobilePanels } from "./slide-merge-mobile.jsx";
-import { canvasTheme } from "./slide-merge-appearance.mjs";
+import { canvasTheme, coverAppearanceElements } from "./slide-merge-appearance.mjs";
 import { NotesControls, RichNotesEditor, useNotesResize } from "./slide-merge-notes.jsx";
 import { EmbedComposer } from "./slide-merge-embeds.jsx";
 import { LayerPanel } from "./slide-merge-layers.jsx";
@@ -129,7 +129,7 @@ function CompositionPreview({ plan }) {
   useEffect(() => {
     let active = true;
     prepareAuthoredSlide(plan).then(async slide => {
-      const svg = await exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } });
+      const svg = await exportToSvg({ elements: coverAppearanceElements(slide.scene.elements, appearance), files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } });
       if (active) setPreview(<SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} renderEmbed={renderEmbed} />);
     }).catch(error => { if (active) setError(error.message); });
     return () => { active = false; };
@@ -345,7 +345,7 @@ function Merger({ integration, controller }) {
     if (definitions.length) state.deck.fonts = structuredClone(definitions);
   }
   async function thumbnail(slide) {
-    const svg = await exportToSvg({ elements: slide.scene.elements.filter(element => !element.isDeleted), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
+    const svg = await exportToSvg({ elements: coverAppearanceElements(slide.scene.elements.filter(element => !element.isDeleted), document.documentElement.dataset.appearance), appState: { ...slide.scene.appState, exportBackground: false, exportWithDarkMode:canvasTheme(slide.scene.elements,document.documentElement.dataset.appearance)==="dark" }, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true });
     const preview = <SectionThumbnail svg={svg.outerHTML} elements={slide.scene.elements} files={slide.scene.files} renderEmbed={renderEmbed} />;
     setThumbnails(previous => ({ ...previous, [slide.id]: preview }));
   }

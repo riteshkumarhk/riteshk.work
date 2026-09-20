@@ -5,7 +5,7 @@ import { FRAME_ID } from "./slide-lab-core.mjs";
 import { sectionMediaUrl } from "./slide-merge-sections.mjs";
 import { nativeSectionLayers } from "./slide-merge-native-sections.mjs";
 import { EmbeddedMedia } from "./slide-merge-embeds.jsx";
-import { canvasTheme } from "./slide-merge-appearance.mjs";
+import { canvasTheme, coverAppearanceElements } from "./slide-merge-appearance.mjs";
 import { slideSettings, transitionMatch } from "./slide-merge-properties.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { presentDeckWithRenderer } from "./deck-presenter.mjs";
@@ -96,7 +96,7 @@ function SectionForeground({ elements, frame, files, style }) {
   useEffect(() => {
     let current = true;
     if (!elements.length || !frame) { setSvg(""); return; }
-    exportToSvg({ elements: [...elements.map(element => ({ ...element, frameId: frame.id })), frame], files: files || {}, exportingFrame: frame, skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme([...elements, frame], appearance) === "dark" } }).then(svg => { if (current) setSvg(svg.outerHTML); }).catch(() => { if (current) setSvg(""); });
+    exportToSvg({ elements: coverAppearanceElements([...elements.map(element => ({ ...element, frameId: frame.id })), frame], appearance), files: files || {}, exportingFrame: frame, skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme([...elements, frame], appearance) === "dark" } }).then(svg => { if (current) setSvg(svg.outerHTML); }).catch(() => { if (current) setSvg(""); });
     return () => { current = false; };
   }, [signature, files, appearance]);
   return svg ? <div className="merge-native-foreground" style={style} dangerouslySetInnerHTML={{ __html: svg }} /> : null;
@@ -199,6 +199,7 @@ function PresentationCanvas({ slides, index, renderEmbed }) {
   useEffect(() => {
     if (!api) return;
     const scene = structuredClone(slide.scene);
+    scene.elements = coverAppearanceElements(scene.elements, appearance);
     api.resetScene();
     api.addFiles(Object.values(scene.files));
     api.updateScene({ elements: scene.elements.map(element => element.id === FRAME_ID ? { ...element, name: "" } : element), appState: { ...scene.appState, viewModeEnabled: true, zenModeEnabled: true, theme: canvasTheme(scene.elements, appearance), viewBackgroundColor: sceneBackground(), selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null }, captureUpdate: CaptureUpdateAction.NEVER });
@@ -224,7 +225,7 @@ function PresentationCanvas({ slides, index, renderEmbed }) {
     }
     const observer = new ResizeObserver(fit); observer.observe(stage.current); fit();
     return () => { observer.disconnect(); cancelAnimationFrame(animationFrame); animation?.cancel(); };
-  }, [api, slide]);
+  }, [api, slide, appearance]);
   return <div className="merge-present-stage" ref={stage}><div className="merge-present-engine" ref={engine}><CanvasVideo api={api} /><NativeSections api={api} interactive /><Excalidraw excalidrawAPI={setApi} onScrollChange={fit} theme={canvasTheme(slide.scene.elements, appearance)} viewModeEnabled zenModeEnabled aiEnabled={false} handleKeyboardGlobally={false} UIOptions={engineOptions} renderEmbeddable={element => renderEmbed ? renderEmbed(element) : <Embed element={element} />} validateEmbeddable={validEmbed} /></div></div>;
 }
 
@@ -232,7 +233,7 @@ function PresentationThumbnail({ slide, renderEmbed }) {
   const [svg, setSvg] = useState(""), appearance = useAppearance();
   useEffect(() => {
     let active = true; setSvg("");
-    if (slide) exportToSvg({ elements: slide.scene.elements, files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } }).then(result => { if (active) setSvg(result.outerHTML); }).catch(() => { if (active) setSvg(""); });
+    if (slide) exportToSvg({ elements: coverAppearanceElements(slide.scene.elements, appearance), files: slide.scene.files, exportingFrame: slide.scene.elements.find(element => element.id === FRAME_ID), skipInliningFonts: true, appState: { exportBackground: false, exportWithDarkMode: canvasTheme(slide.scene.elements, appearance) === "dark" } }).then(result => { if (active) setSvg(result.outerHTML); }).catch(() => { if (active) setSvg(""); });
     return () => { active = false; };
   }, [slide, appearance]);
   return slide && svg ? <div className="merge-present-thumbnail" style={{ background: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() }}><SectionThumbnail svg={svg} elements={slide.scene.elements} files={slide.scene.files} embeds renderEmbed={renderEmbed} /></div> : null;
@@ -240,7 +241,7 @@ function PresentationThumbnail({ slide, renderEmbed }) {
 
 async function nativeThumbnailDocument(slide) {
   const appearance = document.documentElement.dataset.appearance || 'dark';
-  const scene = slide.scene, frame = scene.elements.find(element => element.id === FRAME_ID);
+  const scene = { ...slide.scene, elements: coverAppearanceElements(slide.scene.elements, appearance) }, frame = scene.elements.find(element => element.id === FRAME_ID);
   const styles = getComputedStyle(document.documentElement);
   const tokens = Object.fromEntries(['--text','--text-dim','--text-faint','--accent','--bg','--bg-2','--line-soft','--sans','--serif','--mono'].map(key => [key,styles.getPropertyValue(key)]));
   const snapshot = document.implementation.createHTMLDocument('Slide preview');

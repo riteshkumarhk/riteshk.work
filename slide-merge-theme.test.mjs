@@ -3,7 +3,31 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { siteTokenCss, studioTypographyCss } from "./slide-merge-theme.mjs";
 import { runInNewContext } from "node:vm";
-import { canvasTheme } from "./src/js/slide-merge-appearance.mjs";
+import { canvasTheme, coverAppearanceElements, COVER_LIGHT_PALETTE } from "./src/js/slide-merge-appearance.mjs";
+import { coverSkeleton, COVER_DEFAULTS } from "./src/js/slide-merge-cover.mjs";
+
+test("cover appearance follows site tokens without changing saved artwork or custom colours", () => {
+  const source = readFileSync(new URL("./css/styles.css", import.meta.url), "utf8");
+  const css = siteTokenCss(source);
+  for (const color of Object.values(COVER_LIGHT_PALETTE)) assert.ok(css.includes(color));
+  const elements = coverSkeleton({title:"Original title", team:"Design", image:{fileId:"original",width:1600,height:900}}, 2);
+  elements.find(element => element.customData.slideCover === "rail").backgroundColor = "#123456";
+  elements.push({type:"rectangle",backgroundColor:COVER_DEFAULTS.background}, {type:"rectangle",backgroundColor:COVER_DEFAULTS.background,isDeleted:true,customData:{slideCover:"background"}});
+  const saved = structuredClone(elements), light = coverAppearanceElements(elements, "light");
+  assert.equal(light.find(element => element.customData?.slideCover === "background").backgroundColor, COVER_LIGHT_PALETTE.background);
+  assert.equal(light.find(element => element.customData?.slideCover === "title").strokeColor, COVER_LIGHT_PALETTE.text);
+  assert.equal(light.find(element => element.customData?.slideCover === "rail").backgroundColor, "#123456");
+  assert.equal(light.find(element => element.type === "image"), elements.find(element => element.type === "image"));
+  assert.equal(light.at(-2), elements.at(-2));
+  assert.equal(light.at(-1), elements.at(-1));
+  assert.deepEqual(coverAppearanceElements(light, "dark"), saved);
+  assert.deepEqual(elements, saved);
+  assert.deepEqual(light.map(({strokeColor,backgroundColor,...element}) => element), saved.map(({strokeColor,backgroundColor,...element}) => element));
+  const legacy = elements.map(element => { const copy = structuredClone(element); if (copy.customData) delete copy.customData.slideCover; return copy; });
+  assert.equal(coverAppearanceElements(legacy, "light")[0].backgroundColor, COVER_LIGHT_PALETTE.background);
+  const incomplete = legacy.filter(element => element.width !== 136);
+  assert.deepEqual(coverAppearanceElements(incomplete, "light"), incomplete);
+});
 
 test("merger uses authoritative site tokens and ignores later theme overrides", () => {
   const source=readFileSync(new URL("./css/styles.css",import.meta.url),"utf8");
