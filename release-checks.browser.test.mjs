@@ -47,7 +47,7 @@ async function device(browser, fixtureData, width = 1440) {
     if (url.startsWith("https://riteshk.work/release-checks/")) return route.fulfill({ path: "release-checks/index.html", contentType: "text/html" });
     if (url.startsWith("https://riteshk.work/src/js/admin-core.js")) return route.fulfill({ path: "src/js/admin-core.js", contentType: "text/javascript" });
     if (url.startsWith("https://media.riteshk.work/") && url.includes(".woff2")) return route.continue();
-    if (!url.startsWith("https://rk-ai-proxy.riteshkumarhk.workers.dev/admin/")) return route.abort();
+    if (!url.startsWith("https://rk-ai-proxy.riteshkumarhk.workers.dev/admin/") && !url.startsWith("https://riteshk.work/admin/")) return route.abort();
     if (url.includes("/release-checks")) {
       fixtureData.privateReads++;
       if (fixtureData.offline) return route.abort("internetdisconnected");

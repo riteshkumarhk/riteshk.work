@@ -45,6 +45,16 @@
 .pass__err { color: #ff7a7a; font-size: .74rem; min-height: 1.1em; margin-bottom: .6rem; }
 .pass__actions { display: flex; gap: .6rem; }
 .pass__actions .btn { flex: 1; }
+.pass__remember { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 40px; padding: 6px 0; border: 0; color: var(--text); background: transparent; font: 13px var(--sans); text-align: left; cursor: pointer; }
+.pass__remember:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pass__remember:disabled { opacity: .5; cursor: wait; }
+.pass__remember + .pass__note { margin: 0 0 14px; text-align: left; color: var(--text-dim); font-size: .72rem; line-height: 1.5; }
+.pass__remember[aria-checked="true"] .rksw { background: linear-gradient(180deg, #e8ba6b, #cd923d); }
+.pass__remember[aria-checked="true"] .rksw__knob { transform: translateX(calc(var(--w) - var(--k) - 2 * var(--p))); }
+html.rk-session-locked .adm, html.rk-session-locked .adm__resume-host, html.rk-session-locked .pass:not([data-auth-gate]):not([data-signout-dialog]) { visibility: hidden; }
+.adm__session-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.adm__session-row > span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.adm__session-row small { display: block; color: var(--text-dim); margin-top: 4px; }
 .pass__link { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--text-dim); font-family: var(--mono); font-size: .66rem; text-decoration: underline; cursor: pointer; margin-top: .7rem; }
 .pass__link:hover { color: var(--text); }
 .pass__note { font-size: .64rem; color: var(--text-faint); margin-top: .7rem; line-height: 1.45; }

@@ -8,7 +8,7 @@ import { browserShards, shardCommands } from './tools/browser-shards.mjs';
 
 test('browser shards retain every release file and partition all deck test registrations exactly once', () => {
   const tasks = Object.values(browserShards).flat();
-  const expected = ['resume-workspace.test.mjs', 'ai-ribbon.test.mjs', 'project-recovery.browser.test.mjs', 'slide-studio-deck.test.mjs', 'slide-presenter-readonly.browser.test.mjs', 'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs', 'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs', 'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs', 'studio-capture-download.browser.test.mjs'];
+  const expected = ['admin-session.browser.test.mjs', 'resume-workspace.test.mjs', 'ai-ribbon.test.mjs', 'project-recovery.browser.test.mjs', 'slide-studio-deck.test.mjs', 'slide-presenter-readonly.browser.test.mjs', 'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs', 'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs', 'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs', 'studio-capture-download.browser.test.mjs'];
   assert.deepEqual([...new Set(tasks.flatMap(task => task.files))].sort(), expected.sort());
   for (const file of expected.filter(file => file !== 'slide-studio-deck.test.mjs')) {
     assert.equal(tasks.filter(task => task.files.includes(file) && !task.pattern).length, 1, file);

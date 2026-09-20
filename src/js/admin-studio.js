@@ -14,7 +14,7 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath,
-  ADMIN_WORKER, adminSession, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
+  ADMIN_WORKER, adminSession, adminSessionInfo, adminSessionIdentity, adminSessions, signOutAdmin, retryAdminSignout, clearAdminSession, vaultUpload, vaultRegisterGrant, vaultSignedUrl,
   webauthnSupported, webauthnRegister, webauthnList, webauthnRemove, webauthnAuth, publishProof, publishStatus, publishConfig, authStatus, authConfig, deviceTrust, deviceTrusted, stepUp, keyringGet, keyringPut
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
@@ -906,6 +906,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     up: svgIco('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
     down: svgIco('<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>'),
     close: svgIco('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+    logout: svgIco('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/>'),
     dup: svgIco('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>', 13),
     edit: svgIco('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
     refresh: svgIco('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/>'),
@@ -7545,8 +7546,8 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     }
     if (!current() || !document) throw new Error("The case-study presentation session has changed");
     let queue = Promise.resolve();
-    const owner = adminSession();
-    const syncCurrent = () => current() && !!owner && adminSession() === owner;
+    const owner = adminSessionIdentity();
+    const syncCurrent = () => current() && !!owner && adminSessionIdentity() === owner;
     const snapshot = () => active?.editor ? active.editor.snapshot() : document;
     const applyMetadata = async (slideId, key, value) => {
       if (!current()) throw new Error("The case-study presentation session has changed");
@@ -7571,7 +7572,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           request: async (method, body) => {
             if (!syncCurrent()) throw new Error('Sign in again to sync private presenter metadata.');
             const response = await fetch(ADMIN_WORKER + '/admin/presenter-metadata?case=' + encodeURIComponent(work.id) + '&deck=native', {
-              method, headers: { Authorization: 'Bearer ' + owner, 'Content-Type': 'application/json' },
+              method, headers: { Authorization: 'Bearer ' + adminSession(), 'Content-Type': 'application/json' },
               body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(10000), cache: 'no-store'
             });
             if (!syncCurrent()) throw new Error('The presenter owner session changed. Local edits are retained.');
@@ -7687,7 +7688,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   function nativeSlideClickGate(event) {
     if (!nativeSlideSession || nativeSlideReplay || event.target.closest('.merge-shell,[data-native-slide-toolbar],[data-native-slide-status],[data-act="logs-rec"]')) return;
-    const trigger = event.target.closest('.adm__tab,[data-l2-back],[data-exit-save],[data-exit-discard],[data-publish],[data-act]');
+    const trigger = event.target.closest('.adm__tab,[data-l2-back],[data-exit-save],[data-return-site],[data-exit-discard],[data-publish],[data-act]');
     if (!trigger) return;
     if (trigger.hasAttribute("data-exit-discard")) { disposeNativeSlides(); return; }
     event.preventDefault(); event.stopImmediatePropagation();
@@ -11859,6 +11860,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       return '<div class="rkqg"><div class="rkqg__head">Passkeys <span class="rkqg__sub">how you sign in</span></div>' +
         '<div class="af__hint" style="margin:.2rem 0 .8rem">Your day-to-day sign-in \u2014 Windows Hello, Face ID or a security key. Add one per device (laptop, phone) so you\u2019re never locked out. Enrolment happens only here in the studio.</div>' +
         '<div class="rkqg__row"><button class="btn btn--primary" data-act="open-passkeys">' + IC.key + ' Manage passkeys</button></div>' +
+        '<div class="rkqg__row"><button class="btn btn--ghost" data-act="open-sessions">' + IC.shield + ' Browser sessions</button></div>' +
         '<div class="rkqg__head" style="margin-top:1.6rem">Admin key <span class="rkqg__sub">recovery &amp; encryption key</span></div>' +
         '<div class="af__hint" style="margin:.2rem 0 .8rem">The key you type on this device. It\u2019s your recovery fallback and the encryption key \u2014 and it\u2019s required to enrol passkeys. Keep it somewhere safe; passkeys are for everyday sign-in, this is the master.</div>' +
         '<div class="rkqg__row"><button class="btn btn--ghost" data-act="open-adminkey">' + LOCK_SVG + ' Change admin key</button></div></div>';
@@ -12440,6 +12442,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (act === "set-back") { setSub = null; renderSetPanel(); return; }
     if (act === "recruiter-toggle") { recruiterToggle(); renderSetPanel(); return; }
     if (act === "backup-dl") { downloadContentBackup(); return; }
+    if (act === "open-sessions") { browserSessionsModal(); return; }
     if (act === "backup-restore") { backupPickAndRestore(); return; }
     if (act === "draft-recovery") { reviewDraftRecoveries().catch(error => status(error.message)); return; }
     if (act === "open-passkeys") { setSub = "passkeys"; renderSetPanel(); return; }
@@ -13222,6 +13225,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function autopubStart() { autopubStop(); if (autopubOn()) autopubTimer = setInterval(autopubTick, autopubEvery() * 60000); }
   function autopubTick() {
     if (!autopubOn()) { autopubStop(); return; }
+    if (adminSession().startsWith("s2.")) { status("Draft saved locally. Select Publish to verify with your passkey."); return; }
     if (publishing || !root || !root.classList.contains("is-open")) return;
     const token = adminSession() ? "session" : localStorage.getItem(GH_TOKEN_KEY);
     if (!token) return;                        // not connected \u2014 can't publish silently
@@ -14571,6 +14575,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       publishStepup = null;
       if (viaSession) {
         var _pst = await publishStatus().catch(function () { return { enabled: false }; });
+        if (adminSession().startsWith("s2.") && !_pst.enabled) await webauthnAuth("publish");
         if (_pst && _pst.enabled) {
           var _rec = await ensureRecoveryPass();
           if (_rec === null) { pubStopCreep(); pubProgress(100, "Publish needs your recovery passphrase.", { error: true }); return; }
@@ -19548,11 +19553,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
             '<button class="btn btn--primary adm__publish" data-publish hidden>Publish</button>' +
           '<button class="btn btn--ghost adm__gear" data-opensettings type="button" aria-label="Settings" title="Settings"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>' +
           '<div class="adm__exitwrap" data-exit-wrap>' +
-            '<button class="btn adm__exit" data-exit type="button" aria-label="Exit studio" title="Exit">' + IC.close + '</button>' +
+            '<button class="btn adm__exit" data-exit type="button" aria-label="Sign out" title="Sign out">' + IC.logout + '</button>' +
             '<div class="adm__exit-pop" hidden>' +
-              '<div class="adm__exit-pop-h">You have unsaved changes</div>' +
-              '<button class="adm__exit-opt adm__exit-opt--save" data-exit-save type="button"><span class="adm__more-tx"><b>Save &amp; leave</b><small>Keep your changes as a local draft \u2014 publish them anytime</small></span></button>' +
-              '<button class="adm__exit-opt adm__exit-opt--discard" data-exit-discard type="button"><span class="adm__more-tx"><b>Discard changes</b><small>Throw away everything changed since your last publish</small></span></button>' +
+              '<div class="adm__exit-pop-h">End your admin session?</div>' +
+              '<button class="adm__exit-opt adm__exit-opt--save" data-exit-save type="button"><span class="adm__more-tx"><b>Save &amp; sign out</b><small>Your local draft stays on this browser.</small></span></button>' +
+              '<button class="adm__exit-opt" data-return-site type="button"><span class="adm__more-tx"><b>Return to site</b><small>Leave Studio without removing saved drafts.</small></span></button>' +
             "</div>" +
           "</div>" +
           "</div>" +
@@ -19734,11 +19739,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     // "\u2715" close: when there are unsaved changes, offer Save / Discard; a clean studio just exits.
     root.querySelector("[data-exit]").addEventListener("click", (e) => {
       e.stopPropagation(); closeMorePop();
-      if (!isDirty()) { exit(); return; }
       const pop = root.querySelector(".adm__exit-pop"); if (pop) pop.hidden = !pop.hidden;
     });
-    var _exSave = root.querySelector("[data-exit-save]"); if (_exSave) _exSave.addEventListener("click", () => { closeExitPop(); exit(); });
-    var _exDiscard = root.querySelector("[data-exit-discard]"); if (_exDiscard) _exDiscard.addEventListener("click", () => { closeExitPop(); revert(); });
+    var _exSave = root.querySelector("[data-exit-save]"); if (_exSave) _exSave.addEventListener("click", () => { closeExitPop(); studioSignOut(); });
+    root.querySelector("[data-return-site]").addEventListener("click", () => { closeExitPop(); exit(); });
     document.addEventListener("click", (e) => {
       const ew = root.querySelector("[data-exit-wrap]");
       if (ew && !ew.contains(e.target)) closeExitPop();
@@ -19952,6 +19956,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
 
   async function open(hostApi) {
     if (hostApi) __host = hostApi;
+    window.__RKStudio.signOut = studioSignOut;
     const pub = (window.RK && window.RK.published) ? window.RK.published : (window.RK && window.RK.data);
     publicationBaseRevision = window.RK?.publishedRevision || await contentRevision(pub);
     const draftRaw = localStorage.getItem(DRAFT_KEY);
@@ -20028,6 +20033,95 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
 
   /* ---------- change the admin key (requires the current key) ---------- */
+  let signingOut = false;
+  async function studioSignOut(options = {}) {
+    if (signingOut) return;
+    signingOut = true;
+    try {
+      if (!options.discard) {
+        if (resumeFrame) throw new Error("Close Resume Studio after saving before signing out.");
+        if (nativeSlideSession?.editor && !nativeSlideSession.loadFailed) await nativeSlideSession.editor.flush();
+        if (!saveDraft(true)) throw new Error("Your latest draft could not be saved. Retry or download a backup before signing out.");
+      }
+      autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); cancelStudyUnlocks();
+      root.inert = true;
+      document.documentElement.classList.add("rk-session-locked");
+      const result = await signOutAdmin({ broadcast: options.broadcast !== false });
+      if (result.confirmed) { location.assign("/"); return; }
+      signoutNotice("Signed out on this browser", "Server revocation is pending. Local access is blocked; reconnect to finish revoking the session.", true);
+    } catch (error) { signoutNotice("Draft not saved", error.message, false); }
+    finally { signingOut = false; }
+  }
+  function signoutNotice(title, message, revoked) {
+    document.querySelector("[data-signout-dialog]")?.remove();
+    const modal = document.createElement("div");
+    modal.className = "pass pass--lock"; modal.setAttribute("data-signout-dialog", "");
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">' + escHtml(title) + '</div><div class="pass__sub">' + escHtml(message) + '</div><div class="pass__err" role="status"></div><div class="pass__actions"><button class="btn btn--ghost" data-stay>' + (revoked ? 'Return to site' : 'Cancel') + '</button><button class="btn btn--primary" data-retry>Retry</button></div>' + (revoked ? '' : '<button class="pass__link" data-backup>Download backup</button><button class="pass__link" data-discard>Sign out without saving latest changes</button>') + '</div>';
+    document.body.append(modal);
+    modal.querySelector("[data-stay]").onclick = () => { if (revoked) location.assign("/"); else { modal.remove(); if (!adminSession()) __host.reauthenticate?.(); } };
+    modal.querySelector("[data-retry]").onclick = async event => {
+      if (!revoked) { modal.remove(); studioSignOut(); return; }
+      event.currentTarget.disabled = true;
+      if (await retryAdminSignout()) location.assign("/");
+      else { modal.querySelector(".pass__err").textContent = "Still offline or unavailable. Revocation remains pending."; modal.querySelector("[data-retry]").disabled = false; }
+    };
+    if (!revoked) {
+      modal.querySelector("[data-backup]").onclick = () => downloadContentBackup();
+      modal.querySelector("[data-discard]").onclick = () => { if (confirm("Sign out without saving the latest changes? Previously saved drafts are kept.")) { modal.remove(); studioSignOut({ discard: true }); } };
+    }
+    modal.querySelector("[data-retry]").focus();
+  }
+  async function browserSessionsModal() {
+    const modal = document.createElement("div");
+    modal.className = "pass pass--wide pass--lock";
+    modal.innerHTML = '<div class="pass__box"><div class="pass__title">Browser sessions</div><div class="pass__sub">Verify with your passkey to manage signed-in browsers.</div><div class="pass__err" role="status"></div><div data-sessions></div><div class="pass__actions"><button class="btn btn--ghost" data-close>Close</button><button class="btn btn--primary" data-verify>Verify</button><button class="btn btn--ghost" data-all hidden>Sign out all sessions</button></div></div>';
+    document.body.append(modal);
+    const error = modal.querySelector(".pass__err"), list = modal.querySelector("[data-sessions]");
+    modal.querySelector("[data-close]").onclick = () => modal.remove();
+    async function refresh() {
+      const result = await adminSessions();
+      if (!modal.isConnected) return;
+      list.replaceChildren();
+      for (const session of result.sessions) {
+        const row = document.createElement("div"); row.className = "adm__session-row";
+        const text = document.createElement("span"); text.textContent = session.label + (session.current ? " (this session)" : "");
+        const detail = document.createElement("small"); detail.textContent = (session.remembered ? "Remembered" : "Page session") + " - expires " + new Date(session.exp).toLocaleString(); text.append(detail);
+        const revoke = document.createElement("button"); revoke.className = "btn btn--ghost"; revoke.textContent = "Revoke";
+        revoke.onclick = async () => { if (!confirm("Revoke this browser session? Saved drafts will not be deleted.")) return; revoke.disabled = true; try { if (session.current) { modal.remove(); await studioSignOut(); } else { await adminSessions("revoke", { id: session.id }); await refresh(); } } catch (failure) { error.textContent = failure.message; revoke.disabled = false; } };
+        row.append(text, revoke); list.append(row);
+      }
+      modal.querySelector("[data-all]").hidden = false;
+    }
+    modal.querySelector("[data-verify]").onclick = async event => {
+      const button = event.currentTarget; button.disabled = true; error.textContent = "";
+      try { await webauthnAuth("security"); await refresh(); button.hidden = true; }
+      catch (failure) { error.textContent = failure.message; button.disabled = false; }
+    };
+    modal.querySelector("[data-all]").onclick = async () => {
+      if (!confirm("Sign out every browser session? Local drafts on those browsers will remain.")) return;
+      try {
+        if (resumeFrame) throw new Error("Close Resume Studio after saving first.");
+        if (nativeSlideSession?.editor) await nativeSlideSession.editor.flush();
+        if (!saveDraft(true)) throw new Error("Save or back up your draft first.");
+        await adminSessions("revoke", { all: true }); modal.remove(); await studioSignOut();
+      } catch (failure) { error.textContent = failure.message; }
+    };
+  }
+  window.addEventListener("rk:admin-auth", event => {
+    if (!root?.classList.contains("is-open")) return;
+    if (event.detail?.reason === "signed-in") {
+      document.documentElement.classList.remove("rk-session-locked"); root.inert = !!resumeFrame;
+      if (resumeFrame) resumeSession = adminSessionInfo()?.sessionId || adminSession();
+      aiSession.start(); autopubStart(); return;
+    }
+    if (signingOut) return;
+    autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); cancelStudyUnlocks();
+    saveDraft(true);
+    root.inert = true; document.documentElement.classList.add("rk-session-locked");
+    if (event.detail?.reason === "signed-out") studioSignOut({ broadcast: false });
+    else if (event.detail?.reason === "locked") __host.reauthenticate?.();
+  });
+
   // Manage passkeys (enrol / list / remove). Enrolment is owner-gated by the current session, so the
   // first passkey is added right after a normal (password) sign-in; after that, passkeys sign you in.
   // Recruiter mode (published): show the landing ticket flyout to every visitor. Toggled from the ⋯ menu.
@@ -20174,7 +20268,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function openResumeStudio(context = {}) {
     if (!root?.classList.contains("is-open")) return;
     if (resumeFrame) { resumeFrame.focus(); return; }
-    resumeContext = context; resumeSession = adminSession();
+    resumeContext = context; resumeSession = adminSessionInfo()?.sessionId || adminSession();
     resumeTrigger = document.activeElement;
     resumeFrame = document.createElement("iframe");
     resumeFrame.title = "Resume Studio";
@@ -20187,7 +20281,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     resumeFrame.focus();
   }
   async function initializeResumeStudio(caller, resumeId = null) {
-    if (!resumeFrame || caller !== resumeFrame.contentWindow || adminSession() !== resumeSession) throw new Error('This ATS editor session is closed.');
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
     if (resumeId) resumeContext = { resumeId };
     const context = resumeContext;
     let retained = null;
@@ -20235,7 +20329,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     return result;
   }
   function resumeStudioConfiguration(caller) {
-    if (!resumeFrame || caller !== resumeFrame.contentWindow || adminSession() !== resumeSession) throw new Error('This ATS editor session is closed.');
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
     const cfg = aiCfg('txt');
     return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection' };
   }
@@ -20273,7 +20367,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     refreshAtsResumes();
   }
   async function resumeStudioRequest(path, options = {}, caller) {
-    if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession() || adminSession() !== resumeSession) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
     if (!/^(library|migrate|sources(?:\/[a-f0-9]{64})?|resumes(?:\/[a-zA-Z0-9_-]{1,80}(?:\/(?:restore|recover-legacy|export|finalize|exports\/[a-zA-Z0-9_-]{1,80}))?)?)$/.test(path) || !["GET", "POST", "PUT"].includes(options.method || "GET")) throw new Error("Invalid Resume Studio request.");
     const headers = { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" };
     for (const name of ["If-Match", "X-Resume-Pages"]) if (options.headers?.[name]) headers[name] = options.headers[name];

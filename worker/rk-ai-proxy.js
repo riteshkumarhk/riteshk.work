@@ -32,6 +32,8 @@ import { readOperationalState, updateOperationalState } from "./operational-stat
 import { resumeWorkspaceRoute, legacyAtsDestination } from "./resume-workspace.mjs";
 import { presenterMetadataRoute } from "./presenter-metadata.mjs";
 import { atsMigrationIdentity } from "../src/js/resume-ats.mjs";
+import { adminSessionOperation } from "./admin-sessions.mjs";
+export { AdminSessions } from "./admin-sessions.mjs";
 
 const PROVIDERS = {
   openai:    { base: "https://api.openai.com/v1",                        keyVar: "OPENAI_KEY",    inject: "bearer"  },
@@ -142,6 +144,21 @@ export default {
         return new Response(null, { status: 204, headers });
       }
       return new Response(null, { status: 204, headers: cors });
+    }
+
+    if (url.pathname.startsWith("/admin/session/")) return sessionRoute(request, env, cors);
+    if (env.ADMIN_SESSIONS && url.pathname.startsWith("/admin/")) {
+      cors["Cache-Control"] = "no-store";
+      if (request.method !== "GET" && (!origin || !String(env.ALLOW_ORIGIN || "").split(",").map(value => value.trim()).includes(origin))) return json({ error: "Origin not allowed" }, 403, cors);
+      const sensitive = ["/admin/webauthn/register/begin", "/admin/webauthn/register/finish", "/admin/webauthn/remove", "/admin/publish/config", "/admin/auth/config"];
+      const publishing = request.method !== "GET" && (url.pathname === "/admin/content" || url.pathname.startsWith("/admin/gh/"));
+      if (sensitive.includes(url.pathname) || publishing) {
+        const token = bearer(request.headers.get("Authorization"));
+        let session;
+        try { session = await adminSessionOperation(env, "verify", { token }); } catch (error) { return json({ error: error.message }, 503, cors); }
+        if (session.status !== 200) return json(session.body, session.status, cors);
+        if (!session.body.fresh || Date.now() - session.body.fresh > PUBLISH_TOKEN_TTL_MS) return json({ error: "Verify with your passkey before this action.", needPasskey: true }, 403, cors);
+      }
     }
 
     if (url.pathname === "/admin/release-checks" || url.pathname.startsWith("/admin/release-checks/")) {
@@ -417,7 +434,7 @@ export default {
         try { creds = await request.json(); } catch (e) {}
         const ok = await verifyAdminPassword(String(creds.password || ""), env);
         if (!ok) return json({ error: "Incorrect key" }, 401, cors);
-        return json(await issueSession(env), 200, cors);
+        return await loginSessionResponse(request, env, cors, creds.remember === true, false);
       } catch (e) {
         return json({ error: "Login failed on the server", detail: String((e && e.message) || e) }, 500, cors);
       }
@@ -480,11 +497,14 @@ export default {
     if (url.pathname === "/admin/webauthn/auth/begin") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
       if (!env.VAULT_GRANTS) return json({ error: "Passkey store not configured" }, 500, cors);
-      let purpose = "login"; try { const b = await request.json(); if (b && ["publish", "release-checks"].includes(b.purpose)) purpose = b.purpose; } catch (e) {}
+      let purpose = "login", remember = false;
+      try { const body = await request.json(); if (["publish", "release-checks", "security"].includes(body.purpose)) purpose = body.purpose; remember = body.remember === true; } catch (e) {}
+      const session = bearer(request.headers.get("Authorization"));
+      if (env.ADMIN_SESSIONS && ["publish", "security"].includes(purpose) && !(await verifySession(session, env))) return json({ error: "Sign in first." }, 401, cors);
       const challenge = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(32)));
-      try { await passkeyChallenge(env, "issue", challenge, { type: "auth", purpose: purpose }); }
+      try { await passkeyChallenge(env, "issue", challenge, { type: "auth", purpose, remember, session }); }
       catch (error) { return json({ error: "Passkey challenge service unavailable. Please retry." }, 503, cors); }
-      return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: purpose === "release-checks" ? "required" : "preferred", allowCredentials: [] }, 200, cors);
+      return json({ challenge: challenge, rpId: waRpId(env), timeout: 120000, userVerification: env.ADMIN_SESSIONS || purpose === "release-checks" ? "required" : "preferred", allowCredentials: [] }, 200, cors);
     }
     if (url.pathname === "/admin/webauthn/auth/finish") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
@@ -502,7 +522,7 @@ export default {
         const rpHash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(waRpId(env))));
         if (!bytesEq(p.rpIdHash, rpHash)) return json({ error: "RP mismatch" }, 400, cors);
         if (!(p.flags & 0x01)) return json({ error: "User not present" }, 400, cors);
-        if (chal.purpose === "release-checks" && !(p.flags & 0x04)) return json({ error: "Passkey user verification required" }, 401, cors);
+        if ((env.ADMIN_SESSIONS || chal.purpose === "release-checks") && !(p.flags & 0x04)) return json({ error: "Passkey user verification required" }, 401, cors);
         const cdHash = new Uint8Array(await crypto.subtle.digest("SHA-256", b64urlToBytes(body.response.clientDataJSON)));
         const ok = await waVerifySig(cred.jwk, cred.alg, concatBytes(authData, cdHash), b64urlToBytes(body.response.signature));
         if (!ok) return json({ error: "Bad signature" }, 401, cors);
@@ -515,14 +535,19 @@ export default {
           return json({ checklistToken: payload + "." + await hmac(env.SESSION_SECRET || "", "release-checks." + payload), exp }, 200, { ...cors, "Cache-Control": "no-store" });
         }
         if (chal.purpose === "publish") {
+          if (env.ADMIN_SESSIONS) {
+            const verified = await adminSessionOperation(env, "verified", { token: chal.session });
+            if (verified.status !== 200) return json(verified.body, verified.status, cors);
+          }
           const exp = Date.now() + PUBLISH_TOKEN_TTL_MS;
-          const payload = b64urlFromStr(JSON.stringify({ pub: 1, exp: exp }));
+          const payload = b64urlFromStr(JSON.stringify({ pub: 1, exp: exp, ...(env.ADMIN_SESSIONS ? { sessionId: chal.session.split(".")[1] } : {}) }));
           return json({ ok: true, publishToken: payload + "." + (await hmac(env.SESSION_SECRET || "", payload)), exp: exp }, 200, cors);
         }
-        // A passkey assertion is strong proof of possession — trust this device (same as passing the
-        // recovery+password step-up), so publishing needs no further verification here.
-        const _sess = await issueSession(env), _trust = await issueTrust(env);
-        return json({ token: _sess.token, exp: _sess.exp, trust: _trust.trust, trustExp: _trust.exp }, 200, cors);
+        if (chal.purpose === "security" && env.ADMIN_SESSIONS) {
+          const verified = await adminSessionOperation(env, "verified", { token: chal.session });
+          return json(verified.body, verified.status, cors);
+        }
+        return await loginSessionResponse(request, env, cors, chal.remember === true, true);
       } catch (e) { return json({ error: e?.status === 503 ? "Passkey challenge service unavailable. Please retry." : "Auth failed", detail: String((e && e.message) || e) }, e?.status === 503 ? 503 : 401, cors); }
     }
     if (url.pathname === "/admin/webauthn/list") {
@@ -611,7 +636,7 @@ export default {
           return json({ error: need2fa ? "That recovery passphrase or admin password didn\u2019t match." : "That recovery passphrase didn\u2019t match." }, 401, cors);
         }
         await env.VAULT_GRANTS.delete(rlKey);
-        return json(await issueSession(env), 200, cors);
+        return await loginSessionResponse(request, env, cors, b.remember === true, true);
       } catch (e) { return json({ error: "Recovery failed" }, 400, cors); }
     }
     // Device-trust step-up: verify the recovery passphrase (+ admin password when one exists) to mark
@@ -636,7 +661,7 @@ export default {
           return json({ error: needPass ? "That recovery passphrase or admin password didn\u2019t match." : "That recovery passphrase didn\u2019t match." }, 401, cors);
         }
         await env.VAULT_GRANTS.delete(rlKey);
-        return json(await issueTrust(env), 200, cors);
+        return json(await issueTrust(env, bearer(request.headers.get("Authorization"))), 200, cors);
       } catch (e) { return json({ error: "Step-up failed" }, 400, cors); }
     }
     // Owner's bookings inbox: Cal.com bookings captured by /cal/webhook (session-gated). Newest first.
@@ -1029,7 +1054,7 @@ export default {
       if (!owner || !repo) return json({ error: "Repo not configured" }, 500, cors);
       if (env.VAULT_GRANTS && !(await verifyTrust(request.headers.get("X-Device-Trust"), env))) return json({ error: "This device isn\u2019t verified to delete media yet.", needStepup: true }, 403, cors);
       if (env.VAULT_GRANTS && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
-        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Deleting media needs a passkey step-up." }, 401, cors);
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env, bearer(request.headers.get("Authorization"))))) return json({ error: "Deleting media needs a passkey step-up." }, 401, cors);
         const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
         const proof = request.headers.get("X-Publish-Proof") || "";
         const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
@@ -1090,7 +1115,7 @@ export default {
       }
       // Publish step-up (when enabled): fresh passkey assertion + recovery-passphrase proof.
       if (env.VAULT_GRANTS && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
-        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env, bearer(request.headers.get("Authorization"))))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
         const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
         const proof = request.headers.get("X-Publish-Proof") || "";
         const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
@@ -1160,7 +1185,7 @@ export default {
       // (X-Publish-Token — factor 1, possession) AND the recovery-passphrase proof (X-Publish-Proof
       // — factor 2, knowledge). So a stolen session alone can read but cannot publish/deface.
       if (env.VAULT_GRANTS && ghMethod !== "GET" && ghMethod !== "HEAD" && (await env.VAULT_GRANTS.get("cfg:publish2fa")) === "1") {
-        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
+        if (!(await verifyPublishToken(request.headers.get("X-Publish-Token"), env, bearer(request.headers.get("Authorization"))))) return json({ error: "Publish needs a passkey step-up." }, 401, cors);
         const stored = await env.VAULT_GRANTS.get("cfg:publishproof");
         const proof = request.headers.get("X-Publish-Proof") || "";
         const proofHash = proof ? bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(proof))) : "";
@@ -1886,6 +1911,55 @@ async function calBookingAction(env, uid, action) {
     return { ok: r.status >= 200 && r.status < 300, status: r.status };
   } catch (e) { return { ok: false, status: 0, msg: String((e && e.message) || e) }; }
 }
+const SESSION_COOKIE = "__Host-rk-admin";
+function sessionCookie(value, exp = 0) {
+  return SESSION_COOKIE + "=" + value + "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=" + Math.max(0, Math.floor((exp - Date.now()) / 1000));
+}
+function rememberedCookie(request) {
+  return (request.headers.get("Cookie") || "").split(";").map(value => value.trim()).find(value => value.startsWith(SESSION_COOKIE + "="))?.slice(SESSION_COOKIE.length + 1) || "";
+}
+function sameSiteSessionRequest(request, env) {
+  const url = new URL(request.url), origin = request.headers.get("Origin");
+  return url.protocol === "https:" && origin === url.origin && String(env.ALLOW_ORIGIN || "").split(",").map(value => value.trim()).includes(origin);
+}
+async function loginSessionResponse(request, env, cors, remember, verified) {
+  if (!env.ADMIN_SESSIONS) {
+    const session = await issueSession(env), trust = verified ? await issueTrust(env) : null;
+    return json({ ...session, ...(trust ? { trust: trust.trust, trustExp: trust.exp } : {}) }, 200, cors);
+  }
+  if (remember && !sameSiteSessionRequest(request, env)) return json({ error: "Remembered sign-in requires the site's secure sign-in endpoint." }, 400, cors);
+  const agent = request.headers.get("User-Agent") || "";
+  const browser = /Edg\//.test(agent) ? "Edge" : /Firefox\//.test(agent) ? "Firefox" : /Chrome\//.test(agent) ? "Chrome" : /Safari\//.test(agent) ? "Safari" : "Browser";
+  const platform = /Windows/.test(agent) ? "Windows" : /Android/.test(agent) ? "Android" : /iPhone|iPad/.test(agent) ? "iOS" : /Macintosh/.test(agent) ? "macOS" : /Linux/.test(agent) ? "Linux" : "unknown platform";
+  const label = browser + " on " + platform;
+  const issued = await adminSessionOperation(env, "issue", { remember, verified, label });
+  if (issued.status !== 200) return json(issued.body, issued.status, cors);
+  const { refresh, ...body } = issued.body;
+  const old = rememberedCookie(request);
+  if (old && sameSiteSessionRequest(request, env)) await adminSessionOperation(env, "forget", { token: old });
+  return json(body, 200, { ...cors, "Cache-Control": "no-store", ...(!remember && sameSiteSessionRequest(request, env) ? { "Set-Cookie": sessionCookie("") } : {}) });
+}
+async function sessionRoute(request, env, cors) {
+  const headers = { ...cors, "Cache-Control": "no-store" };
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, headers);
+  const origin = request.headers.get("Origin");
+  if (!origin || !String(env.ALLOW_ORIGIN || "").split(",").map(value => value.trim()).includes(origin)) return json({ error: "Origin not allowed" }, 403, headers);
+  if (!(request.headers.get("Content-Type") || "").startsWith("application/json")) return json({ error: "JSON required" }, 415, headers);
+  const action = new URL(request.url).pathname.split("/").pop();
+  if (!["remember", "restore", "forget", "logout", "renew", "activity", "lock", "list", "revoke"].includes(action)) return json({ error: "Unknown operation" }, 404, headers);
+  const cookieAction = ["remember", "restore"].includes(action);
+  if (cookieAction && !sameSiteSessionRequest(request, env)) return json({ error: "Same-origin sign-in required" }, 403, headers);
+  try {
+    const body = await request.json();
+    const token = action === "restore" ? rememberedCookie(request) : action === "forget" ? body.revoke || rememberedCookie(request) : bearer(request.headers.get("Authorization"));
+    if (action === "forget" && !body.revoke && !sameSiteSessionRequest(request, env)) return json({ error: "Same-origin sign-out required" }, 403, headers);
+    const result = await adminSessionOperation(env, action, { token, id: body.id, all: body.all === true });
+    const { refresh, ...output } = result.body;
+    if (refresh) headers["Set-Cookie"] = sessionCookie(refresh, result.body.sessionExp);
+    if (action === "forget" || action === "logout" || (action === "restore" && result.status === 401)) headers["Set-Cookie"] = sessionCookie("");
+    return json(output, result.status, headers);
+  } catch (error) { return json({ error: error.status === 503 ? error.message : "Session request failed." }, error.status || 400, headers); }
+}
 async function issueSession(env) {
   const exp = Date.now() + SESSION_TTL_MS;
   const payload = b64urlFromStr(JSON.stringify({ scope: "admin-session", exp }));
@@ -1894,13 +1968,21 @@ async function issueSession(env) {
 }
 // Device-trust token: a long-lived, HMAC-signed marker that THIS device passed a 2-factor step-up.
 // Domain-separated from sessions ("trust." prefix in the MAC) so one can never be used as the other.
-async function issueTrust(env) {
+async function issueTrust(env, session) {
+  if (env.ADMIN_SESSIONS) {
+    const verified = await adminSessionOperation(env, "verified", { token: session });
+    if (verified.status !== 200) throw new Error("Sign in again.");
+    return { trust: session, exp: Date.now() + PUBLISH_TOKEN_TTL_MS };
+  }
   const exp = Date.now() + TRUST_TTL_MS;
   const payload = b64urlFromStr(JSON.stringify({ t: "trust", exp }));
   const sig = await hmac(env.SESSION_SECRET || "", "trust." + payload);
   return { trust: payload + "." + sig, exp };
 }
 async function verifyTrust(token, env) {
+  if (env.ADMIN_SESSIONS) {
+    try { const result = await adminSessionOperation(env, "verify", { token }); return result.status === 200 && result.body.fresh > Date.now() - PUBLISH_TOKEN_TTL_MS; } catch (error) { return false; }
+  }
   if (!token || !env.SESSION_SECRET) return false;
   const dot = token.indexOf(".");
   if (dot < 1) return false;
@@ -1913,6 +1995,9 @@ async function verifyTrust(token, env) {
   } catch (e) { return false; }
 }
 async function verifySession(token, env) {
+  if (env.ADMIN_SESSIONS) {
+    try { return (await adminSessionOperation(env, "verify", { token })).status === 200; } catch (error) { return false; }
+  }
   if (!token || !env.SESSION_SECRET) return false;
   try {
     const parts = token.split(".");
@@ -2100,12 +2185,12 @@ async function verifyGrant(token, env) {
   return null;
 }
 // Verify a publish step-up token (the passkey "publish" assertion result): payload {pub:1, exp} + HMAC.
-async function verifyPublishToken(token, env) {
+async function verifyPublishToken(token, env, session) {
   if (!token || !env.SESSION_SECRET) return false;
   const dot = token.indexOf("."); if (dot < 1) return false;
   const payload = token.slice(0, dot), sig = token.slice(dot + 1);
   if (!timingSafeEqual(sig, await hmac(env.SESSION_SECRET, payload))) return false;
-  try { const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))); return !!(o && o.pub && o.exp && o.exp > Date.now()); } catch (e) { return false; }
+  try { const o = JSON.parse(new TextDecoder().decode(b64urlToBytes(payload))); return !!(o && o.pub && o.exp && o.exp > Date.now() && (!env.ADMIN_SESSIONS || o.sessionId === session?.split(".")[1])); } catch (e) { return false; }
 }
 
 /* ---------- Web Push (RFC 8291 aes128gcm payload + RFC 8292 VAPID) ---------- */

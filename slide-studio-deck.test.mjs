@@ -1008,7 +1008,7 @@ test('Private DJ metadata sync crosses independent owner profiles without Publis
       return route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: await response.text() });
     });
     await page.evaluate(() => {
-      localStorage.setItem('rk:admin:sess', JSON.stringify({ token: 'synthetic-presenter-owner', exp: Date.now() + 3600000 }));
+      window.__rkAdminAuth = { session: { token: 'synthetic-presenter-owner', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
       window.__RK_NATIVE_PRESENTER = true;
       const bridge = new EventTarget(); bridge.postMessage = state => { if (state.type === 'state') window.syncedPresenter = state; };
       window.chrome.webview = bridge;
@@ -1426,7 +1426,7 @@ test("Studio protected inserts share recovery-gated access across case and slide
     for (const width of [1440,390]) {
       const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:width===1440?'no-preference':'reduce'}), page = await context.newPage();
       const errors = [];page.on('pageerror',error=>errors.push(error.message));
-      await page.addInitScript(()=>localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-section-test',exp:Date.now()+3600000})));
+      await page.addInitScript(() => { window.__rkAdminAuth = { session: { token: 'synthetic-section-test', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 }; });
       await openIntegratedFixture(page,[{type:'text',heading:'Public section',body:'Public source'},encrypted],{enc:{wraps:{owner:wrap}}});
       const progress = await page.locator('.adm__statusbar').evaluate(element => {
         const style = getComputedStyle(element,'::after');
@@ -1569,7 +1569,7 @@ test("Studio section recovery preserves navigation, newer edits and failed saves
       const context = await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'}), page = await context.newPage();
       const errors = []; page.on('pageerror',error=>errors.push(error.message));
       await page.addInitScript(()=>{
-        localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-stale-recovery',exp:Date.now()+3600000}));
+        window.__rkAdminAuth = { session: { token: 'synthetic-stale-recovery', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
         const originalFetch = window.fetch;
         window.fetch = function(resource,options) {
           const address = typeof resource === 'string' ? resource : resource.url;
@@ -2135,6 +2135,7 @@ test("Prepare local test link opens directly and leaves normal sign-in enforced"
         const request = route.request(), url = new URL(request.url());
         if (!['GET','HEAD'].includes(request.method())) { writes.push(url.pathname); return route.abort(); }
         if (url.pathname.endsWith('/content.json')) return route.fulfill({contentType:'application/json',body:JSON.stringify(published)});
+        if (url.pathname.startsWith('/admin/')) return route.abort();
         if (url.origin === scenario.origin) {
           const asset = new URL('.' + url.pathname + (url.pathname.endsWith('/') ? 'index.html' : ''), import.meta.url);
           return route.fulfill({path:fileURLToPath(asset)});
@@ -2627,7 +2628,7 @@ test('Prepare ATS recovers its original PDF, exact source bytes and retains link
   const remote = new Map(); let writes = 0, failWorkspaceSave = false;
   const open = async page => {
     await page.addInitScript(() => {
-      localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-prepare-only',exp:Date.now()+3600000}));
+      window.__rkAdminAuth = { session: { token: 'synthetic-prepare-only', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
       localStorage.setItem('rk:autopub:on','0');
     });
     await page.route('**/admin/prep/**',async route => {
@@ -3567,7 +3568,7 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     assert.equal(await page.locator('[data-ai-session-panel]').isVisible(), false);
     assert.equal(await page.locator('[data-ai-session-toggle]').evaluate(element => element === document.activeElement), true);
     await page.locator('[data-exit]').click();
-    if (await page.locator('[data-exit-save]').isVisible()) await page.locator('[data-exit-save]').click();
+    await page.locator('[data-return-site]').click();
     await page.waitForFunction(() => !document.querySelector('.adm.is-open'));
     assert.equal(await page.evaluate(() => sessionStorage.getItem('rk:ai:admin-session')), null);
     await page.waitForFunction(() => !document.querySelector('[data-ai-jobs]')?.textContent.includes('Refined private'));
@@ -4218,8 +4219,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
   await context.route("**/*", routes);
   await context.addInitScript(() => {
     localStorage.setItem("rk:dev:stub", "1");
-    localStorage.setItem("rk:admin:sess", JSON.stringify({ token: "synthetic-local-test", exp: Date.now() + 3600000 }));
-    localStorage.setItem("rk:trust", JSON.stringify({ token: "synthetic-local-test", exp: Date.now() + 3600000 }));
+    window.__rkAdminAuth = { session: { token: 'synthetic-local-test', exp: Date.now() + 3600000 }, trust: { token: 'synthetic-local-test', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
     localStorage.setItem("rk:autopub:on", "0");
     navigator.mediaDevices.getDisplayMedia = () => Promise.reject(new DOMException("Denied in test", "NotAllowedError"));
   });
@@ -4639,8 +4639,7 @@ for (const publicationRoute of ['live-content', 'direct-git']) test('section loc
     const page=await browser.newPage({viewport:{width:1440,height:1000}}),pass='synthetic-section-publish-only';
     await page.addInitScript(route=>{
       if (route === 'live-content') {
-        localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-local-test',exp:Date.now()+3600000}));
-        localStorage.setItem('rk:trust',JSON.stringify({token:'synthetic-local-test',exp:Date.now()+3600000}));
+        window.__rkAdminAuth = { session: { token: 'synthetic-local-test', exp: Date.now() + 3600000 }, trust: { token: 'synthetic-local-test', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
       } else localStorage.setItem('rk:gh:token','synthetic-direct-git-token');
       localStorage.setItem('rk:autopub:on','0');
     },publicationRoute);
@@ -4805,8 +4804,7 @@ test("Studio stale-tab publication keeps the local draft and newer remote docume
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     let latest, rejected = 0;
     await page.addInitScript(() => {
-      localStorage.setItem("rk:admin:sess", JSON.stringify({ token: "synthetic-session", exp: Date.now() + 60000 }));
-      localStorage.setItem("rk:trust", JSON.stringify({ token: "synthetic-trust", exp: Date.now() + 60000 }));
+      window.__rkAdminAuth = { session: { token: 'synthetic-session', exp: Date.now() + 60000 }, trust: { token: 'synthetic-trust', exp: Date.now() + 60000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
       localStorage.setItem("rk:autopub:on", "0");
     });
     await page.route("**/*", async route => {

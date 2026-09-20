@@ -8,6 +8,7 @@ export const browserShards = {
   authoring: [{ files: [deck], pattern: '^' + authoring }, { files: ['presenter-web.browser.test.mjs'] }],
   sections: [{ files: [deck], skipPattern: '^' + authoring }, { files: ['resume-workspace.test.mjs'] }],
   recovery: [{ files: [
+    'admin-session.browser.test.mjs',
     'ai-ribbon.test.mjs',
     'project-recovery.browser.test.mjs', 'slide-presenter-readonly.browser.test.mjs',
     'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs',

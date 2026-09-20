@@ -14,9 +14,94 @@ import { createHostedResumeStore } from "./worker/resume-workspace.mjs";
 import { createResume, resumeText } from "./src/js/resume-workspace.mjs";
 import { createPresenterMetadataStore, presenterMetadataRoute } from "./worker/presenter-metadata.mjs";
 import { createPresenterMetadataSync } from "./src/js/presenter-metadata-sync.mjs";
+import { AdminSessions, ACCESS_MS, IDLE_MS } from "./worker/admin-sessions.mjs";
 
 const bundled = await build({ entryPoints: ["worker/rk-ai-proxy.js"], bundle: true, write: false, format: "esm", platform: "node", packages: "external" });
 const { default: worker, ContentPublisher } = await import("data:text/javascript;base64," + Buffer.from(bundled.outputFiles[0].text).toString("base64"));
+
+test("Admin sessions expire, rotate with a race grace period and revoke replayed credentials", async () => {
+  const values = new Map();
+  let queue = Promise.resolve();
+  const service = new AdminSessions({
+    storage: { get: async key => structuredClone(values.get(key)), put: async (key, value) => values.set(key, structuredClone(value)), setAlarm: async () => {}, deleteAlarm: async () => {} },
+    blockConcurrencyWhile(run) { const result = queue.then(run); queue = result.catch(() => {}); return result; }
+  });
+  const call = async (action, body) => { const response = await service.fetch(new Request("https://session.internal/" + action, { method: "POST", body: JSON.stringify(body) })); return { status: response.status, ...await response.json() }; };
+  const initial = await call("issue", { remember: true, label: "Test browser" });
+  assert.equal(initial.status, 200);
+  assert.equal((await call("verify", { token: initial.token })).status, 200);
+  initial.refresh = (await call("remember", { token: initial.token })).refresh;
+  assert.doesNotMatch(JSON.stringify(values.get("sessions")), new RegExp(initial.refresh.split(".")[2]));
+  values.get("sessions")[0].rotated -= ACCESS_MS;
+  const [first, second] = await Promise.all([call("restore", { token: initial.refresh }), call("restore", { token: initial.refresh })]);
+  assert.ok(first.refresh);
+  assert.equal(second.refresh, undefined);
+  assert.equal(second.status, 200);
+  values.get("sessions")[0].used[0].at -= 11000;
+  assert.equal((await call("restore", { token: initial.refresh })).status, 401);
+  assert.equal((await call("verify", { token: first.token })).status, 401);
+  const temporary = await call("issue", { remember: false });
+  assert.equal(temporary.refresh, "");
+  assert.equal((await call("logout", { token: temporary.token })).status, 200);
+  assert.equal((await call("verify", { token: temporary.token })).status, 401);
+  const idle = await call("issue", { remember: true });
+  idle.refresh = (await call("remember", { token: idle.token })).refresh;
+  values.get("sessions")[0].active -= IDLE_MS;
+  assert.equal((await call("activity", { token: idle.token })).status, 423);
+  assert.equal((await call("restore", { token: idle.refresh })).status, 423);
+  assert.equal((await call("forget", { token: idle.revoke })).status, 200);
+  const expired = await call("issue", { remember: true });
+  values.get("sessions")[0].exp = Date.now() - 1;
+  assert.equal((await call("restore", { token: expired.refresh })).status, 401);
+});
+
+test("Admin session management requires fresh verification and cannot lock out a new authenticated login", async () => {
+  const values = new Map();
+  const service = new AdminSessions({ storage: { get: async key => structuredClone(values.get(key)), put: async (key, value) => values.set(key, structuredClone(value)), setAlarm: async () => {}, deleteAlarm: async () => {} }, blockConcurrencyWhile: run => run() });
+  const call = async (action, body) => { const response = await service.fetch(new Request("https://session.internal/" + action, { method: "POST", body: JSON.stringify(body) })); return { status: response.status, ...await response.json() }; };
+  const first = await call("issue", { remember: true, verified: true });
+  values.get("sessions")[0].fresh -= ACCESS_MS + 1;
+  assert.equal((await call("list", { token: first.token })).status, 403);
+  assert.equal((await call("revoke", { token: first.token, all: true })).status, 403);
+  assert.equal((await call("verified", { token: first.token })).status, 200);
+  assert.equal((await call("list", { token: first.token })).sessions.length, 1);
+  const other = await call("issue", { remember: false });
+  assert.equal((await call("revoke", { token: first.token, id: other.sessionId })).status, 200);
+  assert.equal((await call("verify", { token: other.token })).status, 401);
+  for (let count = 0; count < 50; count++) assert.equal((await call("issue", { remember: false })).status, 200);
+  assert.equal(values.get("sessions").length, 50);
+  const current = await call("issue", { verified: true });
+  assert.equal(current.status, 200);
+  assert.equal((await call("list", { token: current.token })).sessions.length, 50);
+  assert.equal((await call("revoke", { token: current.token, all: true })).status, 200);
+  assert.equal((await call("verify", { token: current.token })).status, 401);
+  assert.equal(values.get("sessions").length, 0);
+});
+
+test("Admin session HTTP routes keep refresh credentials HttpOnly and enforce same-origin revocation", async () => {
+  const values = new Map();
+  const object = new AdminSessions({ storage: { get: async key => structuredClone(values.get(key)), put: async (key, value) => values.set(key, structuredClone(value)), setAlarm: async () => {}, deleteAlarm: async () => {} }, blockConcurrencyWhile: run => run() });
+  const env = { ALLOW_ORIGIN: "https://example.test", ADMIN_SESSIONS: { idFromName: value => value, get: () => ({ fetch: (url, init) => object.fetch(new Request(url, init)) }) } };
+  const issued = await (await object.fetch(new Request("https://internal/issue", { method: "POST", body: JSON.stringify({ remember: true, verified: true }) }))).json();
+  const call = (action, options = {}) => worker.fetch(new Request("https://example.test/admin/session/" + action, { method: "POST", headers: { Origin: "https://example.test", "Content-Type": "application/json", Authorization: "Bearer " + issued.token, ...options.headers }, body: JSON.stringify(options.body || {}) }), env);
+  const remembered = await call("remember");
+  assert.equal(remembered.status, 200);
+  const cookie = remembered.headers.get("set-cookie");
+  assert.match(cookie, /^__Host-rk-admin=s2\./);
+  assert.match(cookie, /Path=\/; Secure; HttpOnly; SameSite=Strict; Max-Age=/);
+  assert.equal((await remembered.json()).refresh, undefined);
+  assert.equal((await call("remember")).status, 403);
+  assert.equal((await call("restore", { headers: { Origin: "https://other.test", Cookie: cookie } })).status, 403);
+  assert.equal((await call("restore", { headers: { "Content-Type": "text/plain", Cookie: cookie } })).status, 415);
+  const restored = await call("restore", { headers: { Cookie: cookie } });
+  assert.equal(restored.status, 200);
+  assert.equal((await restored.json()).refresh, undefined);
+  const loggedOut = await call("forget", { headers: { Cookie: cookie } });
+  assert.equal(loggedOut.status, 200);
+  assert.match(loggedOut.headers.get("set-cookie"), /Max-Age=0/);
+  assert.equal((await call("renew")).status, 401);
+  assert.equal((await call("restore", { headers: { Cookie: cookie } })).status, 401);
+});
 
 function challengeFixture() {
   const stores = new Map();
@@ -686,12 +771,16 @@ test("Cloudflare local runtime persists atomic challenges and conditional public
   const directory = mkdtempSync(join(tmpdir(), "rk-worker-stability-"));
   const options = {
     modules: true, script: bundled.outputFiles[0].text, compatibilityDate: "2026-07-14",
-    durableObjects: { PASSKEY_CHALLENGES: { className: "PasskeyChallenges", useSQLite: true }, CONTENT_PUBLISHER: { className: "ContentPublisher", useSQLite: true } },
+    durableObjects: { ADMIN_SESSIONS: { className: "AdminSessions", useSQLite: true }, PASSKEY_CHALLENGES: { className: "PasskeyChallenges", useSQLite: true }, CONTENT_PUBLISHER: { className: "ContentPublisher", useSQLite: true } },
     durableObjectsPersist: join(directory, "objects"), r2Buckets: ["MEDIA", "VAULT"], r2Persist: join(directory, "r2"),
     outboundService: () => { throw new Error("Local validation must not contact an external service"); }
   };
   let runtime = new Miniflare(options);
   try {
+    const sessionNamespace = await runtime.getDurableObjectNamespace("ADMIN_SESSIONS");
+    const sessionObject = sessionNamespace.get(sessionNamespace.idFromName("owner"));
+    const session = await (await sessionObject.fetch("https://session.test/issue", { method: "POST", body: JSON.stringify({ remember: true, verified: true }) })).json();
+    const remembered = await (await sessionObject.fetch("https://session.test/remember", { method: "POST", body: JSON.stringify({ token: session.token }) })).json();
     const challenges = await runtime.getDurableObjectNamespace("PASSKEY_CHALLENGES");
     const challenge = "runtime".padEnd(43, "a"), object = challenges.get(challenges.idFromName(challenge));
     const send = action => object.fetch("https://challenge.test/" + action, { method: "POST", body: JSON.stringify({ type: "auth", purpose: "login" }) });
@@ -714,6 +803,13 @@ test("Cloudflare local runtime persists atomic challenges and conditional public
     assert.equal((await readOperationalState(operations, "analytics", {})).count, 6);
     await runtime.dispose();
     runtime = new Miniflare(options);
+    const restartedSessions = await runtime.getDurableObjectNamespace("ADMIN_SESSIONS");
+    const restartedSession = restartedSessions.get(restartedSessions.idFromName("owner"));
+    const sessionCall = (action, token) => restartedSession.fetch("https://session.test/" + action, { method: "POST", body: JSON.stringify({ token }) });
+    assert.equal((await sessionCall("verify", session.token)).status, 200);
+    assert.equal((await sessionCall("restore", remembered.refresh)).status, 200);
+    assert.equal((await sessionCall("forget", session.revoke)).status, 200);
+    assert.equal((await sessionCall("verify", session.token)).status, 401);
     const restartedChallenges = await runtime.getDurableObjectNamespace("PASSKEY_CHALLENGES");
     assert.equal((await restartedChallenges.get(restartedChallenges.idFromName(challenge)).fetch("https://challenge.test/consume", { method: "POST", body: JSON.stringify({ type: "auth" }) })).status, 409);
     const restartedBucket = await runtime.getR2Bucket("MEDIA");

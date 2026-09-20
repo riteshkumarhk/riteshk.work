@@ -303,7 +303,7 @@ test('Studio automatic refresh reduces list requests without suppressing explici
     });
     await page.addInitScript(() => {
       localStorage.setItem('rk:dev:stub','1');
-      localStorage.setItem('rk:admin:sess',JSON.stringify({token:'synthetic-list-test',exp:Date.now()+3600000}));
+      window.__rkAdminAuth = { session: { token: 'synthetic-list-test', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
       window.refreshClock = Date.now(); Date.now = () => window.refreshClock;
     });
     const initialBookings = page.waitForResponse(response=>response.url().endsWith('/admin/bookings'));
@@ -902,7 +902,8 @@ test("built sign-in gate retains control after provider failure and cancellation
     await page.evaluate(() => window.finishProvider());
     await page.locator(".adm.is-open").waitFor();
     assert.equal(finishes, 1);
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem("rk:admin:sess")).token), "synthetic-session");
+    assert.equal(await page.evaluate(() => window.__rkAdminAuth.session.token), "synthetic-session");
+    assert.equal(await page.evaluate(() => localStorage.getItem("rk:admin:sess")), null);
     assert.equal(await page.locator(".pass--lock").count(), 0);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

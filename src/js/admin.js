@@ -14,7 +14,8 @@ import {
   rkNormPass, rkB64, rkUnb64, rkDeriveKey, rkNewSek, rkImportSek,
   rkEncWithSek, rkDecWithSek, rkWrapSek, rkUnwrapSek, rkEncBytes, rkDecBytes,
   rkPbkHex, rkGateRecord, rkGateVerify, getPath, setPath, adminLogin, adminSession, clearAdminSession, ADMIN_WORKER, TURNSTILE_SITEKEY,
-  vaultSignedUrl, vaultRedeem, ownerVaultGrant, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase
+  vaultSignedUrl, vaultRedeem, ownerVaultGrant, webauthnSupported, webauthnList, webauthnAuth, authStatus, cachedAuthMode, recoverWithPassphrase,
+  restoreAdminSession, signOutAdmin, startAdminSessionMonitor
 } from "./admin-core.js";
 
 (function () {
@@ -175,7 +176,8 @@ import {
     ["xbox", "Neon grid"],
   ];
   /* ---------- passphrase gate (always asks) ---------- */
-  function gate() {
+  function gate(options = {}) {
+    if (document.querySelector("[data-auth-gate]")) return;
     thDismiss(true);   // clear the landing “have a ticket?” nudge before the gate/editor (it sits above them)
     const publishedGate = (window.RK && window.RK.published && window.RK.published.adminGate) || null;
     const avatarRaw = (window.RK && window.RK.published && window.RK.published.contact && window.RK.published.contact.avatar) || "";
@@ -188,14 +190,17 @@ import {
     const creating = !ADMIN_WORKER && !publishedGate && !stored;
     const modal = document.createElement("div");
     modal.className = "pass";
+    modal.setAttribute("data-auth-gate", "");
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + (creating ? "Set admin key" : "Admin mode") + "</div>" +
       '<div class="pass__sub">' + (creating
         ? "Create a key for this browser. (It guards this editor only — publishing still requires your repo.)"
-        : "Enter your key to open the studio. Required every time.") + "</div>" +
+        : options.locked ? "Session locked. Verify to continue; your edits are kept." : "Sign in to open the studio.") + "</div>" +
       (creating ? "" : '<button class="btn btn--primary" data-passkey hidden style="width:100%;justify-content:center;gap:.4rem;margin-bottom:14px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>Sign in with a passkey</button><div class="pass__or" data-or hidden style="text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.4;margin:0 0 12px">or use your admin key</div>') +
       '<input type="password" placeholder="Key" autofocus />' +
       (creating ? '<input type="password" placeholder="Confirm key" data-confirm />' : "") +
+      '<button class="pass__remember" type="button" role="switch" aria-checked="false" data-remember><span>Remember this device</span><span class="rksw rksw--sm" aria-hidden="true"><span class="rksw__knob"></span></span></button>' +
+      '<div class="pass__note">7-day maximum. Locks after 30 minutes of inactivity. Local drafts remain on this browser.</div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-cancel>Cancel</button>' +
       '<button class="btn btn--primary" data-go>' + (creating ? "Create" : "Enter") + "</button></div>" +
@@ -213,6 +218,9 @@ import {
     const pass = modal.querySelector('input[type="password"]');
     const confirm2 = modal.querySelector("[data-confirm]");
     const err = modal.querySelector(".pass__err");
+    const remember = modal.querySelector("[data-remember]");
+    remember.addEventListener("click", () => remember.setAttribute("aria-checked", remember.getAttribute("aria-checked") === "true" ? "false" : "true"));
+    const rememberDevice = () => remember.getAttribute("aria-checked") === "true";
     pass.focus();
 
     let gateAttempt = null, gateClosed = false, pendingGateStatus = null;
@@ -220,7 +228,7 @@ import {
     function beginGateAttempt() {
       if (gateClosed || gateAttempt) return null;
       gateAttempt = new AbortController();
-      modal.querySelectorAll("[data-passkey],[data-go],[data-reclink]").forEach(button => { button.disabled = true; });
+      modal.querySelectorAll("[data-passkey],[data-go],[data-reclink],[data-remember]").forEach(button => { button.disabled = true; });
       err.textContent = "";
       return gateAttempt;
     }
@@ -228,7 +236,7 @@ import {
     function endGateAttempt(attempt) {
       if (gateAttempt !== attempt) return;
       gateAttempt = null;
-      if (!gateClosed) modal.querySelectorAll("[data-passkey],[data-go],[data-reclink]").forEach(button => { button.disabled = false; });
+      if (!gateClosed) modal.querySelectorAll("[data-passkey],[data-go],[data-reclink],[data-remember]").forEach(button => { button.disabled = false; });
       if (pendingGateStatus) { const status = pendingGateStatus; pendingGateStatus = null; applyGateStatus(status); }
     }
     const leaveGate = () => { const attempt = gateAttempt; attempt?.abort(); endGateAttempt(attempt); gateStatus.abort(); };
@@ -240,7 +248,7 @@ import {
     async function doPasskey() {
       const attempt = beginGateAttempt();
       if (!attempt) return;
-      try { await webauthnAuth("login", { signal: attempt.signal }); if (currentGateAttempt(attempt)) { done(); openStudio(); } }
+      try { await webauthnAuth("login", { signal: attempt.signal, remember: rememberDevice() }); if (currentGateAttempt(attempt)) { done(); openStudio(); } }
       catch (e) { if (currentGateAttempt(attempt)) err.textContent = (e && e.message) || "Passkey sign-in didn't work."; }
       finally { endGateAttempt(attempt); }
     }
@@ -270,7 +278,7 @@ import {
       if (pass) pass.style.display = "none";
       if (go) go.style.display = "none";
       if (orEl) { orEl.hidden = true; orEl.style.display = "none"; }
-      if (subEl && !recovering) subEl.textContent = "Sign in with your passkey.";
+      if (subEl && !recovering) subEl.textContent = options.locked ? "Session locked. Verify to continue; your edits are kept." : "Sign in with your passkey.";
       if (pkBtn) { pkBtn.hidden = false; if (!pkBtn.dataset.wired) { pkBtn.dataset.wired = "1"; pkBtn.addEventListener("click", doPasskey); } }
       if (hasRecovery && !modal.querySelector("[data-reclink]")) {
         const rec = document.createElement("button");
@@ -287,7 +295,7 @@ import {
       const pkBtn = modal.querySelector("[data-passkey]"), orEl = modal.querySelector("[data-or]"), go = modal.querySelector("[data-go]"), subEl = modal.querySelector(".pass__sub");
       if (pass) pass.style.display = "";
       if (go) go.style.display = "";
-      if (subEl) subEl.textContent = "Enter your key to open the studio. Required every time.";
+      if (subEl) subEl.textContent = "Enter your key to open the studio.";
       if (passkeys > 0) {
         if (pkBtn) { pkBtn.hidden = false; if (!pkBtn.dataset.wired) { pkBtn.dataset.wired = "1"; pkBtn.addEventListener("click", doPasskey); } }
         if (orEl) { orEl.hidden = false; orEl.style.display = ""; }
@@ -314,9 +322,9 @@ import {
     // On the dedicated /studio page the gate is all there is (e.g. a hard refresh re-prompts it), so Cancel
     // should leave for the public site rather than stranding the owner on a blank editor. From the landing
     // ··· menu (not a studio page) Cancel just closes the dialog.
-    const onCancel = () => { done(); if (window.__STUDIO_PAGE) { try { location.href = "/"; } catch (e) {} } };
+    const onCancel = () => { done(); if (options.locked) { window.__RKStudio?.signOut?.(); return; } if (window.__STUDIO_PAGE) { try { location.href = "/"; } catch (e) {} } };
     modal.querySelector("[data-cancel]").addEventListener("click", onCancel);
-    modal.addEventListener("click", (e) => { if (e.target === modal) done(); });
+    modal.addEventListener("click", (e) => { if (e.target === modal && !options.locked) done(); });
 
     async function submit() {
       if (gateClosed || gateAttempt) return;
@@ -340,15 +348,15 @@ import {
       const attempt = beginGateAttempt();
       if (!attempt) return;
       try {
-        if (recovering) await recoverWithPassphrase(val, adminPw, { signal: attempt.signal });
+        if (recovering) await recoverWithPassphrase(val, adminPw, { signal: attempt.signal, remember: rememberDevice() });
         else {
           let ok = creating;
           if (!creating) {
-            const login = await adminLogin(val, { signal: attempt.signal });
+            const login = await adminLogin(val, { signal: attempt.signal, remember: rememberDevice() });
             if (!currentGateAttempt(attempt)) return;
             ok = login.ok;
-            if (!ok && publishedGate) ok = await rkGateVerify(val, publishedGate);
-            if (!ok && stored) ok = (await sha256(val)) === stored;
+            if (!ADMIN_WORKER && !ok && publishedGate) ok = await rkGateVerify(val, publishedGate);
+            if (!ADMIN_WORKER && !ok && stored) ok = (await sha256(val)) === stored;
           }
           if (!currentGateAttempt(attempt)) return;
           if (!ok) { err.textContent = "Incorrect key"; return; }
@@ -363,8 +371,22 @@ import {
       finally { endGateAttempt(attempt); }
     }
     modal.querySelector("[data-go]").addEventListener("click", submit);
-    modal.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") done(); });
+    modal.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target === pass) submit(); if (e.key === "Escape") onCancel(); });
   }
+
+  let enteringAdmin = false;
+  async function enterAdmin() {
+    if (enteringAdmin) return;
+    enteringAdmin = true;
+    try { if (await restoreAdminSession()) openStudio(); else gate(); }
+    finally { enteringAdmin = false; }
+  }
+  startAdminSessionMonitor();
+  window.addEventListener("rk:admin-auth", event => {
+    if (!mobEl || !["locked", "signed-out"].includes(event.detail?.reason)) return;
+    mobClose();
+    if (event.detail.reason === "locked") gate({ locked: true });
+  });
 
 
   /* ---------- lazy studio loader: the heavy editor + AI load ONLY after the gate passes ---------- */
@@ -401,7 +423,7 @@ import {
     try { localStorage.setItem("rk:noanalytics", "1"); } catch (e) {}   // stop counting the owner's own visits in Web Analytics
     __studioOpening = loadStudio().then(async function () {
       if (window.__RKStudio) {
-        await window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit });
+        await window.__RKStudio.open({ musSilence: musSilence, musRestore: musRestore, thDismiss: thDismiss, onExit: studioUrlExit, reauthenticate: () => gate({ locked: true }) });
         try { history.replaceState({}, "", RK_DEV ? "/studio/?devstub=1" : "/studio"); } catch (e) {}   // reflect admin mode in the URL, however you entered
       }
     }).catch(function () { __studioOpening = null; flash("Couldn\u2019t load the editor \u2014 check your connection and try again."); });
@@ -675,7 +697,7 @@ import {
     if (!b) { if (e.target === mobEl) mobClose(); return; }
     var a = b.dataset.mob;
     if (a === "close") mobClose();
-    else if (a === "exit") { clearAdminSession(); mobClose(); }
+    else if (a === "exit") { signOutAdmin().then(result => { if (result.confirmed) location.assign("/"); else flash("Signed out here. Server revocation is pending until you reconnect."); }); mobClose(); }
     else if (a === "mute") {
       var muted = false; try { muted = !!localStorage.getItem("rk:owner"); } catch (x) {}
       try {
@@ -695,7 +717,7 @@ import {
       '<button class="mobadm__mute' + (muted ? " is-muted" : "") + '" data-mob="mute" role="switch" aria-checked="' + (muted ? "true" : "false") + '">' + (muted ? "\u25cf This device is muted" : "\u25cb Count this device") + "</button>" +
       '<p class="mobadm__note mobadm__mutenote">' + (muted ? "Your visits from this phone won\u2019t count in your Insights." : "This phone now counts in your analytics \u2014 tap above to mute it.") + "</p>" +
       '<p class="mobadm__note">The studio &amp; Prepare tools are <b>desktop-only</b> \u2014 sign in on a computer to edit, curate or publish. Recruiter approvals come through the <b>Requests</b> app.</p>' +
-      '<div class="mobadm__actions"><button class="btn btn--primary" data-mob="exit">Exit admin mode</button></div>' +
+      '<div class="mobadm__actions"><button class="btn btn--primary" data-mob="exit">Sign out</button></div>' +
       "</div>";
   }
   function mobInsShell() {
@@ -846,7 +868,7 @@ import {
     closeMenu();
     if (which === "special") ticketDialog();
     else if (which === "present") presentDialog();
-    else if (which === "admin") gate();
+    else if (which === "admin") enterAdmin();
   }
 
   // Sign-in / identity dialogs (class "pass--lock") must not be soft-dismissable: a capture-phase guard
@@ -1278,7 +1300,7 @@ import {
     if (window.__STUDIO_PAGE) {
       // Dedicated /studio page: no landing to wire — just open the gate.
       try { if (window.RK) window.RK.requestAccess = requestAccessModal; } catch (e) {}
-      setTimeout(RK_DEV ? openStudio : gate, 60);
+      setTimeout(RK_DEV ? openStudio : enterAdmin, 60);
       return;
     }
     const clock = document.getElementById("clock");

@@ -21,31 +21,198 @@ export const ADMIN_WORKER = "https://rk-ai-proxy.riteshkumarhk.workers.dev"; // 
 // (`wrangler secret put TURNSTILE_SECRET`). Both must be set together for the check to be enforced.
 export const TURNSTILE_SITEKEY = "0x4AAAAAAEFcvVNY5a3_uPEc";
 export const ADMIN_SESSION_KEY = "rk:admin:sess";
-export function adminSession() {
-  try {
-    const s = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || "null");
-    if (s && s.token && s.exp && s.exp > Date.now()) return s.token;
-  } catch (e) {}
-  return "";
+export const ADMIN_AUTH_URL = typeof location !== "undefined" && location.hostname === "riteshk.work" ? location.origin : ADMIN_WORKER;
+const ADMIN_EVENT_KEY = "rk:admin:event";
+const ADMIN_BLOCKED_KEY = "rk:admin:blocked";
+const ADMIN_PENDING_KEY = "rk:admin:pending-signout";
+const ADMIN_IDLE_MS = 30 * 60 * 1000;
+function adminHost() {
+  let host = window;
+  try { if (window.parent && window.location && window.parent !== window && window.parent.location.origin === window.location.origin) host = window.parent; } catch (error) {}
+  try { if (host === window && window.opener?.location.origin === window.location?.origin && window.opener?.__rkAdminAuth) host = window.opener; } catch (error) {}
+  return host;
 }
-export function saveAdminSession(token, exp) {
-  try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ token, exp })); } catch (e) {}
+function adminState() {
+  const host = adminHost();
+  return host.__rkAdminAuth || (host.__rkAdminAuth = { session: null, trust: null, generation: 0, lastActivity: Date.now(), activitySent: 0 });
+}
+function authEvent(reason) {
+  if (typeof CustomEvent !== "undefined") adminHost().dispatchEvent?.(new CustomEvent("rk:admin-auth", { detail: { reason } }));
+}
+function removeLegacyCredentials() {
+  try { localStorage.removeItem(ADMIN_SESSION_KEY); localStorage.removeItem("rk:trust"); } catch (error) {}
+}
+removeLegacyCredentials();
+export function adminSession() {
+  const state = adminState(), session = state.session;
+  return session && !state.locked && session.exp > Date.now() && state.lastActivity + ADMIN_IDLE_MS > Date.now() ? session.token : "";
+}
+export function saveAdminSession(token, exp, details = {}) {
+  const state = adminState();
+  state.generation++;
+  state.session = { ...details, token, exp };
+  state.locked = false;
+  state.lastActivity = Date.now();
+  removeLegacyCredentials();
   // Durably mark this device as the owner's so first-party analytics + the Cloudflare beacon never
   // count your own visits — on this PC or your phone — even after the admin session later expires.
   try { localStorage.setItem("rk:owner", "1"); } catch (e) {}
+  startAdminSessionMonitor();
+  authEvent("signed-in");
 }
-export function clearAdminSession() { try { localStorage.removeItem(ADMIN_SESSION_KEY); } catch (e) {} }
+export function clearAdminSession() {
+  const state = adminState();
+  state.session = null; state.trust = null; state.generation++;
+  removeLegacyCredentials();
+}
+export function adminSessionInfo() {
+  const session = adminState().session;
+  return session ? { remembered: !!session.remembered, exp: session.sessionExp || session.exp, sessionId: session.sessionId } : null;
+}
+export function adminSessionIdentity() {
+  return adminSession() ? adminState().session.sessionId || adminSession() : "";
+}
+async function sessionRequest(action, body = {}, token = adminSession()) {
+  const response = await fetch(ADMIN_AUTH_URL + "/admin/session/" + action, {
+    method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true,
+    ...(typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(15000) } : {}),
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(result.error || "Session request failed."), { status: response.status, locked: result.locked });
+  return result;
+}
+function pendingSignouts() {
+  try { return JSON.parse(localStorage.getItem(ADMIN_PENDING_KEY) || "[]"); } catch (error) { return []; }
+}
+function queueSignout(revoke) {
+  try {
+    localStorage.setItem(ADMIN_BLOCKED_KEY, "1");
+    const pending = pendingSignouts();
+    if (revoke && !pending.includes(revoke)) pending.push(revoke);
+    localStorage.setItem(ADMIN_PENDING_KEY, JSON.stringify(pending));
+  } catch (error) {}
+}
+export async function retryAdminSignout() {
+  let confirmed = true;
+  for (const revoke of pendingSignouts()) {
+    try { await sessionRequest("forget", { revoke }, ""); }
+    catch (error) { if (error.status !== 401) { confirmed = false; continue; } }
+    try { localStorage.setItem(ADMIN_PENDING_KEY, JSON.stringify(pendingSignouts().filter(value => value !== revoke))); } catch (error) {}
+  }
+  try { await sessionRequest("forget", {}, ""); } catch (error) { if (error.status !== 401) confirmed = false; }
+  return confirmed;
+}
+export async function signOutAdmin({ broadcast = true } = {}) {
+  const state = adminState(), session = state.session;
+  queueSignout(session?.revoke);
+  clearAdminSession();
+  state.blocked = true;
+  if (broadcast) {
+    const message = { reason: "signed-out", at: Date.now(), nonce: Math.random() };
+    state.channel?.postMessage(message);
+    try { localStorage.setItem(ADMIN_EVENT_KEY, JSON.stringify(message)); } catch (error) {}
+  }
+  authEvent("signed-out");
+  let confirmed = true;
+  if (session?.token) {
+    try { await sessionRequest("logout", {}, session.token); } catch (error) { if (error.status !== 401) confirmed = false; }
+  }
+  return { confirmed: await retryAdminSignout() && confirmed };
+}
+export async function restoreAdminSession() {
+  const state = adminState();
+  if (adminSession()) return true;
+  try { if (state.blocked || localStorage.getItem(ADMIN_BLOCKED_KEY) === "1") { await retryAdminSignout(); return false; } } catch (error) {}
+  const generation = state.generation;
+  try {
+    const result = await sessionRequest("restore", {}, "");
+    if (generation !== state.generation) return false;
+    saveAdminSession(result.token, result.exp, result);
+    return true;
+  } catch (error) { return false; }
+}
+async function acceptAdminLogin(result, options = {}) {
+  const state = adminState();
+  const cancelled = () => options.signal?.aborted || (options.generation !== undefined && options.generation !== state.generation);
+  try {
+    if (cancelled()) throw new DOMException("Sign-in cancelled.", "AbortError");
+    if (options.remember) await sessionRequest("remember", {}, result.token);
+    if (cancelled()) throw new DOMException("Sign-in cancelled.", "AbortError");
+    if (state.session?.token && state.session.token !== result.token) {
+      try { await sessionRequest("logout", {}, state.session.token); } catch (error) {}
+      if (cancelled()) throw new DOMException("Sign-in cancelled.", "AbortError");
+    }
+    state.blocked = false;
+    try { localStorage.removeItem(ADMIN_BLOCKED_KEY); } catch (error) {}
+    saveAdminSession(result.token, result.exp, result);
+    return { ok: true };
+  } catch (error) {
+    queueSignout(result.revoke);
+    try { await sessionRequest("logout", {}, result.token); await retryAdminSignout(); } catch (cleanupError) {}
+    throw error;
+  }
+}
+export async function adminSessions(action = "list", details = {}) { return sessionRequest(action, details); }
+export function lockAdminSession() {
+  const state = adminState();
+  if (!state.session || state.locked) return;
+  const token = state.session.token;
+  state.locked = true; state.trust = null; state.generation++;
+  sessionRequest("lock", {}, token).catch(() => {});
+  authEvent("locked");
+}
+export function startAdminSessionMonitor() {
+  const state = adminState();
+  if (window.__rkAdminListeners || !window.addEventListener) return;
+  window.__rkAdminListeners = true;
+  const receive = () => { if (state.session) signOutAdmin({ broadcast: false }); else { state.blocked = true; state.generation++; } };
+  try {
+    if (!state.channel && typeof BroadcastChannel !== "undefined") { state.channel = new BroadcastChannel("rk:admin-auth"); state.channel.onmessage = event => { if (event.data?.reason === "signed-out") receive(); }; }
+  } catch (error) {}
+  window.addEventListener("storage", event => { if (event.key === ADMIN_EVENT_KEY && event.newValue) receive(); });
+  window.addEventListener("online", () => { try { if (localStorage.getItem(ADMIN_BLOCKED_KEY) === "1") retryAdminSignout(); } catch (error) {} });
+  const activity = event => {
+    if (!event.isTrusted || !state.session || state.locked) return;
+    if (Date.now() - state.lastActivity >= ADMIN_IDLE_MS) { lockAdminSession(); return; }
+    state.lastActivity = Date.now();
+    if (Date.now() - state.activitySent < 30000) return;
+    state.activitySent = Date.now();
+    sessionRequest("activity").catch(error => { if ([401, 423].includes(error.status)) lockAdminSession(); });
+  };
+  for (const event of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(event, activity, { passive: true, capture: true });
+  if (state.monitor) return;
+  state.monitor = setInterval(async () => {
+    if (!state.session || state.locked || state.renewing) return;
+    if (Date.now() - state.lastActivity >= ADMIN_IDLE_MS) { lockAdminSession(); return; }
+    if (state.session.exp - Date.now() > 60000) return;
+    const generation = state.generation;
+    state.renewing = true;
+    try {
+      const result = await sessionRequest("renew", {}, state.session.token);
+      if (generation === state.generation) state.session = { ...state.session, ...result };
+    } catch (error) { if ([401, 423].includes(error.status) || state.session?.exp <= Date.now()) lockAdminSession(); }
+    finally { state.renewing = false; }
+  }, 15000);
+}
+export async function verifyAdminAction() {
+  const state = adminState();
+  if (adminSession().startsWith("s2.") && !(state.session.verifiedUntil > Date.now())) await webauthnAuth("security");
+}
+if (typeof window !== "undefined") startAdminSessionMonitor();
 // ---------- device-trust: this browser/device passed a 2-factor step-up (recovery passphrase + admin
 // password), so it may enrol a passkey or publish. The token is HMAC-signed by the Worker (unspoofable);
 // a fresh device (e.g. signed in via your phone) has none until it steps up. ----------
 export const TRUST_KEY = "rk:trust";
 export function deviceTrust() {
-  try { const s = JSON.parse(localStorage.getItem(TRUST_KEY) || "null"); if (s && s.token && s.exp && s.exp > Date.now()) return s.token; } catch (e) {}
+  if (adminSession().startsWith("s2.")) return adminSession();
+  const s = adminState().trust;
+  if (s && s.exp > Date.now()) return s.token;
   return "";
 }
 export function deviceTrusted() { return !!deviceTrust(); }
-export function saveDeviceTrust(token, exp) { try { localStorage.setItem(TRUST_KEY, JSON.stringify({ token: token, exp: exp })); } catch (e) {} }
-export function clearDeviceTrust() { try { localStorage.removeItem(TRUST_KEY); } catch (e) {} }
+export function saveDeviceTrust(token, exp) { adminState().trust = { token, exp }; }
+export function clearDeviceTrust() { adminState().trust = null; try { localStorage.removeItem(TRUST_KEY); } catch (e) {} }
 // Verify the recovery passphrase (+ admin password when one is set) to trust THIS device; stores the token.
 export async function stepUp(recovery, password) {
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
@@ -59,22 +226,23 @@ export async function stepUp(recovery, password) {
 // Log in against the Worker. Returns {ok:true} (session stored), {ok:false,status} (rejected),
 // or {ok:false,network:true} (Worker unreachable / not deployed → caller falls back to the local gate).
 export async function adminLogin(password, options = {}) {
+  options = { ...options, generation: adminState().generation };
   try {
     const result = await authStage("Password verification", async signal => {
-      const res = await fetch(ADMIN_WORKER + "/admin/login", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }), signal,
+      const res = await fetch(ADMIN_AUTH_URL + "/admin/login", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password, remember: !!options.remember }), signal,
       });
       return { status: res.status, data: await res.json().catch(() => null) };
     }, options);
     options.signal?.throwIfAborted();
     if (result.status === 200) {
       const j = result.data;
-      if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+      if (j && j.token && j.exp) return await acceptAdminLogin(j, options);
       return { ok: false, status: 500 };
     }
     if (result.status === 404) return { ok: false, network: true }; // endpoint not deployed yet → fall back
     return { ok: false, status: result.status };
-  } catch (e) { if (options.signal?.aborted) throw e; return { ok: false, network: true }; }
+  } catch (e) { if (options.signal?.aborted || e.name === "AbortError") throw e; return { ok: false, network: true }; }
 }
 
 /* ---------- passkeys (WebAuthn) — passwordless admin sign-in + publish step-up ----------
@@ -123,6 +291,7 @@ function guessPasskeyLabel(cred) {
 }
 // Enrol a new passkey (owner-gated — needs a live session, e.g. from the password login the first time).
 export async function webauthnRegister(label) {
+  await verifyAdminAction();
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first to add a passkey."); e.auth = true; throw e; }
   const br = await fetch(ADMIN_WORKER + "/admin/webauthn/register/begin", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json", "X-Device-Trust": deviceTrust() }, body: "{}" });
   if (br.status === 401) { const e = new Error("Your session expired — sign in again."); e.auth = true; throw e; }
@@ -179,7 +348,7 @@ async function authStage(stage, execute, options = {}, timeout = 15000) {
 }
 async function authJson(path, init, options, stage) {
   return authStage(stage, async signal => {
-    const response = await fetch(ADMIN_WORKER + path, { ...init, signal });
+    const response = await fetch(ADMIN_AUTH_URL + path, { credentials: "same-origin", ...init, signal });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || typeof data !== "object") {
       const error = new Error(data?.error || "The sign-in service could not complete this request.");
@@ -190,7 +359,9 @@ async function authJson(path, init, options, stage) {
   }, options);
 }
 export async function webauthnAuth(purpose, options = {}) {
-  const o = await authJson("/admin/webauthn/auth/begin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: purpose || "login" }) }, options, "Challenge");
+  options = { ...options, generation: adminState().generation };
+  const headers = { "Content-Type": "application/json", ...(adminSession() ? { Authorization: "Bearer " + adminSession() } : {}) };
+  const o = await authJson("/admin/webauthn/auth/begin", { method: "POST", headers, body: JSON.stringify({ purpose: purpose || "login", remember: !!options.remember }) }, options, "Challenge");
   const assertion = await authStage("Passkey provider", signal => navigator.credentials.get({ signal, publicKey: {
     challenge: b64urlToBuf(o.challenge), rpId: o.rpId, timeout: o.timeout || 120000, userVerification: o.userVerification || "preferred",
     allowCredentials: (o.allowCredentials || []).map((c) => ({ type: c.type, id: b64urlToBuf(c.id) })),
@@ -198,14 +369,16 @@ export async function webauthnAuth(purpose, options = {}) {
   if (!assertion) throw new Error("Passkey sign-in was cancelled.");
   const r = assertion.response;
   const body = { id: assertion.id, rawId: bufToB64url(assertion.rawId), type: assertion.type, response: { clientDataJSON: bufToB64url(r.clientDataJSON), authenticatorData: bufToB64url(r.authenticatorData), signature: bufToB64url(r.signature), userHandle: r.userHandle ? bufToB64url(r.userHandle) : null } };
-  const j = await authJson("/admin/webauthn/auth/finish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, options, "Verification");
+  const j = await authJson("/admin/webauthn/auth/finish", { method: "POST", headers, body: JSON.stringify(body) }, options, "Verification");
   options.signal?.throwIfAborted();
-  if (purpose === "publish" || purpose === "release-checks") return j;
-  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); if (j.trust && j.trustExp) saveDeviceTrust(j.trust, j.trustExp); return { ok: true }; }
+  if (purpose === "security" && adminState().session && options.generation === adminState().generation) adminState().session.verifiedUntil = j.verifiedUntil;
+  if (purpose === "publish" || purpose === "release-checks" || purpose === "security") return j;
+  if (j && j.token && j.exp) return acceptAdminLogin(j, options);
   throw new Error("Passkey sign-in didn’t return a session.");
 }
 // Remove an enrolled passkey (owner-gated).
 export async function webauthnRemove(credId) {
+  await verifyAdminAction();
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
   const r = await fetch(ADMIN_WORKER + "/admin/webauthn/remove", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ credId: credId }) });
   if (!r.ok) throw new Error("Couldn’t remove that passkey.");
@@ -226,6 +399,7 @@ export async function publishStatus() {
 }
 // Owner-only: set the recovery proof hash and/or the require flag for the publish step-up.
 export async function publishConfig(proof, require) {
+  await verifyAdminAction();
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
   const body = { require: !!require }; if (proof) body.proof = proof;
   const r = await fetch(ADMIN_WORKER + "/admin/publish/config", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -247,6 +421,7 @@ export async function authStatus(options = {}) {
 }
 // Owner-only: turn the passwordless (passkey-only) admin login on/off.
 export async function authConfig(passwordless) {
+  await verifyAdminAction();
   const sess = adminSession(); if (!sess) { const e = new Error("Sign in first."); e.auth = true; throw e; }
   const r = await fetch(ADMIN_WORKER + "/admin/auth/config", { method: "POST", headers: { Authorization: "Bearer " + sess, "Content-Type": "application/json" }, body: JSON.stringify({ passwordless: !!passwordless }) });
   if (!r.ok) { const j = await r.json().catch(() => null); throw new Error((j && j.error) || "Couldn’t update sign-in mode."); }
@@ -254,12 +429,13 @@ export async function authConfig(passwordless) {
 }
 // Break-glass sign-in with the recovery passphrase (all passkeys lost). Stores a session on success.
 export async function recoverWithPassphrase(recovery, password, options = {}) {
+  options = { ...options, generation: adminState().generation };
   const proof = await authStage("Recovery proof", () => publishProof(recovery), options);
-  const body = { proof: proof };
+  const body = { proof: proof, remember: !!options.remember };
   if (password) body.password = password;
   const j = await authJson("/admin/recover", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, options, "Recovery verification");
   options.signal?.throwIfAborted();
-  if (j && j.token && j.exp) { saveAdminSession(j.token, j.exp); return { ok: true }; }
+  if (j && j.token && j.exp) return acceptAdminLogin(j, options);
   throw new Error("Recovery didn’t return a session.");
 }
 

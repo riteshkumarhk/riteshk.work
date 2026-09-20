@@ -21,6 +21,50 @@ Focused regression check: `node --test studio-status.test.mjs`.
 Build: `npm run build`. Both Studio entry points version the shared admin CSS;
 the Studio JavaScript continues to use its dynamic cache version.
 
+## Admin Sessions
+
+Remember this device is off by default. Access credentials stay in page memory;
+reload or full navigation requires sign-in unless remembering was explicitly
+enabled. Same-origin embedded editors and opener-connected presentation windows
+can use the active page session. Credentials are not copied into localStorage or
+sessionStorage. Old `rk:admin:sess` and `rk:trust` values are removed on load.
+
+Opt-in remembering uses a host-only Secure, HttpOnly, SameSite=Strict cookie on
+`https://riteshk.work/admin/*`. Its seven-day maximum does not slide. Access tokens
+last five minutes and renew while the session remains active; temporary sessions
+have a twelve-hour maximum. Thirty minutes without input locks access and requires
+reauthentication. Remembering is not permission to bypass fresh verification for
+publication or security changes. Passkey ceremonies require user verification.
+
+Sign out replaces the library X. It flushes native edits and saves the local draft
+before revocation, with retry, backup and explicit unsaved-exit options on failure.
+Return to site is a separate action, not a server logout. Cross-tab notifications
+contain no credentials. Offline sign-out clears page access and blocks automatic
+restoration; a persisted revocation-only capability allows retry but cannot sign
+in. Server revocation is not claimed until acknowledged. Previously saved drafts,
+source files and history remain on this browser and are not encrypted by logout.
+
+Settings > Security > Browser sessions requires fresh verification and supports
+individual revocation and Sign out all sessions. Labels describe browser/platform,
+not cryptographically bound hardware. The strongly consistent AdminSessions
+Durable Object stores hashed credentials, enforces idle/hard expiry, rotates
+remember credentials on restoration after five minutes and revokes replay beyond
+a ten-second concurrent-request grace period. At fifty sessions, a freshly
+authenticated login retires the least recently active one rather than locking the
+owner out. Session storage failure fails closed.
+
+Deploy the `admin-sessions-v1` SQLite Durable Object migration and the same-origin
+Worker route before the frontend. Enabling the binding rejects legacy signed
+sessions and requires existing clients to sign in again. Do not reset passkeys,
+rotate unrelated secrets or publish owner content for this migration. Restoring
+legacy-token acceptance is not a safe automatic rollback.
+
+Focused checks:
+`node --test --test-concurrency=1 auth-lifecycle.test.mjs admin-session.browser.test.mjs`
+and `node --test --test-name-pattern="Admin session" worker-stability.test.mjs`.
+Browser coverage uses synthetic credentials with Chromium's virtual authenticator;
+real provider and physical-device acceptance remain separate.
+
 ## AI Counter
 
 The footer uses the shared living ribbon at 18px with an unfilled 1.5 stroke.

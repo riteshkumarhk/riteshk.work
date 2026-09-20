@@ -3,6 +3,11 @@ main = "rk-ai-proxy.js"
 compatibility_date = "2026-07-28"
 workers_dev = true
 preview_urls = false
+routes = [{ pattern = "riteshk.work/admin/*", zone_name = "riteshk.work" }]
+
+[[durable_objects.bindings]]
+name = "ADMIN_SESSIONS"
+class_name = "AdminSessions"
 
 [[durable_objects.bindings]]
 name = "PASSKEY_CHALLENGES"
@@ -15,6 +20,10 @@ class_name = "ContentPublisher"
 [[migrations]]
 tag = "stability-challenges-v1"
 new_sqlite_classes = ["PasskeyChallenges", "ContentPublisher"]
+
+[[migrations]]
+tag = "admin-sessions-v1"
+new_sqlite_classes = ["AdminSessions"]
 
 [[r2_buckets]]
 binding = "SLIDE_LIBRARIES"

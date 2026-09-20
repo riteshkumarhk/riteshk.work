@@ -17,17 +17,57 @@ function setup(overrides = {}) {
       return Response.json(url.endsWith("/begin") ? { challenge: "AQ", rpId: "synthetic.test" } : { token: "synthetic-session", exp: Date.now() + 60000, trust: "synthetic-trust", trustExp: Date.now() + 60000 });
     }, ...overrides
   };
-  const api = runInNewContext(source.replace(/^export /gm, "") + "\n;({webauthnAuth,authStatus,authStage,adminLogin,recoverWithPassphrase});", context);
+  const api = runInNewContext(source.replace(/^export /gm, "") + "\n;({webauthnAuth,authStatus,authStage,adminLogin,recoverWithPassphrase,adminSession,adminSessionIdentity,saveAdminSession,signOutAdmin,restoreAdminSession});", context);
   return { ...api, values, requests, stages, context, options: { onStage: value => stages.push(value) } };
 }
 
-test("passkey login persists only a completed current session and reports no credentials", async () => {
+test("passkey login keeps completed credentials in memory only and reports no credentials", async () => {
   const fixture = setup();
   assert.equal((await fixture.webauthnAuth("login", fixture.options)).ok, true);
-  assert.equal(JSON.parse(fixture.values.get("rk:admin:sess")).token, "synthetic-session");
-  assert.equal(JSON.parse(fixture.values.get("rk:trust")).token, "synthetic-trust");
+  assert.equal(fixture.adminSession(), "synthetic-session");
+  assert.equal(fixture.values.has("rk:admin:sess"), false);
+  assert.equal(fixture.values.has("rk:trust"), false);
   assert.deepEqual(fixture.stages.map(stage => stage.stage), ["Challenge", "Passkey provider", "Verification"]);
   assert.doesNotMatch(JSON.stringify(fixture.stages), /synthetic-session|synthetic-trust|signature|clientDataJSON/);
+});
+
+test("session identity survives token renewal but not logout, lock or a different login", async () => {
+  const fixture = setup();
+  fixture.saveAdminSession("first", Date.now() + 60000, { sessionId: "same-session" });
+  assert.equal(fixture.adminSessionIdentity(), "same-session");
+  fixture.saveAdminSession("renewed", Date.now() + 60000, { sessionId: "same-session" });
+  assert.equal(fixture.adminSessionIdentity(), "same-session");
+  fixture.context.window.__rkAdminAuth.locked = true;
+  assert.equal(fixture.adminSessionIdentity(), "");
+  fixture.saveAdminSession("new-login", Date.now() + 60000, { sessionId: "new-session" });
+  assert.equal(fixture.adminSessionIdentity(), "new-session");
+  await fixture.signOutAdmin();
+  assert.equal(fixture.adminSessionIdentity(), "");
+});
+
+test("late remembered-session restoration cannot replace a newer explicit sign-in", async () => {
+  let release;
+  const fixture = setup({ fetch: async () => new Promise(resolve => { release = () => resolve(Response.json({ token: "old-restore", exp: Date.now() + 60000, sessionId: "old" })); }) });
+  const restoring = fixture.restoreAdminSession();
+  await tick();
+  fixture.saveAdminSession("new-signin", Date.now() + 60000, { sessionId: "new" });
+  release();
+  assert.equal(await restoring, false);
+  assert.equal(fixture.adminSession(), "new-signin");
+  assert.equal(fixture.adminSessionIdentity(), "new");
+});
+
+test("remember is opt-in, sign-out clears memory and blocks automatic restoration", async () => {
+  const fixture = setup();
+  await fixture.webauthnAuth("login", { remember: true });
+  assert.equal(fixture.requests.filter(request => request.url.endsWith("/remember")).length, 1);
+  assert.equal(JSON.parse(fixture.requests[0].options.body).remember, true);
+  await fixture.signOutAdmin();
+  assert.equal(fixture.adminSession(), "");
+  assert.equal(fixture.values.get("rk:admin:blocked"), "1");
+  assert.equal(await fixture.restoreAdminSession(), false);
+  assert.equal(fixture.requests.some(request => request.url.endsWith("/restore")), false);
+  assert.doesNotMatch(JSON.stringify([...fixture.values]), /synthetic-session|synthetic-trust/);
 });
 
 for (const stage of ["challenge", "provider", "verification"]) {
@@ -113,7 +153,7 @@ test("gate cancellation and navigation ignore late success and prevent overlappi
     const buttons = [{ disabled: false }, { disabled: false }];
     const gate = runInNewContext(`(() => { ${admin.slice(start, end)} return {doPasskey,done,leaveGate}; })()`, {
       AbortController, modal: { querySelectorAll: () => buttons, remove() {} }, err: { textContent: "" },
-      window: { addEventListener() {}, removeEventListener() {} },
+      window: { addEventListener() {}, removeEventListener() {} }, rememberDevice: () => false,
       webauthnAuth: async (purpose, options) => { attempts++; signal = options.signal; await new Promise(resolve => { release = resolve; }); },
       openStudio: () => { opened++; }
     });
@@ -136,7 +176,7 @@ test("a verified server login does not depend on optional local gate caching", a
     let opened = 0;
     const attempt = new AbortController();
     const submit = runInNewContext(`(${admin.slice(start, end)})`, {
-      gateClosed: false, gateAttempt: null, recovering: false, creating: false, publishedGate: null, stored: null,
+      gateClosed: false, gateAttempt: null, recovering: false, creating: false, publishedGate: null, stored: null, ADMIN_WORKER: "synthetic-worker", rememberDevice: () => false,
       pass: { value: "synthetic-password", style: { display: "" } }, err: { textContent: "" },
       beginGateAttempt: () => attempt, currentGateAttempt: () => !attempt.signal.aborted, endGateAttempt: () => {},
       adminLogin: async () => ({ ok: true }),

@@ -624,7 +624,7 @@ describe('Resume browser acceptance', () => {
       await page.goto(preview.origin + '/studio/?devstub=1');
       await page.waitForFunction(() => typeof window.__rkDevStudio === 'function');
       const ownerDraft = await page.evaluate(async ownerContent => {
-        localStorage.setItem('rk:admin:sess', JSON.stringify({ token: 'synthetic-owner', exp: Date.now() + 3600000 }));
+        window.__rkAdminAuth = { session: { token: 'synthetic-owner', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 };
         const original = JSON.stringify(ownerContent);
         localStorage.setItem('rk:content:draft', original);
         localStorage.setItem('rk:content:draft:sig', window.RK.publishedSig);
@@ -893,7 +893,7 @@ describe('Resume browser acceptance', () => {
         const otherPage = await otherContext.newPage();
         await otherPage.goto(preview.origin + '/studio/?devstub=1');
         await otherPage.waitForFunction(() => typeof window.__rkDevStudio === 'function');
-        await otherPage.evaluate(async () => { localStorage.setItem('rk:admin:sess', JSON.stringify({ token: 'synthetic-owner', exp: Date.now() + 3600000 })); await window.__rkDevStudio(); });
+        await otherPage.evaluate(async () => { window.__rkAdminAuth = { session: { token: 'synthetic-owner', exp: Date.now() + 3600000 }, generation: 0, lastActivity: Date.now(), activitySent: 0 }; await window.__rkDevStudio(); });
         await otherPage.locator('.adm__tab[data-tab="ai"]').click();
         await otherPage.locator('[data-act="prep-open"][data-tool="ats"]').click();
         await otherPage.locator('[data-act="resume-hist-open"][data-id="' + migratedId + '"]').click();
