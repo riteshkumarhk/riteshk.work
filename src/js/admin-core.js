@@ -348,7 +348,8 @@ async function authStage(stage, execute, options = {}, timeout = 15000) {
 }
 async function authJson(path, init, options, stage) {
   return authStage(stage, async signal => {
-    const response = await fetch(ADMIN_AUTH_URL + path, { credentials: "same-origin", ...init, signal });
+    const admin = path.startsWith("/admin/");
+    const response = await fetch((admin ? ADMIN_AUTH_URL : ADMIN_WORKER) + path, { credentials: admin ? "same-origin" : "omit", ...init, signal });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data || typeof data !== "object") {
       const error = new Error(data?.error || "The sign-in service could not complete this request.");

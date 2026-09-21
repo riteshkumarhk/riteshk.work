@@ -15,6 +15,77 @@ const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "ut
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
 
+test('production-host Present mode and visitor passes load protected sections without exposing them to visitors', { timeout: 60000 }, async () => {
+  const project = await build({ entryPoints: ['src/js/project.js'], bundle: true, write: false, format: 'iife' });
+  const auth = await build({ entryPoints: ['src/js/admin-core.js'], bundle: true, write: false, format: 'iife', globalName: 'fixtureAuth' });
+  const browser = await chromium.launch(launchOptions);
+  try {
+    for (const width of [1440, 390]) for (const access of ['owner', 'pass', 'none']) {
+      const page = await browser.newPage({ viewport: { width, height: 1000 } });
+      const requests = [], wrongHost = [];
+      await page.route('**/*', async route => {
+        const url = new URL(route.request().url());
+        if (url.pathname.startsWith('/vault/')) {
+          if (url.origin !== 'https://rk-ai-proxy.riteshkumarhk.workers.dev') {
+            wrongHost.push(url.pathname);
+            await route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Static site fallback</title>' });
+            return;
+          }
+          requests.push({ path: url.pathname, headers: route.request().headers() });
+          if (url.pathname === '/vault/redeem') await route.fulfill({ json: { token: 'synthetic-pass-grant', exp: Date.now() + 60000 } });
+          else if (url.pathname === '/vault/sign') await route.fulfill({ json: { url: '/vault/file/synthetic-present-section' } });
+          else if (url.pathname === '/vault/file/synthetic-present-section') await route.fulfill({ json: { type: 'text', heading: 'Protected presentation content', body: 'Synthetic private evidence loaded successfully.', locked: true } });
+          else await route.abort();
+          return;
+        }
+        if (url.href === 'https://riteshk.work/') await route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Protected presentation regression</title>' });
+        else await route.abort();
+      });
+      await page.goto('https://riteshk.work/');
+      await page.addStyleTag({ content: readFileSync('css/styles.css', 'utf8') + readFileSync('css/project.css', 'utf8') });
+      await page.addScriptTag({ content: auth.outputFiles[0].text });
+      await page.evaluate(async access => {
+        localStorage.setItem('rk:content:draft', 'synthetic-draft-must-survive');
+        window.RK = { data: { work: [{ id: 'present-fixture', client: 'Synthetic', title: 'Present mode', study: { blocks: [{ type: 'text', heading: 'Public introduction', body: 'Public content remains visible.' }, { type: 'text', locked: true, vaultBlock: 'synthetic-present-section', sectionId: 'protected-original' }] } }] }, vaultSignedUrl: fixtureAuth.vaultSignedUrl };
+        window.__siteRendered = true;
+        if (access === 'owner') {
+          fixtureAuth.saveAdminSession('synthetic-owner', Date.now() + 60000);
+          sessionStorage.setItem('rk:present:active', '1');
+        } else if (access === 'pass') await fixtureAuth.vaultRedeem('synthetic-pass', { strict: true });
+      }, access);
+      await page.addScriptTag({ content: project.outputFiles[0].text });
+      await page.evaluate(() => RK.openProject('present-fixture', { push: false }));
+      await page.getByText('Public introduction', { exact: true }).waitFor();
+      if (access === 'none') {
+        await page.getByText('This deeper cut is shared on request.', { exact: true }).waitFor();
+        assert.deepEqual(requests, []);
+        assert.equal(await page.getByText('Protected presentation content', { exact: true }).count(), 0);
+      } else {
+        await page.getByText('Protected presentation content', { exact: true }).waitFor();
+        assert.equal(await page.locator('[data-vault-retry]').count(), 0);
+        assert.equal(requests.filter(request => request.path === '/vault/file/synthetic-present-section').length, 1);
+        const signed = requests.find(request => request.path === '/vault/sign');
+        assert.equal(signed.headers[access === 'owner' ? 'authorization' : 'x-vault-grant'], access === 'owner' ? 'Bearer synthetic-owner' : 'synthetic-pass-grant');
+        assert.equal(await page.evaluate(() => RK.data.work[0].study.blocks[1].sectionId), 'protected-original');
+        if (access === 'owner') await page.screenshot({ path: join(tmpdir(), 'rk-present-vault-routing-' + width + '.png') });
+        const beforeRelock = requests.length;
+        await page.evaluate(() => {
+          sessionStorage.removeItem('rk:present:active');
+          sessionStorage.removeItem('rk:vault:grant');
+          RK.setStudyLocked('present-fixture');
+          RK.openProject('present-fixture', { push: false, keepScroll: true });
+        });
+        await page.getByText('This deeper cut is shared on request.', { exact: true }).waitFor();
+        assert.equal(await page.getByText('Synthetic private evidence loaded successfully.', { exact: true }).count(), 0);
+        assert.equal(requests.length, beforeRelock);
+      }
+      assert.deepEqual(wrongHost, []);
+      assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), 'synthetic-draft-must-survive');
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('Overview to Full releases its scroll pin on the first upward wheel gesture', { timeout: 60000 }, async () => {
   const bundle = await build({ entryPoints: ['src/js/project.js'], bundle: true, write: false, format: 'iife' });
   const browser = await chromium.launch(launchOptions);

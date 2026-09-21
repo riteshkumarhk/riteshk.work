@@ -17,9 +17,41 @@ function setup(overrides = {}) {
       return Response.json(url.endsWith("/begin") ? { challenge: "AQ", rpId: "synthetic.test" } : { token: "synthetic-session", exp: Date.now() + 60000, trust: "synthetic-trust", trustExp: Date.now() + 60000 });
     }, ...overrides
   };
-  const api = runInNewContext(source.replace(/^export /gm, "") + "\n;({webauthnAuth,authStatus,authStage,adminLogin,recoverWithPassphrase,adminSession,adminSessionIdentity,saveAdminSession,signOutAdmin,restoreAdminSession});", context);
+  const api = runInNewContext(source.replace(/^export /gm, "") + "\n;({webauthnAuth,authStatus,authStage,adminLogin,recoverWithPassphrase,adminSession,adminSessionIdentity,saveAdminSession,signOutAdmin,restoreAdminSession,vaultSignedUrl,vaultRedeem});", context);
   return { ...api, values, requests, stages, context, options: { onStage: value => stages.push(value) } };
 }
+
+test("production authentication stays same-origin while owner and visitor vault requests use the Worker", async () => {
+  const worker = "https://rk-ai-proxy.riteshkumarhk.workers.dev";
+  for (const origin of ["https://riteshk.work", "http://localhost:5510"]) {
+    const storage = new Map(), requests = [];
+    const fixture = setup({
+      location: new URL(origin),
+      sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
+      fetch: async (url, options) => {
+        requests.push({ url, options });
+        const address = new URL(url);
+        if (address.pathname.startsWith("/vault/")) {
+          assert.equal(address.origin, worker);
+          assert.equal(options.credentials, "omit");
+          return Response.json(address.pathname === "/vault/redeem" ? { token: "synthetic-grant", exp: Date.now() + 60000 } : { url: "/vault/file/synthetic-section?signature=synthetic" });
+        }
+        assert.equal(address.origin, origin === "https://riteshk.work" ? origin : worker);
+        assert.equal(options.credentials, "same-origin");
+        return Response.json({ passwordless: true, passkeys: 1 });
+      }
+    });
+    await fixture.authStatus();
+    fixture.saveAdminSession("synthetic-owner", Date.now() + 60000);
+    assert.equal(await fixture.vaultSignedUrl("synthetic-section", { strict: true }), worker + "/vault/file/synthetic-section?signature=synthetic");
+    assert.equal(requests.at(-1).options.headers.Authorization, "Bearer synthetic-owner");
+    fixture.context.window.__rkAdminAuth.session = null;
+    assert.equal(await fixture.vaultRedeem("synthetic-pass", { strict: true }), true);
+    assert.equal(await fixture.vaultSignedUrl("synthetic-section", { strict: true }), worker + "/vault/file/synthetic-section?signature=synthetic");
+    assert.equal(requests.at(-1).options.headers["X-Vault-Grant"], "synthetic-grant");
+    assert.equal(requests.at(-1).options.headers.Authorization, undefined);
+  }
+});
 
 test("passkey login keeps completed credentials in memory only and reports no credentials", async () => {
   const fixture = setup();
