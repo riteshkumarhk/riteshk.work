@@ -2270,6 +2270,43 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .iprep__cols { margin-top: .4rem; }
 .iprep__cols .prep-hist__h { margin-top: .1rem; }
 
+.prep-workspace { padding: 0; align-items: stretch; animation: none; }
+.prep-workspace .pass__box { width: 100%; max-width: none; height: 100dvh; max-height: none; padding: 0; border: 0; border-radius: 0; corner-shape: round; box-shadow: none; display: flex; flex-direction: column; overflow: hidden; text-align: left; animation: none; }
+.prep-workspace__bar { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; min-height: 58px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.prep-workspace__bar .iconbtn { flex: 0 0 34px; width: 34px; height: 34px; padding: 7px; }
+.prep-workspace__bar .pass__title { margin: 0; font: 600 16px/1.4 var(--sans); letter-spacing: 0; }
+.prep-workspace__bar [data-iprep-saved] { margin-left: auto; min-height: 34px; letter-spacing: 0; }
+.prep-workspace__project { min-width: 0; margin-left: auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font: 12px/1.5 var(--sans); }
+.prep-workspace .iprep__cols { position: relative; flex: 1; min-height: 0; margin: 0; gap: 0; grid-template-columns: minmax(0, 1fr); align-items: stretch; overflow: hidden; }
+.prep-workspace--history .iprep__cols { grid-template-columns: minmax(0, 1fr) 260px; }
+.prep-workspace .ats__main { min-width: 0; overflow: auto; overscroll-behavior: contain; padding: 24px max(24px, calc((100% - 720px) / 2)); }
+.prep-workspace .iprep__list { max-height: none; overflow: visible; }
+.prep-workspace .prep-hist { margin: 0; padding: 24px 16px; border-top: 0; border-left: 1px solid var(--line); min-height: 0; overflow: auto; background: var(--bg-2); }
+.prep-workspace .prep-hist__list { max-height: none; overflow: visible; }
+.prep-workspace .prep-h { padding: 0; border-radius: 6px; corner-shape: squircle; }
+.prep-workspace .prep-h__x { color: inherit; background: none; border: 0; text-align: left; font-family: var(--sans); padding: 10px 40px 10px 10px; cursor: pointer; border-radius: 6px; corner-shape: squircle; }
+.prep-workspace .prep-h__del { width: 30px; height: 30px; border: 0; background: none; display: grid; place-items: center; opacity: .65; }
+.prep-workspace .prep-h__x:focus-visible, .prep-workspace .prep-h__del:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.prep-workspace .iprep__levels { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.prep-workspace .iprep__lvl { border-radius: 6px; corner-shape: squircle; }
+.prep-workspace .iprep__foot { flex: 0 0 auto; margin: 0; min-height: 58px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--bg-2); }
+.prep-workspace .prep-storage { flex: 0 0 auto; margin: 0; padding: 8px 20px; }
+.prep-workspace .prep-practice-modes { position: sticky; top: -24px; z-index: 1; padding-block: 12px; background: var(--bg-2); }
+.prep-workspace .iprep__card { border-radius: 8px; corner-shape: squircle; }
+.prep-workspace :is(.prep-hist__h, .af__label, .iprep__cat, .prep-practice-progress) { letter-spacing: 0; }
+@media (max-width: 800px) {
+  .prep-workspace .iprep__cols { display: block; overflow: auto; }
+  .prep-workspace .ats__main { overflow: visible; padding: 20px max(16px, calc((100% - 720px) / 2)); }
+  .prep-workspace .prep-hist { position: sticky; top: 0; z-index: 2; min-height: 100%; border-left: 0; border-top: 0; padding: 20px 16px; }
+  .prep-workspace--history .ats__main { display: none; }
+  .prep-workspace--history .iprep__foot { display: none; }
+  .prep-workspace .iprep__levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .prep-workspace__bar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+  .prep-workspace__project { flex-basis: 100%; max-width: none; margin-left: 42px; }
+  .prep-workspace .iprep__foot { padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+  .prep-workspace .prep-practice-modes { top: 0; }
+}
+
 /* Storyteller modal gets the history rail too */
 .story-modal .pass__box { width: min(880px, 94vw); }
 .story__cols { margin-top: .4rem; }

@@ -2183,7 +2183,10 @@ async function installPrepareReplies(page) {
         text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',instruction:'',inputs:[],summary:'Use the selected evidence'}});
       } else {
         window.preparationCalls.push({system,user:JSON.stringify(request.messages)});
-        if (system.includes('generate the questions a sharp interviewer')) text = JSON.stringify({questions:[{q:'Which decision changed the outcome?',category:'Decisions',why:'Explain the evidence'}]});
+        if (system.includes('{"questions":[{"q":string,"category":string,"why":string}]}') && /Generate exactly \d+ questions/.test(JSON.stringify(request.messages))) {
+          const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10);
+          text = JSON.stringify(window.interviewReply || {questions:Array.from({length:count},(_,index)=>({q:index ? 'What evidence would you seek for alternative '+index+'?' : 'Which decision changed the outcome?',category:'Decisions',why:'Explain the evidence'}))});
+        }
         else if (system.includes('propose a few DISTINCT')) text = JSON.stringify({themes:[{title:'Evidence led the decision',hook:'A grounded angle',beats:'Context decision outcome'}]});
         else if (system.includes('Script EXACTLY')) text = JSON.stringify({spine:'Evidence led the decision',opener:'Original source',beats:[{label:'Decision',mins:'5',say:'Explain the evidence',must:'Outcome'}],close:'Lessons',skip:'Details',tip:'Keep it clear'});
         else if (system.includes('Invent ONE crisp')) text = JSON.stringify({prompt:'A new synthetic exercise',context:'Explicit constraints',watchfor:['Clarity']});
@@ -2264,7 +2267,7 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
         assert.equal(await modal.locator('[data-iprep-proj][value="0"]').isChecked(),true);
         assert.equal(await modal.locator('[data-iprep-proj][value="1"]').isChecked(),false);
         await modal.locator('[data-iprep-run]').click();
-        await modal.locator('.iprep__q').waitFor();
+        await modal.locator('.iprep__q').first().waitFor();
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
         assert.equal(saved.payload.source.brief.id,brief.id);
         assert.match(saved.payload.source.text,/PERMITTED_PROJECT_EVIDENCE/);
@@ -2311,14 +2314,17 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     await page.setViewportSize({width,height:1000});
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     await page.locator('#iprepJd').fill('ORIGINAL_PRACTICE_ROLE');
+    const workspace = await page.locator('.prep-workspace .pass__box').boundingBox();
+    assert.deepEqual(workspace, {x:0,y:0,width,height:1000});
+    assert.equal(await page.getByRole('button',{name:'Back to Prepare',exact:true}).isVisible(),true);
     await page.locator('[data-iprep-run]').click();
-    await page.locator('.iprep__q').waitFor();
+    await page.locator('.iprep__q').first().waitFor();
     assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
     await page.locator('[data-iprep-ans="0"]').click();
     await page.locator('.iprep__a strong').waitFor();
-    const suggested = await page.locator('.iprep__a').innerHTML();
+    const suggested = await page.locator('.iprep__a').first().innerHTML();
     await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
-    assert.equal(await page.locator('.iprep__a').isVisible(),false);
+    assert.equal(await page.locator('.iprep__a').first().isVisible(),false);
     await page.locator('[data-practice-feedback]').click();
     assert.match(await page.locator('.iprep-modal .pass__err').innerText(),/response first/);
     assert.equal(await page.evaluate(() => window.preparationCalls.filter(call=>call.system.includes('interview practice coach')).length),0);
@@ -2357,9 +2363,10 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     await page.screenshot({path:join(tmpdir(),'rk-prep-practice-'+width+'.png')});
     await page.locator('.iprep-modal [data-cancel]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
     assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
-    assert.equal(await page.locator('.iprep__a').innerHTML(),suggested);
+    assert.equal(await page.locator('.iprep__a').first().innerHTML(),suggested);
     await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
     const paused = await page.locator('[data-practice-elapsed]').innerText();
     await page.clock.runFor(1500);
@@ -2377,12 +2384,205 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     assert.equal(saved.payload.practice.turns[1].attempts.length,0);
     assert.match(saved.payload.practice.turns[1].draft,/unfinished follow-up/);
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
     await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-del="'+first.id+'"]').click();
     await page.locator('.iprep-modal [data-cancel]').click();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.length),0);
     assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test("Prepare Interview workspace fits responsive screens and keeps VP sets through keyboard restore and reload", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:900},reducedMotion:"reduce"});
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    for (const width of [1440,800,390,320]) {
+      await page.setViewportSize({width,height:900});
+      const launcher = page.locator('[data-act="prep-open"][data-tool="iprep"]');
+      await launcher.click();
+      assert.deepEqual(await page.locator('.prep-workspace .pass__box').boundingBox(),{x:0,y:0,width,height:900});
+      assert.equal(await page.locator('[data-iprep-lvl]').count(),4);
+      for (const selector of ['.prep-workspace__bar','.iprep__foot','[data-iprep-saved]','[data-cancel]']) {
+        const bounds = await page.locator('.prep-workspace').locator(selector).boundingBox();
+        assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y + bounds.height <= 901,selector);
+      }
+      assert.equal(await page.locator('.prep-workspace').evaluate(root => Array.from(root.querySelectorAll('.pass__box,.ats__main,.iprep__levels,.prep-workspace__bar')).every(element => element.scrollWidth <= element.clientWidth + 1)),true);
+      await page.screenshot({path:join(tmpdir(),'rk-prep-workspace-setup-'+width+'.png')});
+      await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+      if (width > 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+      assert.equal(await page.locator('[data-iprep-hist]').isVisible(),true);
+      if (width <= 800) {
+        assert.equal(await page.locator('[data-iprep-run]').isVisible(),false);
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('[data-iprep-hist]').isVisible(),false);
+        assert.equal(await page.getByRole('button',{name:'Saved sets',exact:true}).evaluate(element=>element===document.activeElement),true);
+      }
+      await page.getByRole('button',{name:'Back to Prepare',exact:true}).click();
+      await page.waitForFunction(() => document.activeElement?.matches('[data-act="prep-open"][data-tool="iprep"]'));
+    }
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-lvl="vp"]').click();
+    assert.equal(await page.locator('[data-iprep-lvl][aria-pressed="true"]').getAttribute('data-iprep-lvl'),'vp');
+    await page.locator('[data-iprep-proj][value="0"]').check();
+    await page.locator('#iprepCount').selectOption('14');
+    await page.locator('#iprepJd').fill('Executive design role: evaluate investment and risk.');
+    await page.locator('[data-iprep-run]').click();
+    await page.locator('.iprep__q').first().waitFor();
+    const first = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+    assert.equal(first.payload.level,'vp');
+    assert.equal(first.meta.level,'VP / Executive');
+    assert.equal(first.payload.source.projects.length,1);
+    const request = await page.evaluate(() => window.preparationCalls[0]);
+    assert.match(request.system,/VP \/ EXECUTIVE/); assert.match(request.user,/Generate exactly 14 questions/);
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    await page.locator('[data-practice-answer]').fill('A saved executive practice response without an invented outcome.');
+    await page.locator('[data-iprep-new]').click();
+    await page.locator('[data-iprep-lvl="senior"]').click();
+    await page.locator('[data-iprep-run]').click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.length === 2);
+    await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    await page.locator('[data-iprep-hist-open="'+first.id+'"]').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).evaluate(element=>element===document.activeElement),true);
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    assert.match(await page.locator('[data-practice-answer]').inputValue(),/saved executive practice/);
+    await page.getByRole('button',{name:'Back to Prepare',exact:true}).click();
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),before);
+    await page.reload();
+    await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio());
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    await page.screenshot({path:join(tmpdir(),'rk-prep-workspace-history-320.png')});
+    await page.locator('[data-iprep-hist-open="'+first.id+'"]').focus();
+    await page.keyboard.press('Space');
+    await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+    assert.match(await page.locator('[data-practice-answer]').inputValue(),/saved executive practice/);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test("Prepare Interview quality keeps complete evidence and rejects bad sets without changing saved work", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+  const errors = []; page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await installPrepareReplies(page);
+    await openIntegratedFixture(page,[
+      {type:'text',body:'Earlier evidence. '.repeat(700)},
+      {type:'rows',items:[{cells:[{heading:'Reported design',body:'LATE_CELL_SEVEN_TO_FOUR'}]}]},
+      {type:'text',body:'LATE_RESULTS_PENDING'},
+      {type:'text',locked:true,body:'EXCLUDED_LOCKED_SOURCE'}
+    ]);
+    await page.evaluate(() => localStorage.setItem('rk:prep:brief',JSON.stringify({id:'quality-brief',projectMode:'selected',projectIds:['integrated-case'],includePrivate:false,level:'staff',jd:'BRIEF_ROLE_DATA'})));
+    const before = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    for (const useBrief of [false,true]) {
+      if (useBrief) { await page.locator('[data-iprep-new]').click(); await page.getByRole('button',{name:'Use brief',exact:true}).click(); }
+      else await page.locator('[data-iprep-proj][value="0"]').check();
+      await page.locator('#iprepCount').selectOption('6');
+      await page.locator('[data-iprep-run]').click();
+      await page.locator('.iprep__q').first().waitFor();
+      assert.equal(await page.locator('.iprep__q').count(),6);
+      const saved = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
+      assert.ok(saved.payload.source.text.length > 9000);
+      for (const marker of ['LATE_CELL_SEVEN_TO_FOUR','LATE_RESULTS_PENDING']) assert.ok(saved.payload.source.text.includes(marker));
+      assert.doesNotMatch(saved.payload.source.text,/EXCLUDED_LOCKED_SOURCE|Source excerpt/);
+      assert.deepEqual(saved.payload.source.projects.map(project=>project.id),['integrated-case']);
+      const request = await page.evaluate(()=>window.preparationCalls.at(-1));
+      assert.match(request.user,/LATE_RESULTS_PENDING/);
+      assert.match(request.system,/Target seniority and listening audience are separate/);
+      await page.locator('[data-iprep-ans="0"]').click();
+      await page.locator('.iprep__a strong').waitFor();
+      const answer = await page.evaluate(()=>window.preparationCalls.at(-1));
+      assert.match(answer.user,/LATE_CELL_SEVEN_TO_FOUR/);
+      assert.match(answer.system,/No bracketed placeholders/);
+    }
+    await page.locator('[data-iprep-new]').click();
+    const history = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
+    for (const invalid of ['count','duplicate','empty']) {
+      await page.evaluate(kind=>{ window.interviewReply = {questions:Array.from({length:kind === 'count' ? 5 : 6},(_,index)=>({q:kind === 'empty' && index === 0 ? ' ' : kind === 'duplicate' ? 'Same question?' : 'Question '+index+'?'}))}; },invalid);
+      const calls = await page.evaluate(()=>window.preparationCalls.length);
+      await page.locator('[data-iprep-run]').click();
+      await page.waitForFunction(()=>document.querySelector('.iprep-modal .pass__err')?.textContent.includes('No new set was saved'));
+      assert.equal(await page.evaluate(()=>window.preparationCalls.length),calls+1);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),history);
+    }
+    await page.locator('.iprep-modal [data-cancel]').click();
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
+    await page.evaluate(()=>{ window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'Oversized evidence. '.repeat(7000)}]); delete window.interviewReply; });
+    const oversizedDraft = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    const calls = await page.evaluate(()=>window.preparationCalls.length);
+    await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-iprep-proj][value="0"]').check();
+    await page.locator('[data-iprep-run]').click();
+    await page.waitForFunction(()=>document.querySelector('.iprep-modal .pass__err')?.textContent.includes('nothing was truncated or sent'));
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),calls);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),history);
+    await page.locator('.iprep-modal [data-cancel]').click();
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),oversizedDraft);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test("Prepare Interview long sets use one reading scroller with persistent navigation", {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
+  try {
+    for (const width of [1440,800,390,320]) {
+      const page = await browser.newPage({viewport:{width,height:844},reducedMotion:width > 800 ? 'no-preference' : 'reduce'});
+      const errors = []; page.on('pageerror', error => errors.push(error.message));
+      await installPrepareReplies(page);
+      await page.addInitScript(() => {
+        const questions = Array.from({length:14},(_,index) => ({q:'Question '+(index+1)+': What informed the onboarding decision, and what would change your approach?',category:'Decisions',why:'Separate a proposed design from measured outcomes.',answer:'<p>I proposed moving optional invitations after account setup while retaining required verification. The concept reduced seven steps to four. Testing is pending, so this is not a measured conversion gain.</p>'.repeat(3)}));
+        localStorage.setItem('rk:prep:hist',JSON.stringify({iprep:[{id:'reading-set',tool:'iprep',title:'Fictional onboarding',at:1,payload:{level:'staff',fromAi:true,questions}}]}));
+      });
+      await openIntegratedFixture(page);
+      const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+      if (width <= 800) await page.locator('[data-iprep-saved]').click();
+      await page.locator('[data-iprep-hist-open="reading-set"]').click();
+      const scroller = page.locator(width > 800 ? '.prep-workspace .ats__main' : '.prep-workspace .iprep__cols');
+      const list = page.locator('.iprep__list');
+      assert.equal(await list.evaluate(element => getComputedStyle(element).maxHeight),'none');
+      assert.equal(await list.evaluate(element => element.scrollHeight <= element.clientHeight + 1),true);
+      assert.ok(await scroller.evaluate(element => element.scrollHeight > element.clientHeight * 2));
+      const card = await page.locator('.iprep__card').first().boundingBox();
+      assert.ok(card.width <= 720.01 && card.width >= Math.min(680,width-32),String(card.width));
+      const navigation = ['.prep-workspace__bar','.iprep__foot'];
+      const initialBounds = await Promise.all(navigation.map(selector => page.locator(selector).boundingBox()));
+      await page.locator('.iprep__q').first().hover();
+      await page.mouse.wheel(0,650);
+      await page.waitForFunction(selector => document.querySelector(selector).scrollTop > 200,width > 800 ? '.prep-workspace .ats__main' : '.prep-workspace .iprep__cols');
+      assert.equal(await list.evaluate(element => element.scrollTop),0);
+      assert.deepEqual(await Promise.all(navigation.map(selector => page.locator(selector).boundingBox())),initialBounds);
+      const tabs = await page.locator('.prep-practice-modes').boundingBox();
+      assert.ok(Math.abs(tabs.y - initialBounds[0].y - initialBounds[0].height) <= 1,JSON.stringify(tabs));
+      await page.screenshot({path:join(tmpdir(),'rk-prep-reading-'+width+'.png')});
+      await page.locator('.iprep__card').last().scrollIntoViewIfNeeded();
+      const last = await page.locator('.iprep__card').last().boundingBox();
+      assert.ok(last.y + last.height <= initialBounds[1].y + 1);
+      await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+      await page.locator('[data-practice-answer]').fill('My response remains intact through view changes.');
+      assert.ok((await page.locator('.prep-practice').boundingBox()).width <= 720.01);
+      await page.getByRole('tab',{name:'Questions',exact:true}).click();
+      assert.equal(await page.locator('.iprep__card').count(),14);
+      await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
+      assert.equal(await page.locator('[data-practice-answer]').inputValue(),'My response remains intact through view changes.');
+      await page.locator('.iprep-modal [data-cancel]').click();
+      assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),before);
+      assert.deepEqual(errors,[]);
+      await page.close();
+    }
   } finally { await browser.close(); }
 });
 
@@ -2395,13 +2595,13 @@ test("Prepare storage failures keep generated results in memory until retry succ
     await page.locator('.adm__tab[data-tab="ai"]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     await page.locator('[data-iprep-run]').click();
-    await page.locator('.iprep__q').waitFor();
+    await page.locator('.iprep__q').first().waitFor();
     assert.match(await page.locator('[data-prep-storage]:visible').innerText(), /Not saved on this device/);
     assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), null);
     await page.locator('.iprep-modal [data-cancel]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     await page.locator('[data-iprep-hist-open]').first().click();
-    assert.match(await page.locator('.iprep__q').innerText(), /Which decision/);
+    assert.match(await page.locator('.iprep__q').first().innerText(), /Which decision/);
     await page.evaluate(() => { window.prepStorageBlocked = false; });
     await page.getByRole('button',{name:'Retry save and sync',exact:true}).click();
     await page.locator('[data-prep-storage]').waitFor({state:'hidden'});
@@ -2795,7 +2995,7 @@ test("Prepare restored interviews and stories keep their original evidence and r
     await page.locator('[data-iprep-proj][value="1"]').check();
     await page.locator('#iprepJd').fill('ORIGINAL_TARGET_ROLE');
     await page.locator('[data-iprep-run]').click();
-    await page.locator('.iprep__q').waitFor();
+    await page.locator('.iprep__q').first().waitFor();
     const interview = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
     assert.deepEqual(interview.payload.source.projects.map(project => project.id), ['empty-case']);
     assert.match(interview.payload.source.text, /ORIGINAL_PROJECT_EVIDENCE/);
@@ -3000,7 +3200,15 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
     for (const [action, selector] of [['fbrev','.fbrev-modal'],['iprep','.iprep-modal'],['story','.story-modal']]) {
       await page.locator('[data-act="case-ai-prepare"][data-prepare="'+action+'"]').click();
       await page.locator(selector).waitFor();
-      if (action !== 'fbrev') assert.match(await page.locator(selector+' .pass__title').innerText(), /Integrated project/);
+      if (action === 'iprep') {
+        assert.equal(await page.locator(selector+' .pass__title').innerText(),'Interview prep');
+        const project = page.locator(selector+' .prep-workspace__project');
+        assert.equal(await project.innerText(),'Integrated project');
+        assert.equal(await project.isVisible(),true);
+        const bounds = await project.boundingBox();
+        assert.ok(bounds.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= width);
+        assert.equal(await page.getByRole('button',{name:'Back to case study',exact:true}).isVisible(),true);
+      } else if (action === 'story') assert.match(await page.locator(selector+' .pass__title').innerText(), /Integrated project/);
       await page.locator(selector+' [data-cancel]').click();
       await page.locator(selector).waitFor({state:'detached'});
     }

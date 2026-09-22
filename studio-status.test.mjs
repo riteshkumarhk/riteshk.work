@@ -13,6 +13,123 @@ import { createRefreshGate } from "./src/js/studio-refresh.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
+function interviewHelpers(data = {}) {
+  const start = source.indexOf('function iprepStrip('), end = source.indexOf('async function iprepResolveJd', start);
+  const briefStart = source.indexOf('function prepBriefEvidence('), briefEnd = source.indexOf('var _prepSaveT', briefStart);
+  return runInNewContext(`(() => { ${source.slice(start,end)} ${source.slice(briefStart,briefEnd)} return {iprepContext,iprepAiContext,prepBriefEvidence,iprepCheckInput,iprepReadQuestions,iprepSystem,iprepAnsSystem}; })()`, {data,prepareBriefWorks});
+}
+
+test("Interview complete sources retain late caveats and nested cells without changing legacy extraction", () => {
+  const work = {id:'fictional',title:'Onboarding',study:{role:'Led the design',blocks:[
+    {type:'text',body:'Earlier decisions. '.repeat(700)},
+    {type:'rows',items:[{cells:[{heading:'Design change',body:'Reduced seven steps to four.'}]}]},
+    {type:'text',body:'Customer results are still pending.'}
+  ]}};
+  const before = JSON.stringify(work);
+  const {iprepContext,iprepAiContext} = interviewHelpers({work:[work]});
+  for (const text of [iprepContext(work,'study',true),iprepAiContext([work],false,true)]) {
+    assert.ok(text.length > 9000);
+    assert.match(text,/Reduced seven steps to four\./);
+    assert.match(text,/Customer results are still pending\./);
+    assert.match(text,/My role: Led the design/);
+  }
+  assert.equal(iprepContext(work,'study').length,9001);
+  assert.equal(iprepAiContext([work],false).length,9001);
+  assert.equal(JSON.stringify(work),before);
+});
+
+test("Interview complete brief sources retain permitted late evidence without broadening permissions", () => {
+  const work = {id:'fictional',title:'Onboarding',study:{blocks:[
+    {type:'text',body:'Earlier decisions. '.repeat(700)},
+    {type:'text',body:'LATE_PERMITTED_CAVEAT'},
+    {type:'text',locked:true,body:'LOCKED_EVIDENCE'}
+  ]}};
+  const privateWork = {id:'private',hidden:true,study:{blocks:[{type:'text',body:'PRIVATE_EVIDENCE'}]}};
+  const data = {work:[work,privateWork]}, before = JSON.stringify(data);
+  const {prepBriefEvidence} = interviewHelpers(data);
+  const brief = prepareBrief({projectMode:'all',includePrivate:false});
+  const complete = prepBriefEvidence(brief,null,true);
+  assert.match(complete.text,/LATE_PERMITTED_CAVEAT/);
+  assert.doesNotMatch(complete.text,/LOCKED_EVIDENCE|PRIVATE_EVIDENCE|Source excerpt/);
+  assert.deepEqual(Array.from(complete.works,entry=>entry.id),['fictional']);
+  assert.doesNotMatch(prepBriefEvidence(brief).text,/LATE_PERMITTED_CAVEAT/);
+  assert.equal(JSON.stringify(data),before);
+});
+
+test("Interview complete sources exclude unavailable sections, items and cells on direct paths", () => {
+  const work = {id:'fictional',study:{blocks:[
+    {type:'text',body:'Visible evidence'},
+    ...['locked','off','encStub','vaultBlock'].map(flag=>({type:'text',[flag]:true,body:'EXCLUDED_'+flag})),
+    {type:'rows',items:[{locked:true,body:'EXCLUDED_ITEM'},{cells:[{body:'Included cell'},{locked:true,body:'EXCLUDED_CELL'}]}]}
+  ]}};
+  const {iprepContext,iprepAiContext} = interviewHelpers();
+  for (const text of [iprepContext(work,'study',true),iprepAiContext([work],false,true)]) {
+    assert.match(text,/Visible evidence/);
+    assert.match(text,/Included cell/);
+    assert.doesNotMatch(text,/EXCLUDED/);
+  }
+  assert.match(iprepContext(work,'study'),/EXCLUDED_locked/);
+  assert.equal(iprepAiContext([{...work,encWork:true}],false,true),'');
+});
+
+test("Interview quality input limits fail explicitly and prompts preserve attribution and maturity at each level", () => {
+  const {iprepCheckInput,iprepSystem,iprepAnsSystem} = interviewHelpers();
+  assert.doesNotThrow(()=>iprepCheckInput('source'.repeat(19000),'job description'));
+  assert.throws(()=>iprepCheckInput('source'.repeat(20000),'extra'),/nothing was truncated or sent/);
+  assert.throws(()=>iprepCheckInput('  '),/No available case-study text/);
+  const guides = {senior:'concrete design judgment',staff:'system boundaries',leader:'Head/Director',vp:'investment judgment'};
+  for (const [level,guide] of Object.entries(guides)) {
+    for (const prompt of [iprepSystem(level),iprepAnsSystem(level)]) {
+      assert.ok(prompt.includes(guide));
+      assert.doesNotMatch(prompt,/seven-to-four|25M|Delight First/);
+      for (const rule of ['untrusted data','late caveats','explicit candidate contribution','results remain pending','Target seniority and listening audience are separate']) assert.ok(prompt.includes(rule),rule);
+    }
+    assert.match(iprepSystem(level),/how would you/);
+    assert.match(iprepSystem(level),/questions and why/);
+    assert.match(iprepAnsSystem(level),/first sentence/);
+    assert.match(iprepAnsSystem(level),/No bracketed placeholders/);
+    assert.doesNotMatch(iprepAnsSystem(level),/\[add the metric\]/);
+  }
+});
+
+test("Interview revision distinguishes maturity and conditional premises without case-specific fixes", () => {
+  const {iprepSystem,iprepAnsSystem} = interviewHelpers();
+  for (const level of ['senior','staff','leader','vp']) {
+    for (const prompt of [iprepSystem(level),iprepAnsSystem(level)]) {
+      assert.match(prompt,/Status precedence: explicit development/);
+      assert.match(prompt,/Headings such as Impact, Shipping Experience or Production UX are not evidence of release/);
+      assert.match(prompt,/alignment on a broad initiative does not establish endorsement of a particular variant/);
+      assert.match(prompt,/two alternatives do not establish a control arm/);
+      assert.match(prompt,/Collaboration does not imply resistance/);
+      assert.match(prompt,/ENTIRE situation conditional/);
+      assert.match(prompt,/Evidence strength must not increase in paraphrase/);
+      assert.match(prompt,/Preserve a metric definition exactly or omit its definition/);
+      assert.match(prompt,/NOT "I shipped the concept"/);
+      assert.match(prompt,/NOT "Research showed clearer choices were effective"/);
+      assert.doesNotMatch(prompt,/seven-to-four|25M|Delight First|Setup First|Edge|BSoM/);
+    }
+    assert.match(iprepSystem(level),/every past-tense clause in q and why/);
+    assert.match(iprepSystem(level),/false either\/or/);
+    assert.match(iprepAnsSystem(level),/Correct mistaken assumptions conversationally/);
+    assert.match(iprepAnsSystem(level),/Remove unsupported additions even when the same paragraph contains a caveat/);
+    assert.match(iprepAnsSystem(level),/A claimed research finding needs an explicit finding/);
+  }
+});
+
+test("Interview quality rejects incomplete, empty and duplicate questions without repairing model output", () => {
+  const {iprepReadQuestions} = interviewHelpers();
+  for (const count of [6,10,14]) {
+    const questions = Array.from({length:count},(_,index)=>({q:'Decision '+index+'?',category:'Decisions',why:'Reasoning'}));
+    assert.equal(iprepReadQuestions({questions},count).length,count);
+    assert.throws(()=>iprepReadQuestions({questions:questions.slice(1)},count),/instead of/);
+    assert.throws(()=>iprepReadQuestions({questions:questions.map((item,index)=>index ? item : {q:'  '})},count),/empty or duplicate/);
+    questions[1].q = '  DECISION   0! ';
+    assert.throws(()=>iprepReadQuestions({questions},count),/duplicate/);
+  }
+  assert.throws(()=>iprepReadQuestions(null,6),/No new set was saved/);
+  assert.equal(iprepReadQuestions(['A valid legacy-shaped question?'],1)[0].q,'A valid legacy-shaped question?');
+});
+
 function declarations(selector) {
   const result = {};
   styles.walkRules(rule => {
