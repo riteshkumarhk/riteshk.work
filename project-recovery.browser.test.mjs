@@ -580,6 +580,7 @@ test('Workflow Studio edits branches with history, Cancel, Apply and reload whil
     assert.equal(await dialog.locator('[data-id="step-1-1"] .wf-title').innerText(),'Start');
     await dialog.getByRole('button',{name:'Redo',exact:true}).click();
     await dialog.locator('.wf-inspector .wf-row').first().click();
+    await dialog.locator('[data-id="step-1-1"] [data-handleid="r"]').hover();
     const handle=await dialog.locator('[data-id="step-1-1"] [data-handleid="r"]').boundingBox(),canvas=await dialog.locator('.wf-diagram').boundingBox();
     await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(canvas.x+canvas.width*.7,canvas.y+canvas.height*.85,{steps:12});await page.mouse.up();
     await page.waitForFunction(()=>document.querySelectorAll('.wf-editor-dialog .react-flow__node').length===5);
@@ -1595,6 +1596,7 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
     await page.setViewportSize({width:1440,height:1000});
     await page.keyboard.press('Tab');
     await first.focus();
+    await link.waitFor({state:'visible'});
     await page.keyboard.press('Tab');
     assert.equal(await link.evaluate(element=>document.activeElement===element),true);
     assert.match(await link.evaluate(element=>getComputedStyle(element,'::before').backgroundImage),/conic-gradient/);

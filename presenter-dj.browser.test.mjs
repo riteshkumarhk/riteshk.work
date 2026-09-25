@@ -1090,7 +1090,7 @@ test('video navigator previews decode actual frames and compact notes and embed 
     for(const width of [390,320]){
       await page.setViewportSize({width,height:844});
       const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
-      for(const control of await page.locator('.merge-rich-toolbar button').all()){const box=await control.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`notes control at ${width}`);}
+      for(const control of await page.locator('.merge-rich-toolbar button').all()){await control.waitFor({state:'visible'});await control.hover();const box=await control.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`notes control at ${width}`);}
       await page.getByRole('button',{name:'Media',exact:true}).click();await page.getByRole('button',{name:'Embed link',exact:true}).click();
       const field=page.getByRole('textbox',{name:'Embed media link or code',exact:true});await field.fill('https://example.com/embed');
       const box=await page.locator('.merge-embed-composer').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`embed control at ${width}`);
