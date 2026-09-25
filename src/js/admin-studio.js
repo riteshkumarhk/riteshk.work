@@ -18264,7 +18264,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const nextSource = prepSourceSnapshot(ctx, jd, requestWorks, linkedBrief());
         signal.throwIfAborted();
         if (!reconnectEntry) {
-          var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { task: "analysis", json: true, maxTokens: Math.max(2600, n * 320), reasoningTokens: 4096, agentReasoningTokens: 4096, temperature: 0.75, signal }));
+          var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { task: "analysis", json: true, maxTokens: Math.max(2600, n * 320), reasoningTokens: 4096, agentReasoningTokens: 4096, maxEffort: "low", temperature: 0.75, signal }));
           signal.throwIfAborted();
           questions = iprepReadQuestions(obj, n);
           practice = null;
@@ -18289,7 +18289,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved set before generating answers.');
         iprepCheckInput(sourceSnapshot.text, sourceSnapshot.jd);
-        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, sourceSnapshot.text, sourceSnapshot.jd), { task: "analysis", maxTokens: 900, reasoningTokens: 4096, agentReasoningTokens: 4096, temperature: 0.6, signal });
+        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, sourceSnapshot.text, sourceSnapshot.jd), { task: "analysis", maxTokens: 900, reasoningTokens: 4096, agentReasoningTokens: 4096, maxEffort: "low", temperature: 0.6, signal });
         signal.throwIfAborted();
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;

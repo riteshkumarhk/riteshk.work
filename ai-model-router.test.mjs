@@ -624,6 +624,55 @@ test("the agent carries opt-in reasoning headroom through coordination delegatio
   }
 });
 
+test("the agent enforces an opt-in effort ceiling across delegates and drafts without changing other callers", async () => {
+  const adaptive = model('adaptive',{reasoning:true,pricing:{input:2,output:10},capabilities:{effort:{supported:true,low:{supported:true},medium:{supported:true},high:{supported:true}}}});
+  for (const maxEffort of [undefined,'low']) {
+    const {orchestrator,config,store} = orchestratorFixture([adaptive]);
+    const agent = createAiTaskAgent({router:orchestrator,now:()=>now});
+    const roles = [];
+    let planning = 0;
+    const result = await agent.run([config],{task:'analysis',system:'Write ten source-led questions',user:'Complete evidence',options:{maxTokens:3200,reasoningTokens:4096,agentReasoningTokens:4096,maxEffort}},async(selected,modelId,step)=>{
+      roles.push(step.role);
+      if (step.role === 'coordinator') {
+        const input = JSON.parse(step.user), available = input.catalogue[0];
+        assert.deepEqual(available.effortLevels,maxEffort ? ['low'] : ['low','medium','high']);
+        const draft = step.options.responseSchema.properties.decision.anyOf.find(branch=>branch.properties.action.enum[0]==='draft');
+        if (draft && maxEffort) assert.deepEqual(draft.properties.effort.anyOf[0].enum,['low']);
+        planning++;
+        const decision = planning === 1 ? {action:'delegate',modelRef:available.ref,task:'analysis',purpose:'evidence',effort:'high',instruction:'Check the source',inputs:[],summary:'Checking'} : planning === 2 ? {action:'draft',modelRef:available.ref,task:'analysis',effort:'high',instruction:'',inputs:[],summary:'Drafting'} : {action:'finish',summary:'Ready'};
+        return {ok:true,text:JSON.stringify({decision})};
+      }
+      assert.equal(step.options.effort,maxEffort || 'high');
+      assert.equal(selected.routingMaxTokens,step.role === 'draft' ? 7296 : 8192);
+      return {ok:true,text:step.role === 'draft' ? 'Complete questions' : 'Evidence checked'};
+    });
+    assert.deepEqual(roles,['coordinator','delegate','coordinator','draft','coordinator']);
+    assert.equal(result.routing.effort,maxEffort || 'high');
+    const completed = (await store.read()).observations.filter(item=>item.status==='success');
+    if (maxEffort) assert.ok(completed.every(item=>item.effort==='low'));
+  }
+});
+
+test("effort ceilings reject unsupported controls before calls and retain models without effort controls", async () => {
+  const highOnly = model('high-only',{capabilities:{effort:{supported:true,high:{supported:true}}}});
+  const {orchestrator,config} = orchestratorFixture([highOnly]);
+  const agent = createAiTaskAgent({router:orchestrator,now:()=>now});
+  let calls = 0;
+  for (const maxEffort of ['low','unsupported']) {
+    await assert.rejects(agent.run([config],{task:'analysis',system:'Questions',user:'Source',options:{maxEffort}},async()=>{calls++;return {ok:true,text:'Unexpected call'};}),/effort ceiling/);
+  }
+  assert.equal(calls,0);
+  const plain = orchestratorFixture([model('no-effort-control')]);
+  const result = await createAiTaskAgent({router:plain.orchestrator,now:()=>now}).run([plain.config],{task:'analysis',system:'Questions',user:'Source',options:{maxEffort:'low'}},async(selected,modelId,step)=>{
+    assert.equal(step.options.effort,undefined);
+    if (step.role !== 'coordinator') return {ok:true,text:'Complete questions'};
+    const input = JSON.parse(step.user);
+    assert.deepEqual(input.catalogue[0].effortLevels,[]);
+    return {ok:true,text:JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Ready'} : {action:'draft',modelRef:input.catalogue[0].ref,task:'analysis',effort:null,instruction:'',inputs:[],summary:'Writing'}})};
+  });
+  assert.equal(result.text,'Complete questions');
+});
+
 test("the agent chooses supported effort using real token-exhaustion facts instead of an unconfigured default", async () => {
   const adaptive = model("adaptive", { pricing: { input: 2, output: 10 }, capabilities: { effort: { supported: true, low: { supported: true }, medium: { supported: true }, high: { supported: true } } } });
   const { orchestrator, config, store } = orchestratorFixture([adaptive]);

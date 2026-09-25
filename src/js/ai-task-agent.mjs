@@ -11,6 +11,18 @@ const imageResult = item => item?.task === "image" && item.valid && typeof item.
 const targetOf = choice => ({ provider: choice.model.provider, modelId: choice.model.id, scope: choice.scope });
 const modelKey = choice => JSON.stringify([choice.scope, choice.model.provider, choice.model.id]);
 const reviewOutputBytes = 16000;
+const effortLevels = ["low", "medium", "high", "xhigh", "max"];
+
+function allowedEffortLevels(model, maximum) {
+  return (model.effortLevels || []).filter(level => maximum == null || effortLevels.indexOf(level) <= effortLevels.indexOf(maximum));
+}
+
+function boundedEffort(model, requested, maximum) {
+  if (maximum == null) return requested;
+  const allowed = allowedEffortLevels(model, maximum);
+  const requestedIndex = effortLevels.indexOf(requested ?? maximum);
+  return allowed.findLast(level => effortLevels.indexOf(level) <= requestedIndex) || allowed[0];
+}
 
 function workExcerpt(value, bytes) {
   const text = String(value || ""), encoder = new TextEncoder();
@@ -32,14 +44,14 @@ export function agentRequestOptions(system, user, options = {}) {
     structured: options.json ? "preferred" : false, requirements: JSON.stringify([!!images, !!options.json]) };
 }
 
-export function agentActionSchema(models, workIds, draftRefs = [...models.keys()], revision = null) {
+export function agentActionSchema(models, workIds, draftRefs = [...models.keys()], revision = null, maxEffort = null) {
   const references = [...models.keys()], completed = [...workIds];
   if (!references.length) throw new Error("No model references are available for coordination");
   const summary = { type: "string", description: "One short public progress sentence, under 160 characters. Do not include reasoning or source content." };
   const invocation = {
     modelRef: { type: "string", enum: references },
     task: { type: "string", enum: Object.keys(AI_TASKS) },
-    effort: { anyOf: [{ type: "string", enum: ["low", "medium", "high", "xhigh", "max"] }, { type: "null" }], description: "Choose an explicitly advertised effort level sufficient for this work. High reasoning can consume the output budget before the deliverable is finished; use recent failure facts to avoid repeating that. Use null only when the selected model has no advertised effort control." },
+    effort: { anyOf: [{ type: "string", enum: effortLevels.filter(level => maxEffort == null || effortLevels.indexOf(level) <= effortLevels.indexOf(maxEffort)) }, { type: "null" }], description: "Choose an explicitly advertised effort level sufficient for this work. High reasoning can consume the output budget before the deliverable is finished; use recent failure facts to avoid repeating that. Use null only when the selected model has no advertised effort control." },
     instruction: { type: "string", description: "A short work order under 600 characters, not the deliverable. The full original job is supplied automatically. Use an empty string when no extra guidance is needed." },
     inputs: { type: "array", items: { type: "string", ...(completed.length ? { enum: completed } : {}) }, description: completed.length ? "Up to five existing work IDs needed by this action. Use [] when none are needed." : "No prior work exists. Return []." }
   };
@@ -86,6 +98,7 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
   return {
     async run(configs, request, invoke) {
       const options = request.options || {}, jobId = randomId(), started = now();
+      if (options.maxEffort != null && !effortLevels.includes(options.maxEffort)) throw new Error("Unsupported task effort ceiling");
       const timeout = AbortSignal.timeout(AI_AGENT_LIMITS.milliseconds);
       const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
       const limits = AI_AGENT_LIMITS, work = [], receipts = new Set();
@@ -107,12 +120,18 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
       }
       async function choices(task, step, allowEmpty = false) {
         const maxCost = await remaining();
-        try { return await router.choices(allowedConfigs, task, { ...agentRequestOptions(step.system, step.user, step.options), signal, maxCost, allowEmpty }); }
+        try {
+          const ranked = await router.choices(allowedConfigs, task, { ...agentRequestOptions(step.system, step.user, step.options), signal, maxCost, allowEmpty });
+          const eligible = ranked.filter(choice => !choice.model.effortLevels?.length || allowedEffortLevels(choice.model, options.maxEffort).length);
+          if (!eligible.length && !allowEmpty) throw new Error("No available model supports this task's effort ceiling. No additional model was called.");
+          return eligible;
+        }
         catch (error) { if (!signal.aborted) error.message = failureMessage(error.message); throw error; }
       }
       async function execute(choice, task, step, validate) {
         if (calls >= limits.calls) throw new Error("The agent reached its call limit. No result was applied.");
         const maxCost = await remaining(), stepNumber = calls + 1;
+        step = { ...step, options: { ...step.options, effort: boundedEffort(choice.model, step.options.effort, options.maxEffort) } };
         return router.run(allowedConfigs, task, { ...agentRequestOptions(step.system, step.user, step.options), signal, maxCost,
           target: targetOf(choice), maxAttempts: 1, validate, agent: { jobId, role: step.role, step: stepNumber, operation: step.operation },
           onRoute: route => {
@@ -148,7 +167,7 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
         const evidence = finalChoices.find(candidate => modelKey(candidate) === modelKey(choice)) || choice;
         return { ref, provider: choice.model.provider, id: choice.model.id, name: choice.model.name,
           input: choice.model.input, output: choice.model.output, imageInput: choice.model.imageInput, reasoning: choice.model.reasoning,
-          effortLevels: choice.model.effortLevels || [],
+          effortLevels: allowedEffortLevels(choice.model, options.maxEffort),
           inputLimit: choice.model.maxInputTokens, contextLimit: choice.model.contextWindow, outputLimit: choice.model.maxOutputTokens,
           draftEligible: finalChoices.some(candidate => modelKey(candidate) === modelKey(choice)),
           estimatedDraftCostUSD: finalChoices.find(candidate => modelKey(candidate) === modelKey(choice))?.estimatedCost ?? null,
@@ -176,7 +195,7 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
           work: work.map(item => ({ id: item.id, kind: item.kind, task: item.task, valid: item.valid, failure: item.failure, issues: item.issues,
             output: imageResult(item) ? { image: true, availableToVision: true } : workExcerpt(item.text, ["draft", "revise"].includes(item.kind) ? reviewOutputBytes : 8000) })), candidate: candidate ? { id: candidate.id, valid: true } : null };
         const coordinationStep = () => ({ ...coordinatorStep, user: JSON.stringify(input), options: { ...coordinatorStep.options,
-          responseSchema: agentActionSchema(models, new Set(work.map(item => item.id)), input.draftModels, input.revision) } });
+          responseSchema: agentActionSchema(models, new Set(work.map(item => item.id)), input.draftModels, input.revision, options.maxEffort) } });
         let step = coordinationStep();
         const candidates = await choices("analysis", step);
         const selected = candidates.find(choice => modelKey(choice) === modelKey(coordinator)) || candidates[0];

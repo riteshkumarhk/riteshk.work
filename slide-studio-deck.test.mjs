@@ -2176,15 +2176,16 @@ async function installPrepareReplies(page) {
     window.preparationPlanningCalls = [];
     window.fetch = async (resource, options = {}) => {
       const url = new URL(typeof resource === 'string' ? resource : resource.url, location.href);
+      if (url.hostname === 'api.anthropic.com' && url.pathname.endsWith('/models') && window.interviewEffortCeilingTest) return Response.json({data:[{id:'claude-prepare-effort-fixture',input_modalities:['text'],output_modalities:['text'],max_input_tokens:200000,max_tokens:16000,pricing:{input:2,output:10},capabilities:{thinking:{supported:true},structured_outputs:{supported:true},effort:{supported:true,low:{supported:true},high:{supported:true}}}}],has_more:false});
       if (url.hostname !== 'api.anthropic.com' || !url.pathname.endsWith('/messages')) return original(resource, options);
       const request = JSON.parse(options.body), system = request.system;
       let text;
       if (system.startsWith("You are Studio's outcome coordinator.")) {
-        window.preparationPlanningCalls.push({maxTokens:request.max_tokens});
+        window.preparationPlanningCalls.push({maxTokens:request.max_tokens,effort:request.output_config?.effort});
         const input = JSON.parse(request.messages[0].content);
-        text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',instruction:'',inputs:[],summary:'Use the selected evidence'}});
+        text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',effort:window.interviewEffortCeilingTest ? 'high' : undefined,instruction:'',inputs:[],summary:'Use the selected evidence'}});
       } else {
-        window.preparationCalls.push({system,user:JSON.stringify(request.messages),maxTokens:request.max_tokens});
+        window.preparationCalls.push({system,user:JSON.stringify(request.messages),maxTokens:request.max_tokens,effort:request.output_config?.effort});
         if (system.includes('{"questions":[{"q":string,"category":string,"why":string}]}') && /Generate exactly \d+ questions/.test(JSON.stringify(request.messages))) {
           if (window.interviewOutputLimit) return Response.json({content:[],stop_reason:'max_tokens',usage:{input_tokens:10,output_tokens:request.max_tokens,output_tokens_details:{thinking_tokens:request.max_tokens}}});
           const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10);
@@ -2564,6 +2565,7 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
   const errors = []; page.on('pageerror',error=>errors.push(error.message));
   try {
     await installPrepareReplies(page);
+    await page.addInitScript(()=>{window.interviewEffortCeilingTest=true;});
     await openIntegratedFixture(page,[
       {type:'text',body:'Earlier evidence. '.repeat(700)},
       {type:'rows',items:[{cells:[{heading:'Reported design',body:'LATE_CELL_SEVEN_TO_FOUR'}]}]},
@@ -2590,13 +2592,15 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       assert.match(request.user,/LATE_RESULTS_PENDING/);
       assert.match(request.system,/Target seniority and listening audience are separate/);
       assert.equal(request.maxTokens,2600+4096);
-      assert.ok(await page.evaluate(()=>window.preparationPlanningCalls.every(call=>call.maxTokens === 2048+4096)));
+      assert.equal(request.effort,'low');
+      assert.ok(await page.evaluate(()=>window.preparationPlanningCalls.every(call=>call.maxTokens === 2048+4096 && call.effort === 'low')));
       await page.locator('[data-iprep-ans="0"]').click();
       await page.locator('.iprep__a strong').waitFor();
       const answer = await page.evaluate(()=>window.preparationCalls.at(-1));
       assert.match(answer.user,/LATE_CELL_SEVEN_TO_FOUR/);
       assert.match(answer.system,/No bracketed placeholders/);
       assert.equal(answer.maxTokens,900+4096);
+      assert.equal(answer.effort,'low');
     }
     for (const count of [10,14]) {
       await page.locator('[data-iprep-new]').click();
@@ -2604,6 +2608,7 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       await page.locator('[data-iprep-run]').click();
       await page.waitForFunction(expected=>document.querySelectorAll('.iprep__q').length === expected,count);
       assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).maxTokens),count*320+4096);
+      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).effort),'low');
     }
     await page.locator('[data-iprep-new]').click();
     await page.locator('#iprepCount').selectOption('6');
