@@ -2187,8 +2187,9 @@ async function installPrepareReplies(page) {
           const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10);
           text = JSON.stringify(window.interviewReply || {questions:Array.from({length:count},(_,index)=>({q:index ? 'What evidence would you seek for alternative '+index+'?' : 'Which decision changed the outcome?',category:'Decisions',why:'Explain the evidence'}))});
         }
-        else if (system.includes('propose a few DISTINCT')) text = JSON.stringify({themes:[{title:'Evidence led the decision',hook:'A grounded angle',beats:'Context decision outcome'}]});
-        else if (system.includes('Script EXACTLY')) text = JSON.stringify({spine:'Evidence led the decision',opener:'Original source',beats:[{label:'Decision',mins:'5',say:'Explain the evidence',must:'Outcome'}],close:'Lessons',skip:'Details',tip:'Keep it clear'});
+        else if (system.includes('{"themes":[{"title":string,"hook":string,"why":string,"beats":string}]}')) text = JSON.stringify(window.storyThemesReply || {themes:Array.from({length:4},(_,index)=>({title:'Evidence led decision '+index,hook:'A grounded angle '+index,beats:'Context decision outcome',why:'Shows supported reasoning'}))});
+        else if (system.includes('Script EXACTLY')) { if (window.deferStoryReply) { await new Promise(resolve => { window.releaseStoryReply = resolve; }); window.storyReplyReturned = true; } text = JSON.stringify(window.storyScriptReply || {spine:'Evidence led the decision',opener:'Original source',beats:[{label:'Decision',mins:'5',say:'Explain the evidence',must:'Outcome'}],close:'Lessons',skip:'Details',tip:'Keep it clear'}); }
+        else if (system.includes('cross-functional partners in a design-portfolio interview')) { const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10); text = JSON.stringify({questions:Array.from({length:count},(_,index)=>({q:'What informed decision '+index+'?',role:'Design',why:'Explain the reasoning'}))}); }
         else if (system.includes('Invent ONE crisp')) text = JSON.stringify({prompt:'A new synthetic exercise',context:'Explicit constraints',watchfor:['Clarity']});
         else if (system.includes('GAME PLAN')) text = JSON.stringify({clarifiers:['Who needs this?'],phases:[{label:'Frame',mins:'5',move:'Name the goal'}]});
         else if (system.includes('candidate has drafted')) text = JSON.stringify({verdict:'SAVED_COACHING_FEEDBACK',strong:['A clear user'],gaps:['Name the outcome']});
@@ -2212,6 +2213,86 @@ async function installPrepareReplies(page) {
     };
   });
 }
+
+for (const width of [1440,390,320]) test('Prepare Storyteller retains angle drafts, edits, versions and recovery at '+width+'px', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:width === 1440 ? 'no-preference' : 'reduce'});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
+    await page.setViewportSize({width,height:width === 320 ? 568 : 900});
+    await page.locator('[data-story-tone="leader"]').click(); await page.locator('[data-story-audience]').selectOption('partners');
+    await page.screenshot({path:join(tmpdir(),'rk-story-setup-'+width+'.png')});
+    await page.locator('[data-story-run]').click(); await page.locator('[data-story-tell="0"]').waitFor();
+    assert.equal(await page.locator('[data-story-tell]').count(),4);
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),1);
+    await page.locator('[data-story-tell="0"]').click(); await page.locator('[data-story-copy]').waitFor();
+    await page.locator('[data-story-edit]').click(); await page.locator('[data-story-field="opener"]').fill('MY_EDITED_OPENING'); await page.locator('[data-story-edit-done]').click();
+    await page.locator('[data-story-view="questions"]').click(); await page.locator('[data-story-qgen]').click(); await page.locator('[data-story-qans="0"]').waitFor();
+    assert.equal(await page.locator('.story__q').count(),10);
+    await page.locator('[data-story-qans="0"]').click(); await page.locator('[data-story-qedit="0"]').click(); await page.locator('[data-story-answer="0"]').fill('MY_EDITED_ANSWER'); await page.locator('[data-story-answer-done]').click();
+    await page.locator('[data-story-l2back]').click(); await page.locator('[data-story-tell="1"]').click(); await page.locator('[data-story-copy]').waitFor();
+    await page.locator('[data-story-view="questions"]').click(); await page.locator('.story__qrole').selectOption('design'); await page.locator('[data-story-qgen]').click(); await page.locator('[data-story-qans="0"]').waitFor();
+    assert.equal(await page.locator('.story__q').count(),5);
+    const count = await page.evaluate(() => window.preparationCalls.length);
+    await page.locator('[data-story-l2back]').click(); await page.locator('[data-story-tell="0"]').click();
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),count);
+    assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    await page.locator('[data-story-view="questions"]').click(); assert.match(await page.locator('.story__q-a').first().innerText(),/MY_EDITED_ANSWER/);
+    await page.screenshot({path:join(tmpdir(),'rk-story-questions-'+width+'.png')});
+    await page.locator('[data-story-view="script"]').click();
+    await page.locator('[data-story-refinement] summary').click(); await page.locator('[data-story-request]').fill('Make the opening direct.'); await page.locator('[data-story-refine]').click(); await page.locator('[data-story-apply]').waitFor();
+    assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    await page.locator('[data-story-apply]').click(); assert.doesNotMatch(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    await page.locator('[data-story-versions] summary').click(); await page.locator('[data-story-restore]').first().click(); assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    const download = page.waitForEvent('download'); await page.locator('[data-story-download]').click(); assert.equal((await download).suggestedFilename(),'story-outline.txt');
+    await page.screenshot({path:join(tmpdir(),'rk-story-script-'+width+'.png')});
+    const geometry = await page.locator('.story-modal > .pass__box').evaluate(element => ({width:element.getBoundingClientRect().width,height:element.getBoundingClientRect().height,viewport:innerHeight,overflow:element.scrollWidth>element.clientWidth+1,undefinedText:element.textContent.includes('undefined')}));
+    assert.equal(geometry.width,width); assert.equal(geometry.height,geometry.viewport); assert.equal(geometry.overflow,false); assert.equal(geometry.undefinedText,false);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story[0]);
+    assert.equal(saved.payload.tone,'leader'); assert.equal(saved.payload.audience,'partners'); assert.equal(Object.keys(saved.payload.drafts).length,2);
+    assert.equal(saved.payload.drafts[0].script.opener,'MY_EDITED_OPENING'); assert.match(saved.payload.drafts[0].questions[0].answer,/MY_EDITED_ANSWER/);
+    await page.locator('.story-modal [data-cancel]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
+    if (width < 900) await page.locator('.story__history > summary').click();
+    await page.locator('[data-story-hist-open="'+saved.id+'"]').press('Enter'); assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    page.once('dialog',dialog=>dialog.accept()); await page.locator('[data-story-hist-del="'+saved.id+'"]').click();
+    assert.equal(await page.locator('[data-story-hist-open="'+saved.id+'"]').count(),0);
+    await page.reload(); await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
+    await page.evaluate(() => window.__rkDevStudio()); await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
+    await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
+    if (width < 900) await page.locator('.story__history > summary').click();
+    await page.locator('[data-story-hist] details > summary').click(); await page.locator('[data-story-recover="'+saved.id+'"]').click();
+    const recovered = await page.evaluate(id => JSON.parse(localStorage.getItem('rk:prep:hist')).story.find(entry=>entry.id===id),saved.id);
+    assert.deepEqual(recovered.payload,saved.payload); assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),original);
+    await page.locator('[data-story-hist-open="'+saved.id+'"]').press('Enter'); assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    await page.locator('[data-story-view="questions"]').click(); assert.match(await page.locator('.story__q-a').first().innerText(),/MY_EDITED_ANSWER/);
+    await page.locator('[data-story-l2back]').click(); await page.locator('[data-story-tell="1"]').click(); await page.locator('[data-story-view="questions"]').click();
+    assert.equal(await page.locator('.story__qrole').inputValue(),'design'); assert.equal(await page.locator('.story__q').count(),5);
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),0);
+    const fonts = await page.evaluate(async () => { await document.fonts.ready; return Array.from(document.fonts).filter(font=>font.status==='loaded').map(font=>font.family.replaceAll('"','')); });
+    for (const family of ['Hanken Grotesk','Schibsted Grotesk','Martian Mono']) assert.ok(fonts.includes(family),family+' loaded');
+  } finally { await browser.close(); }
+});
+
+test('Prepare Storyteller rejects malformed generations and late replies without replacing saved work', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page); await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
+    await page.locator('[data-story-run]').click(); await page.locator('[data-story-tell="0"]').click(); await page.locator('[data-story-copy]').waitFor();
+    const original = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story[0]);
+    await page.evaluate(() => { window.deferStoryReply = true; }); await page.locator('[data-story-regen]').click(); await page.waitForFunction(() => typeof window.releaseStoryReply === 'function');
+    await page.locator('[data-story-edit]').click(); await page.locator('[data-story-field="opener"]').fill('NEWER_MANUAL_EDIT'); await page.evaluate(() => { window.deferStoryReply = false; window.releaseStoryReply(); }); await page.waitForFunction(() => window.storyReplyReturned && window.__rkAiSession.state().active === 0);
+    await page.locator('[data-story-edit-done]').click(); assert.match(await page.locator('.story__open').innerText(),/NEWER_MANUAL_EDIT/);
+    await page.evaluate(() => { window.storyScriptReply = {opener:'BROKEN'}; }); await page.locator('[data-story-regen]').click(); await page.waitForFunction(() => document.querySelector('.story-modal .pass__err').textContent.includes('incomplete'));
+    assert.match(await page.locator('.story__open').innerText(),/NEWER_MANUAL_EDIT/);
+    await page.locator('[data-story-l2back]').click(); await page.locator('[data-story-back]').click(); await page.evaluate(() => { window.storyThemesReply = {themes:[{title:'BROKEN'}]}; }); await page.locator('[data-story-run]').click(); await page.waitForFunction(() => document.querySelector('.story-modal .pass__err').textContent.includes('four'));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story);
+    assert.equal(saved.length,1); assert.deepEqual(saved[0].payload.source,original.payload.source); assert.equal(saved[0].payload.drafts[0].script.opener,'NEWER_MANUAL_EDIT');
+  } finally { await browser.close(); }
+});
 
 for (const width of [1440,390]) test("Prepare shared brief connects all five tools without replacing their flows at " + width + "px", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
@@ -2278,7 +2359,7 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
         assert.doesNotMatch(saved.payload.source.text,/PRIVATE_PROJECT_EVIDENCE|LOCKED_SECTION_EVIDENCE/);
       } else if (tool === 'story') {
         assert.equal(await modal.locator('[data-story-jd-text]').inputValue(),'SHARED_JOB_REQUIREMENTS');
-        assert.equal(await modal.locator('[data-story-tone].is-on').getAttribute('data-story-tone'),'vp');
+        assert.equal(await modal.locator('[data-story-tone].is-on').getAttribute('data-story-tone'),'leader');
         await modal.locator('[data-story-run]').click(); await modal.locator('[data-story-tell="0"]').waitFor();
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).story[0]);
         assert.equal(saved.payload.source.brief.id,brief.id);
@@ -3348,6 +3429,7 @@ test("Prepare saved answers preserve formatting without executable markup", {tim
     for (const [tool, history, selector] of [['iprep','safe-interview','.iprep__a'],['story','safe-story','.story__q-a']]) {
       await page.locator('[data-act="prep-open"][data-tool="'+tool+'"]').click();
       await page.locator('[data-'+tool+'-hist-open="'+history+'"]').click();
+      if (tool === 'story') await page.locator('[data-story-view="questions"]').click();
       const answer = page.locator(selector).first();
       await answer.waitFor();
       assert.equal(await answer.locator('strong').innerText(), 'Supported answer');

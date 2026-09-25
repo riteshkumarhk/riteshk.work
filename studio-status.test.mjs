@@ -19,6 +19,51 @@ function interviewHelpers(data = {}) {
   return runInNewContext(`(() => { ${source.slice(start,end)} ${source.slice(briefStart,briefEnd)} return {iprepContext,iprepAiContext,prepBriefEvidence,iprepCheckInput,iprepReadQuestions,iprepSystem,iprepAnsSystem}; })()`, {data,prepareBriefWorks});
 }
 
+function storytellerHelpers() {
+  const start = source.indexOf('function iprepStrip('), end = source.indexOf('async function iprepResolveJd',start);
+  const storyStart = source.indexOf('  var STORY_DUR ='), storyEnd = source.indexOf('  function storyRenderThemes(',storyStart);
+  const questionStart = source.indexOf('  var STORY_ROLES ='), questionEnd = source.indexOf('  function storyRenderQuestions(',questionStart);
+  return runInNewContext(`(() => { ${source.slice(start,end)} ${source.slice(storyStart,storyEnd)} ${source.slice(questionStart,questionEnd)} return {storyContext,storyThemesSystem,storyTellSystem,storyQSystem,storyQAnsSystem}; })()`,{data:{},localStorage:{getItem:()=>null}});
+}
+
+test('Storyteller complete sources preserve late evidence and reject protected visuals and oversized inputs', () => {
+  const {storyContext} = storytellerHelpers();
+  const work = {title:'Fixture',study:{blocks:[{type:'text',body:'Earlier detail. '.repeat(850)},{type:'rows',items:[{cells:[{body:'Seven steps became four; customer results are pending.'}]}]},{type:'media',locked:true,caption:'SECRET_VISUAL'},{type:'gallery',items:[{locked:true,caption:'SECRET_ITEM'},{caption:'Permitted visual'}]}]}};
+  const before = JSON.stringify(work), text = storyContext(work);
+  assert.match(text,/Seven steps became four; customer results are pending/);
+  assert.match(text,/Permitted visual/); assert.doesNotMatch(text,/SECRET/);
+  assert.throws(()=>storyContext({...work,locked:true}),/No available/);
+  assert.throws(()=>storyContext(work,'x'.repeat(120000)),/nothing was truncated or sent/);
+  assert.equal(JSON.stringify(work),before);
+});
+
+test('Storyteller separates four target levels and audience without upgrading source claims', () => {
+  const helpers = storytellerHelpers();
+  assert.match(helpers.storyThemesSystem('staff','5 min'),/Maturity applies even to a one-word beat/);
+  assert.match(helpers.storyThemesSystem('staff','5 min'),/descriptive topics already present in the source/);
+  assert.match(helpers.storyThemesSystem('staff','5 min'),/contributing factor into a root cause/);
+  assert.doesNotMatch(helpers.storyThemesSystem('staff','5 min'),/high-impact STORY|metric that redirected the roadmap/);
+  for (const [level,guide] of Object.entries({senior:'concrete design judgment',staff:'system boundaries',leader:'Head/Director',vp:'investment judgment'})) {
+    for (const audience of ['portfolio','design','partners']) {
+      for (const prompt of [helpers.storyThemesSystem(level,'5 min',audience),helpers.storyTellSystem(level,'5 min',5,audience),helpers.storyQSystem(level,'any',10,audience),helpers.storyQAnsSystem(level,'Engineering',audience)]) {
+        assert.ok(prompt.includes(guide)); assert.match(prompt,/Listening audience:/);
+        assert.match(prompt,/Status precedence/); assert.match(prompt,/Evidence strength must not increase/);
+        assert.match(prompt,/explicit candidate contribution/); assert.match(prompt,/Target seniority and listening audience are separate/);
+        assert.doesNotMatch(prompt,/seven-to-four|25M|Delight First|Setup First/);
+      }
+    }
+  }
+});
+
+test('Whiteboard scoring preserves constraint scope and exact candidate evidence IDs', () => {
+  const start = source.indexOf('  function wbScoreSystem()'), end = source.indexOf('  function wbScoreUser(',start);
+  const prompt = runInNewContext(source.slice(start,end)+';wbScoreSystem()');
+  assert.match(prompt,/additional resources does not mean existing resources are absent/);
+  assert.match(prompt,/only credit an acknowledgement actually present/);
+  assert.match(prompt,/Copy evidence IDs exactly from the id field/);
+  assert.match(prompt,/An untested skill is not a weakness/);
+});
+
 test("Interview complete sources retain late caveats and nested cells without changing legacy extraction", () => {
   const work = {id:'fictional',title:'Onboarding',study:{role:'Led the design',blocks:[
     {type:'text',body:'Earlier decisions. '.repeat(700)},

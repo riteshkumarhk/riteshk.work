@@ -17545,6 +17545,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       'Use job requirements for relevance, not as candidate history. Target seniority and listening audience are separate. Executive framing does not manufacture executive responsibility.',
       'State consequential uncertainty naturally. Distinguish source-reported facts, hypotheses and proposed next steps. Citations or confident wording alone do not prove a claim.',
       'Evidence strength must not increase in paraphrase. A hypothesis remains a hypothesis; observations or a competitive review are not research proving a benefit. Preserve a metric definition exactly or omit its definition; do not invent a formula from a list of related factors.',
+      'Do not turn a contributing factor into a root cause, a growth-model change into a metric change, or broad alignment into either endorsement OR rejection of a specific variant. Ask what evidence supports a possibility, not what proved an undocumented conclusion. A caution in why cannot repair a false premise in q.',
       'Examples of faithful wording: "Design approved; implementation in progress" becomes "I completed the design; implementation is in progress", NOT "I shipped the concept". "We hypothesized that clearer choices would help" becomes "Our hypothesis was that clearer choices would help", NOT "Research showed clearer choices were effective". These are wording examples, not candidate facts.'
     ].join('\n');
   }
@@ -18498,6 +18499,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function wbScoreSystem() {
     return [
       "You are the panel debriefing after a whiteboard design exercise. Score the candidate FAIRLY from the transcript \u2014 evidence-based, no inflation.",
+      'Preserve constraints at their exact scope: a limit on additional resources does not mean existing resources are absent. Do not propose forbidden channels or penalize respecting a fixed constraint. Distinguish facts supplied by the interviewer from facts the candidate acknowledged; only credit an acknowledgement actually present in their turn. Missing discussion is not an observed failure. Copy evidence IDs exactly from the id field, without speaker labels.',
       'Return ONLY valid JSON: {"scores":[{"dim":string,"score":number|null,"note":string,"evidence":[string]}],"overall":string,"topfix":string,"improvements":[{"action":string,"evidence":[string],"retry":string}]}. Cover Problem framing, User focus, Ideation & creativity, Prioritisation & trade-offs, Interaction / flow, Communication, Handling ambiguity. Use 1-5 ONLY with supporting candidate turn or readable observation IDs from the evidence list; otherwise score:null and explain Not observed. An untested skill is not a weakness. An interviewer suggestion is not candidate evidence. Return exactly TWO actionable improvements with a focused 5-minute retry each, grounded in observed moments. Do not infer skill from fluency alone or compare totals across different conditions.'
     ].join("\n");
   }
@@ -19303,9 +19305,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   ];
   var STORY_TONE = [
     ["vp", "VP / Exec", "Outcomes, strategy, business altitude"],
+    ["leader", "Head / Director", "Design direction, team capability, delivery"],
     ["staff", "Staff / Principal", "Ambiguity, systems, cross-team leverage"],
     ["senior", "Senior", "Craft, decisions &amp; the how"]
   ];
+  var STORY_AUDIENCES = [['portfolio','Portfolio interview'],['design','Design leadership'],['partners','Cross-functional partners']];
   var STORY_BUDGET = { "2015": 17, "1510": 12, "105": 7, "5": 5 };
   var storyState = {};
   function storySt(id) { return storyState[id] || (storyState[id] = { dur: "1510", tone: "staff", qrole: "any" }); }
@@ -19317,42 +19321,47 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   function storyJdText() { return (storyJd.on && storyJd.text && String(storyJd.text).trim()) ? String(storyJd.text).trim() : ""; }
   function storyJdUserBlock(jd = storyJdText()) { var t = jd; return t ? "\n\nTARGET ROLE — JOB DESCRIPTION (bias the story toward what THIS role values — mirror its priorities and language — using ONLY real facts from the material above; never invent anything to fit the role):\n" + t : ""; }
   function storyDurLabel(dur) { for (var i = 0; i < STORY_DUR.length; i++) if (STORY_DUR[i][0] === dur) return STORY_DUR[i][1]; return ""; }
-  function storyAudience(tone) {
-    return {
-      vp: "The room is a VP / executive panel \u2014 lead with business outcomes and strategic bets, stay at altitude over process, and be crisp and declarative.",
-      staff: "The room is staff / principal designers and engineers \u2014 dwell on ambiguity, problem framing, systems thinking and cross-team leverage; judgment over pixels.",
-      senior: "The room is senior designers \u2014 show craft, the concrete decisions and the reasoning behind them; the how, not just the what."
-    }[tone] || "";
+  function storyAudience(tone, audience = 'portfolio') {
+    return 'Target role: ' + iprepLevelGuide(tone) + '\nListening audience: ' + ({portfolio:'a portfolio interview panel',design:'design leaders',partners:'cross-functional product, engineering and research partners'}[audience] || 'a portfolio interview panel') + '. Adapt vocabulary and emphasis, not the facts or the candidate\'s documented authority.';
   }
   var STORY_VIS = { media: "image(s)", gallery: "image carousel", mediagrid: "image grid", device: "device mockup", isolayers: "layered UI visual", compare: "before/after slider", figure: "figure + text", focus: "annotated image", voices: "user quotes", metrics: "metric band", workflow: "process diagram", stickies: "sticky-note board", columns: "comparison columns", rows: "comparison rows", cards: "card grid" };
-  function storyContext(w) {
-    var base = iprepContext(w, "study"), vis = [];
+  function storyContext(w, jd = '') {
+    var base = iprepContext(w, "study", true), vis = [];
+    if (!base.trim()) throw new Error('No available case-study text. Select a project with visible, unprotected evidence.');
     ((w.study && w.study.blocks) || []).forEach(function (b) {
+      if (b.off || b.locked || b.encStub || b.vaultBlock) return;
       var kind = STORY_VIS[b.type]; if (!kind) return;
-      var cap = iprepStrip(b.heading || b.caption || (b.items && b.items[0] && (b.items[0].caption || b.items[0].heading)) || "");
+      const item = (b.items || []).find(value => value && !value.off && !value.locked && !value.encStub && !value.vaultBlock);
+      var cap = iprepStrip(b.heading || b.caption || (item && (item.caption || item.heading)) || "");
       vis.push("- " + kind + (cap ? " \u2014 " + cap : ""));
     });
     if (vis.length) base += "\n\n# VISUALS I CAN SHOW (tell me WHEN to pull each up)\n" + vis.join("\n");
-    return base.length > 9200 ? base.slice(0, 9200) + "\u2026" : base;
+    if (base.length + jd.length > 120000) throw new Error('Story evidence and job description exceed 120,000 characters. Select less material or shorten the job description; nothing was truncated or sent.');
+    return base;
   }
-  function storyThemesSystem(tone, durLabel) {
+  function storyThemesSystem(tone, durLabel, audience) {
     return [
-      "You are an elite design-portfolio presentation coach. In an interview a designer gets roughly " + durLabel + " to present ONE case study live. From their REAL material, propose a few DISTINCT, high-impact STORY ANGLES to build the talk around \u2014 not a summary, but different SPINES for the narrative.",
-      storyAudience(tone),
-      "Each angle must be a genuinely different lens on the same project (e.g. a trust reframe, a metric that redirected the roadmap, a hard tradeoff, a systems bet, a user-insight turn). Make each vivid and specific to THIS work.",
-      "Rules: use ONLY facts from the material; never invent metrics, names or outcomes; no generic filler; make the titles presentation-worthy.",
+      'You are a careful portfolio editor. The designer has ' + durLabel + ' to discuss one documented case. Propose four distinct editorial choices for what to emphasize. The task is selecting and arranging existing evidence, not completing a conventional success-story arc.',
+      storyAudience(tone, audience),
+      iprepEvidenceRules(),
+      'Begin from documented decisions, contributions, comparisons and constraints. Distinct emphasis does not require a different historical event. Do not invent dramatic stakes, a winner, a negotiation or a before-and-after business result. Avoid superlatives such as highest-leverage, first, largest or only unless explicitly established at that scope.',
+      'Return exactly four constructive, genuinely distinct angles. Audit the title, hook, why and beats against the same source boundaries. Do not invent conflict or withheld authority to make a story dramatic. Pending outcomes can support a story about a completed design decision and a proposed evaluation, not a failure narrative. An angle is a framing proposal, never additional evidence.',
+      'Maturity applies even to a one-word beat: ship, launch, scale and win imply events. If only design completion and an ongoing experiment are documented, end at that status or a proposed next question, never a release. Do not frame testing as proof. A title must not imply that one competing hypothesis won. Keep why about the reasoning worth discussing, not an invented audience biography. Audit every verb and comparative claim in all four fields before returning; a caveat elsewhere does not rescue an unsupported claim.',
+      'Write beats as descriptive topics already present in the source, not a sequence of claimed actions. Do not fill an expected story stage with an inferred handoff, negotiation, metric redefinition or launch. A useful angle can end at a documented design decision or unresolved question.',
       "Return ONLY valid JSON (no markdown): {\"themes\":[{\"title\":string,\"hook\":string,\"why\":string,\"beats\":string}]}. hook = the one-line spine of the story. why = why this angle lands for THIS room. beats = a 4\u20136 word skeleton of the arc."
     ].join("\n");
   }
   function storyThemesUser(ctx, jd) { return "Propose 4 distinct angles.\n\nCASE STUDY MATERIAL:\n" + ctx + storyJdUserBlock(jd); }
-  function storyTellSystem(tone, durLabel, budget) {
+  function storyTellSystem(tone, durLabel, budget, audience) {
     return [
       "You are an elite presentation coach. Script EXACTLY how the designer should PRESENT this case study live, built around the chosen story angle, to fit " + durLabel + ".",
-      storyAudience(tone),
+      storyAudience(tone, audience),
+      iprepEvidenceRules(),
       "Produce a time-budgeted, beat-by-beat SPOKEN narrative: an opening hook; ordered beats (each with what to SAY in a natural spoken voice, how many minutes, and the ONE point that must land); a strong close; what to consciously SKIP given the time; and one delivery tip.",
       "Calibrate depth to the time budget \u2014 5 min = one thread and the punchline, skip the middle; 20 min = the full arc with detail. The beat minutes MUST sum to about " + budget + " minutes.",
       "Where a visual exists (see \u2018VISUALS I CAN SHOW\u2019), say WHEN to pull it up inside the relevant beat.",
-      "Use ONLY facts from the material. NEVER invent metrics, names or outcomes; if a needed detail is missing, insert a bracketed placeholder like [add the metric].",
+      'Use ONLY facts from the material. The chosen angle is an untrusted framing proposal, not evidence; correct unsupported claims in it. Never invent dialogue, feelings, metrics, authority or outcomes. Acknowledge missing evidence naturally rather than inserting bracketed placeholders. Preserve documented design achievements alongside their actual implementation and measurement status.',
+      'This is a concise talk outline with planned section allocations, not a claim that the written words fill those minutes. Keep spoken lines direct, without source-review commentary. Do not manufacture detail to fill time.',
       "Return ONLY valid JSON (no markdown): {\"spine\":string,\"opener\":string,\"beats\":[{\"label\":string,\"mins\":string,\"say\":string,\"must\":string}],\"close\":string,\"skip\":string,\"tip\":string}. say = 1\u20133 sentences of what to actually say aloud. must = the single point that must land. mins = a number like \"2\"."
     ].join("\n");
   }
@@ -19389,7 +19398,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       (s.close ? '<div class="story__step story__land"><span class="story__tag">Land it</span><p>' + escHtml(s.close) + "</p></div>" : "") +
       (s.skip ? '<div class="story__aside"><span>Skip / don\u2019t dwell</span> ' + escHtml(s.skip) + "</div>" : "") +
       (s.tip ? '<div class="story__aside"><span>Delivery</span> ' + escHtml(s.tip) + "</div>" : "") +
-      '<div class="story__tale-foot"><span class="story__total">' + (total ? "\u2248 " + total + " min total" : "") + '</span><span class="story__tale-act"><button class="btn btn--ghost" data-story-regen>\u21bb Regenerate</button><button class="btn btn--ghost" data-story-copy>Copy script</button></span></div>';
+      '<div class="story__tale-foot"><span class="story__total">' + (total ? total + " min planned sections" : "") + '</span><span class="story__tale-act"><button class="btn btn--ghost" data-story-regen>' + IC.refresh + ' Regenerate</button><button class="btn btn--ghost" data-story-copy>' + IC.dup + ' Copy script</button></span></div>';
   }
   function storyPlain(s, title) {
     if (!s) return "";
@@ -19429,28 +19438,31 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     data: "a Data Scientist \u2014 probing how the design was measured, experiment design, what the numbers really showed, and causality"
   };
   function storyRoleName(id) { for (var i = 0; i < STORY_ROLES.length; i++) if (STORY_ROLES[i][0] === id) return STORY_ROLES[i][1]; return id; }
-  function storyQSystem(tone, role, n) {
+  function storyQSystem(tone, role, n, audience) {
     var lens = STORY_ROLE_LENS[role];
     return [
       "You role-play the cross-functional partners in a design-portfolio interview. The candidate has just PRESENTED this case study using a specific narrative angle. Generate the questions they'd get AFTER that talk.",
-      storyAudience(tone),
+      storyAudience(tone, audience),
+      iprepEvidenceRules(),
       role === "any"
         ? "Spread " + n + " questions across the different partners a designer works with (Product, Design, Research, Accessibility, Marketing, Engineering, Data Science) \u2014 vary who is asking."
         : "All " + n + " questions come from " + (lens || (storyRoleName(role) + ", staying in that partner's voice and concerns")) + ".",
       "CRITICAL: these are questions the PARTNER asks the DESIGNER about the DESIGN work \u2014 NOT questions aimed at that partner's own craft. Keep DESIGN centrality in every question: probe the design thinking, decisions, tradeoffs, craft or impact, seen through that partner's lens.",
       "Ground each question in the candidate's ACTUAL material and the chosen angle \u2014 reference a real decision, metric or tradeoff. Match the room's altitude. No generic filler \u2014 make them the sharp questions that actually get asked.",
+      'Check every historical premise in q and why. The angle is not evidence. Do not imply release, research findings, conflict or agreement from plausible interview convention. If an event is undocumented, make the entire situation conditional. Vary the reasoning task without repeating a question.',
       "Return ONLY valid JSON (no markdown): {\"questions\":[{\"q\":string,\"role\":string,\"why\":string}]}. role = the partner asking (Product / Design / Research / Accessibility / Marketing / Engineering / Data Science). why = one short line on what a strong answer reveals."
     ].join("\n");
   }
   function storyQUser(ctx, angle, n, jd) {
     return "CHOSEN NARRATIVE ANGLE:\nTitle: " + ((angle && angle.title) || "") + "\nSpine: " + ((angle && angle.hook) || "") + "\n\nGenerate exactly " + n + " questions.\n\nCASE STUDY MATERIAL:\n" + ctx + storyJdUserBlock(jd);
   }
-  function storyQAnsSystem(tone, roleStr) {
+  function storyQAnsSystem(tone, roleStr, audience) {
     return [
       "You coach a product designer to answer a question from a cross-functional partner right after they presented this case study. Draft a strong, honest answer IN FIRST PERSON they can say aloud.",
-      storyAudience(tone),
+      storyAudience(tone, audience),
+      iprepEvidenceRules(),
       roleStr ? "The question comes from " + roleStr + " \u2014 speak to that partner's concern while keeping the design reasoning central." : "Speak to the asker's concern while keeping the design reasoning central.",
-      "Use ONLY facts in the material. NEVER invent metrics, names or outcomes; if a detail is missing insert a bracketed placeholder like [add the metric].",
+      'Answer the exact question in the first sentence; correct unsupported premises conversationally. Use ONLY source facts, never the angle as evidence. No bracketed placeholders, invented beliefs or source-review commentary. When evidence is thin, be shorter and distinguish a proposed next step from what happened.',
       "Natural spoken voice, confident but not boastful, about 90\u2013170 words. Return clean minimal HTML: <p> paragraphs, <strong> for key phrases, <ul><li> where it helps. No markdown, no preamble."
     ].join("\n");
   }
@@ -19470,16 +19482,43 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     }).join("");
   }
   function storyHistHtml() {
-    var items = prepList("story");
+    var items = prepList("story").filter(entry => !entry.payload?.removedAt);
     var head = '<div class="prep-hist__h">Saved stories</div>';
     if (!items.length) return head + '<div class="prep-hist__empty">Your story angles save here automatically \u2014 come back and pick up any set, script and answers included.</div>';
     return head + '<div class="prep-hist__list">' + items.map(function (e) {
       var m = e.meta || {};
       return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-story-hist-open="' + e.id + '">' +
         '<div class="prep-h__x"><b>' + escHtml(e.title || "Story angles") + '</b><i>' + escHtml((m.count ? m.count + " angle" + (m.count > 1 ? "s" : "") : "set") + (m.dur ? " \u00b7 " + m.dur : "")) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
-        '<span class="prep-h__del" data-story-hist-del="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
+        '<button type="button" class="prep-h__del" data-story-hist-del="' + e.id + '" title="Remove saved story" aria-label="Remove saved story">' + IC.trash + '</button>' +
         '</div>';
     }).join("") + '</div>';
+  }
+  function storyReadDrafts(payload = {}) {
+    const drafts = {};
+    for (const [key,value] of Object.entries(payload.drafts || {})) {
+      if (/^\d+$/.test(key) && value && typeof value === 'object') drafts[key] = structuredClone(value);
+    }
+    if (payload.cur?.script && Number.isInteger(payload.cur.ti) && !drafts[payload.cur.ti]) drafts[payload.cur.ti] = {script:structuredClone(payload.cur.script),questions:structuredClone(payload.cur.questions || []),qrole:payload.qrole || 'any',versions:[]};
+    return drafts;
+  }
+  function storyCheckpoint(draft, label) {
+    const {versions = [], ...content} = draft;
+    draft.versions = [{id:crypto.randomUUID(),at:Date.now(),label,content:structuredClone(content)}, ...versions];
+  }
+  function storyReadThemes(value) {
+    const themes = Array.isArray(value?.themes) ? value.themes : Array.isArray(value) ? value : [];
+    const titles = new Set();
+    if (themes.length !== 4) throw new Error('Expected four distinct angles. Your saved stories are unchanged; try again.');
+    return themes.map(theme => {
+      if (!theme || !['title','hook','why','beats'].every(key => typeof theme[key] === 'string' && theme[key].trim())) throw new Error('An angle was incomplete. Your saved stories are unchanged; try again.');
+      const title = theme.title.trim().toLowerCase().replace(/\s+/g,' ');
+      if (titles.has(title)) throw new Error('The angles were repeated. Your saved stories are unchanged; try again.');
+      titles.add(title); return {title:theme.title,hook:theme.hook,why:theme.why,beats:theme.beats};
+    });
+  }
+  function storyReadScript(value) {
+    if (!value || !['spine','opener','close','skip','tip'].every(key => typeof value[key] === 'string' && value[key].trim()) || !Array.isArray(value.beats) || !value.beats.length || value.beats.some(beat => !beat || !['label','say','must'].every(key => typeof beat[key] === 'string' && beat[key].trim()) || !Number.isFinite(Number(beat.mins)) || Number(beat.mins) <= 0)) throw new Error('The script was incomplete. Your saved draft is unchanged.');
+    return structuredClone(value);
   }
   function storyModal(i, restore) {
     var fromAi = (i == null);
@@ -19488,7 +19527,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { storyModal(i); }); return; }
     var g = storySt(fromAi ? "__ai__" : w.id);
     if (!g.qrole) g.qrole = "any";
+    if (!g.audience) g.audience = 'portfolio';
     var themes = [], curTi = -1, questionsArr = [];
+    let drafts = {};
+    let setSettings = null, refinement = null;
     let sourceSnapshot = null;
     let reconnectEntry = null;
     var sessId = (restore && restore.id) || null;
@@ -19496,16 +19538,17 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     modal.className = "pass pass--wide story-modal";
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">' + IC.book + ' Design storyteller' + (fromAi ? "" : " \u2014 " + escHtml(w.title || "case study")) + "</div>" +
-      '<div class="pass__sub">Turn ' + (fromAi ? "a" : "this") + ' case study into a presentation. Pick how long you\u2019ll have and who\u2019s in the room \u2014 get a few story angles, then open one for a beat-by-beat script and the questions it invites.</div>' +
-      '<div class="ats__cols story__cols"><div class="ats__main">' +
+      '<div class="af__hint prep-source" data-prep-source></div>' +
+      '<div class="ats__cols story__cols" data-prep-body><div class="ats__main">' +
       '<div class="story__setup">' +
         (fromAi ? '<div class="af"><label class="af__label">Case study</label><select class="story__pick">' + stWorks.map(function (pw, idx) { return '<option value="' + idx + '">' + escHtml(pw.title || ("Project " + (idx + 1))) + "</option>"; }).join("") + "</select></div>" : "") +
         '<div class="af"><label class="af__label">How long to present</label><div class="story__opts">' +
           STORY_DUR.map(function (d) { return '<button type="button" class="story__opt' + (g.dur === d[0] ? " is-on" : "") + '" data-story-dur="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
-        '<div class="af"><label class="af__label">Who\u2019s in the room</label><div class="story__opts">' +
+        '<div class="af"><label class="af__label">Target level</label><div class="story__opts">' +
           STORY_TONE.map(function (t) { return '<button type="button" class="story__opt' + (g.tone === t[0] ? " is-on" : "") + '" data-story-tone="' + t[0] + '"><span class="story__opt-name">' + t[1] + '</span><span class="story__opt-desc">' + t[2] + "</span></button>"; }).join("") +
         "</div></div>" +
+        '<div class="af"><label class="af__label" for="storyAudience">Audience</label><select id="storyAudience" data-story-audience>' + STORY_AUDIENCES.map(option => '<option value="' + option[0] + '"' + (g.audience === option[0] ? ' selected' : '') + '>' + option[1] + '</option>').join('') + '</select></div>' +
         '<div class="af story__role"><label class="chk"><input type="checkbox" data-story-align' + (storyJd.on ? " checked" : "") + " /> Align to a role</label>" +
           '<div class="story__role-fields"' + (storyJd.on ? "" : " hidden") + '>' +
             '<div class="cl__row"><input type="url" class="cl__url" data-story-jd-url placeholder="Paste the job posting URL\u2026" value="' + escAttr(storyJd.url || "") + '" /><button class="btn btn--ghost" type="button" data-story-jd-fetch>Fetch</button></div>' +
@@ -19517,28 +19560,29 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       '<div class="story__themes" hidden></div>' +
       '<div class="story__l2" hidden>' +
         '<div class="story__l2-bar"><button class="btn btn--ghost story__l2-back" data-story-l2back>' + IC.back + ' Other angles</button><span class="story__l2-title"></span></div>' +
+        '<nav class="story__tabs" aria-label="Story view"><button type="button" data-story-view="script" aria-pressed="true">Script</button><button type="button" data-story-view="questions" aria-pressed="false">Questions</button></nav>' +
         '<div class="story__l2-body">' +
           '<div class="story__tale"></div>' +
-          '<div class="story__qa">' +
+          '<div class="story__qa" hidden>' +
             '<div class="story__qa-head"><span>Questions they might ask</span><span class="story__qa-ctl"><select class="story__qrole" aria-label="Who is asking">' +
               STORY_ROLES.map(function (r) { return '<option value="' + r[0] + '"' + ((g.qrole || "any") === r[0] ? " selected" : "") + '>' + r[1] + "</option>"; }).join("") +
             '</select><button class="btn btn--auto" data-story-qgen>Generate questions</button></span></div>' +
             '<div class="story__qlist"></div>' +
-            '<div class="story__qa-note">Framed as that partner would ask a designer, at the altitude you picked \u2014 hit Answer to rehearse a response. Anyone = 10 questions; a single role = 5.</div>' +
           "</div>" +
         "</div>" +
       "</div>" +
       '<div class="pass__err"></div>' +
-      '</div><aside class="prep-hist" data-story-hist>' + storyHistHtml() + '</aside></div>' +
+      '</div><aside class="prep-hist"><details class="story__history"><summary>Saved stories</summary><div data-story-hist>' + storyHistHtml() + '</div></details></aside></div>' +
       '<div class="pass__actions story__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
         '<button class="btn btn--ghost" data-story-back hidden>' + IC.back + ' Change setup</button>' +
         '<button class="btn btn--auto" data-story-run>Find story angles</button>' +
       "</div>" +
-      '<div class="pass__note">A prep tool only \u2014 nothing here is saved to or published on your site. It uses only your own content.</div></div>';
+      '<div class="pass__note">Private preparation. Nothing is published.</div></div>';
     document.body.appendChild(modal);
     prepMountStorage(modal);
     const lifetime = prepDialogLifetime(modal,'Design storyteller');
+    if (matchMedia('(min-width: 900px)').matches) modal.querySelector('.story__history').open = true;
     var err = modal.querySelector(".pass__err");
     var setup = modal.querySelector(".story__setup");
     var themesBox = modal.querySelector(".story__themes");
@@ -19552,19 +19596,28 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     var runBtn = modal.querySelector("[data-story-run]");
     var backBtn = modal.querySelector("[data-story-back]");
     var close = function () { lifetime.dispose(); modal.remove(); };
+    function currentSettings() { return setSettings || g; }
+    function storyView(view) {
+      taleBox.hidden = view !== 'script'; modal.querySelector('.story__qa').hidden = view !== 'questions';
+      modal.querySelectorAll('[data-story-view]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.storyView === view)));
+    }
+    modal.querySelectorAll('[data-story-view]').forEach(button => button.addEventListener('click',() => storyView(button.dataset.storyView)));
+    setup.addEventListener('input',() => lifetime.reset());
+    setup.addEventListener('change',() => lifetime.reset());
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
-    modal.querySelector("[data-story-l2back]").addEventListener("click", function () { showThemes(); });
-    qroleSel.addEventListener("change", function () { g.qrole = qroleSel.value; });
-    modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
-    modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    modal.querySelector("[data-story-l2back]").addEventListener("click", function () { lifetime.reset(); persistSession(); showThemes(); });
+    modal.querySelector('[data-story-audience]').addEventListener('change', event => { g.audience = event.target.value; });
+    qroleSel.addEventListener("change", function () { lifetime.reset(); g.qrole = qroleSel.value; persistSession(); });
+    modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.addEventListener("click", function () { lifetime.reset(); g.dur = b.dataset.storyDur; modal.querySelectorAll("[data-story-dur]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
+    modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.addEventListener("click", function () { lifetime.reset(); g.tone = b.dataset.storyTone; modal.querySelectorAll("[data-story-tone]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); }); });
     var storyPick = modal.querySelector(".story__pick");
     if (storyPick) storyPick.addEventListener("change", function () { var nw = stWorks[+storyPick.value]; if (nw) { w = nw; g.__ctx = null; } });
     const linkedBrief = prepUseBrief(modal, brief => {
       if (setup.hidden) throw new Error('Choose Change setup before loading another brief.');
       lifetime.reset();
-      g.tone = brief.level === 'leader' ? 'vp' : brief.level;
+      g.tone = brief.level;
       modal.querySelectorAll('[data-story-tone]').forEach(button => button.classList.toggle('is-on', button.dataset.storyTone === g.tone));
       const works = prepareBriefWorks(brief, data);
       if (storyPick) {
@@ -19586,17 +19639,19 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (jdUrlEl) jdUrlEl.addEventListener("input", function () { storyJd.url = jdUrlEl.value; saveStoryJd(); });
     if (jdTextEl) jdTextEl.addEventListener("input", function () { storyJd.text = jdTextEl.value; saveStoryJd(); });
     if (jdFetchBtn) jdFetchBtn.addEventListener("click", async function () {
+      const signal = lifetime.reset(), previousText = jdTextEl.value, requestedUrl = jdUrlEl.value;
       err.textContent = "";
       btnBusy(jdFetchBtn, "Fetching\u2026");
       try {
-        var jt = await clFetchJd(jdUrlEl ? jdUrlEl.value : "");
+        var jt = await clFetchJd(requestedUrl);
+        signal.throwIfAborted(); if (jdTextEl.value !== previousText || jdUrlEl.value !== requestedUrl) return;
         if (jdTextEl) jdTextEl.value = jt;
         storyJd.text = jt; storyJd.on = true; if (alignCb) alignCb.checked = true; if (roleFields) roleFields.hidden = false; saveStoryJd();
-      } catch (e2) { err.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
-      btnIdle(jdFetchBtn, "Fetch");
+      } catch (e2) { if (!signal.aborted) err.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
+      finally { btnIdle(jdFetchBtn, "Fetch"); }
     });
     function showSetup() { setup.hidden = false; themesBox.hidden = true; l2Box.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
-    function showThemes() { setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; }
+    function showThemes() { setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; themesBox.querySelectorAll('[data-story-tell]').forEach(button => { button.textContent = drafts[button.dataset.storyTell]?.script ? 'Open saved draft' : 'Script this angle'; }); }
     function showL2() { setup.hidden = true; themesBox.hidden = true; l2Box.hidden = false; backBtn.hidden = true; runBtn.hidden = true; err.textContent = ""; }
     backBtn.addEventListener("click", function () { if (reconnectEntry) { storyRestore(reconnectEntry); return; } lifetime.reset(); showSetup(); });
     function paintSource() { prepSourceInfo(modal,sourceSnapshot,() => { if (reconnectEntry) return; reconnectEntry = prepGet('story',sessId); lifetime.reset(); showSetup(); backBtn.hidden = false; backBtn.textContent = 'Back to saved story'; runBtn.textContent = 'Reconnect sources'; }); }
@@ -19607,17 +19662,18 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         const selected = linkedBrief() ? prepareBriefWorks(linkedBrief(), data, [w.id])[0] : w;
         if (!selected) throw new Error('This project is outside the brief\'s permitted evidence. Update the brief or select another project.');
-        var ctx = storyContext(selected); g.__ctx = ctx;
-        sourceSnapshot = prepSourceSnapshot(ctx, storyJdText(), [selected], linkedBrief());
+        var ctx = storyContext(selected, storyJdText()); g.__ctx = ctx;
+        const nextSource = prepSourceSnapshot(ctx, storyJdText(), [selected], linkedBrief());
+        const nextSettings = {tone:g.tone,audience:g.audience,dur:g.dur};
         if (!reconnectEntry) {
-          var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur)), storyThemesUser(ctx, sourceSnapshot.jd), { task: "creative", json: true, maxTokens: 1500, temperature: 0.8, signal }));
+          var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur), g.audience), storyThemesUser(ctx, nextSource.jd), { task: "creative", json: true, maxTokens: 2200, temperature: 0.5, signal }));
           signal.throwIfAborted();
-          var raw = obj && Array.isArray(obj.themes) ? obj.themes : (Array.isArray(obj) ? obj : null);
-          if (!raw || !raw.length) throw new Error("No angles came back \u2014 try again.");
-          themes = raw.filter(function (t) { return t && (t.title || t.hook); });
+          themes = storyReadThemes(obj); drafts = {};
           curTi = -1; taleBox.__script = null; taleBox.__title = ''; questionsArr = []; qlist.innerHTML = '';
           storyRenderThemes(themesBox, themes);
         }
+        sourceSnapshot = nextSource;
+        setSettings = nextSettings;
         sessId = null;
         reconnectEntry = null; backBtn.innerHTML = IC.back + ' Change setup';
         if (taleBox.__script) showL2(); else showThemes();
@@ -19626,86 +19682,167 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       } catch (e) { if (!signal.aborted) err.textContent = (e && e.message) || "Couldn\u2019t find story angles."; }
       btnIdle(runBtn, "Find story angles");
     });
-    async function tell(idx, srcBtn) {
-      const signal = lifetime.signal;
+    function storeCurrent() {
+      if (curTi < 0 || !taleBox.__script) return;
+      drafts[curTi] = {...drafts[curTi],script:taleBox.__script,questions:questionsArr,qrole:g.qrole,versions:drafts[curTi]?.versions || []};
+    }
+    function openDraft(idx) {
+      refinement = null;
+      const draft = drafts[idx]; curTi = idx; taleBox.__script = draft.script; taleBox.__title = themes[idx]?.title || '';
+      questionsArr = draft.questions || []; g.qrole = draft.qrole || 'any'; qroleSel.value = g.qrole;
+      storyRenderTale(taleBox,draft.script); storyRenderQuestions(qlist,questionsArr);
+      qgenBtn.textContent = questionsArr.length ? 'Regenerate' : 'Generate questions'; l2Title.textContent = taleBox.__title;
+      showL2(); storyView('script'); paintDraftTools();
+    }
+    function paintDraftTools() {
+      taleBox.querySelector('[data-story-editor-tools]')?.remove();
+      const tools = document.createElement('div'); tools.dataset.storyEditorTools = ''; tools.className = 'story__editor-tools';
+      const script = taleBox.__script, spoken = [script.opener,...(script.beats || []).map(beat => beat.say),script.close].filter(Boolean).join(' '), words = spoken.trim().split(/\s+/).filter(Boolean).length;
+      tools.innerHTML = '<p class="story__runtime">' + words + ' spoken words / about ' + Math.max(1,Math.round(words / 130 * 60)) + ' seconds at 130 words/min</p><div class="story__tale-act"><button type="button" class="btn btn--ghost" data-story-edit>' + IC.edit + ' Edit script</button><button type="button" class="btn btn--ghost" data-story-download>' + IC.down + ' Download</button></div><details data-story-refinement><summary>Refine script</summary><label class="af"><span class="af__label">Refinement request</span><textarea data-story-request rows="3"></textarea></label><button type="button" class="btn btn--auto" data-story-refine>' + IC.spark + ' Preview refinement</button><div data-story-proposal></div></details>';
+      taleBox.append(tools);
+      taleBox.querySelector('[data-story-versions]')?.remove();
+      const draft = drafts[curTi]; if (!draft?.versions?.length) return;
+      const history = document.createElement('details'); history.dataset.storyVersions = '';
+      history.innerHTML = '<summary>Versions (' + draft.versions.length + ')</summary>' + draft.versions.map(version => '<button type="button" class="btn btn--ghost" data-story-restore="' + escAttr(version.id) + '">' + escHtml(version.label + ' / ' + new Date(version.at).toLocaleString()) + '</button>').join(''); taleBox.append(history);
+    }
+    async function tell(idx, srcBtn, regenerate = false) {
+      const signal = lifetime.reset(); storeCurrent();
       var t = themes[idx]; if (!t) return;
-      var switching = idx !== curTi;
+      if (!regenerate && drafts[idx]?.script) { openDraft(idx); persistSession(); return; }
       var was = srcBtn ? srcBtn.textContent : "";
       btnBusy(srcBtn, "Scripting\u2026");
       err.textContent = "";
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating a new script.');
-        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(g.tone, storyDurLabel(g.dur), STORY_BUDGET[g.dur] || 12), storyTellUser(t, sourceSnapshot.text, sourceSnapshot.jd), { task: "creative", json: true, maxTokens: 2200, temperature: 0.7, signal }));
+        const settings = currentSettings();
+        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(settings.tone, storyDurLabel(settings.dur), STORY_BUDGET[settings.dur] || 12, settings.audience), storyTellUser(t, sourceSnapshot.text, sourceSnapshot.jd), { task: "creative", json: true, maxTokens: 2200, temperature: 0.5, signal }));
         signal.throwIfAborted();
-        if (!s || (!Array.isArray(s.beats) && !s.opener)) throw new Error("The script didn\u2019t come through \u2014 try again.");
-        curTi = idx; taleBox.__script = s; taleBox.__title = t.title || "";
-        storyRenderTale(taleBox, s);
-        if (switching) { questionsArr = []; qlist.innerHTML = ""; qgenBtn.textContent = "Generate questions"; }
-        l2Title.textContent = t.title || "Your story";
-        showL2(); if (l2Body) l2Body.scrollTop = 0;
+        s = storyReadScript(s);
+        const draft = drafts[idx] || {questions:[],qrole:g.qrole,versions:[]};
+        if (draft.script) storyCheckpoint(draft,'Before regenerating script');
+        draft.script = s; delete draft.text; drafts[idx] = draft; openDraft(idx);
+        if (l2Body) l2Body.scrollTop = 0;
         persistSession();
       } catch (e2) { if (!signal.aborted) err.textContent = (e2 && e2.message) || "Couldn\u2019t script that story."; }
       finally { btnIdle(srcBtn, was); }
     }
     themesBox.addEventListener("click", function (e) { var b = e.target.closest("[data-story-tell]"); if (b) tell(+b.dataset.storyTell, b); });
-    taleBox.addEventListener("click", function (e) {
+    taleBox.addEventListener('input',event => {
+      const field = event.target.closest('[data-story-field]');
+      if (!field) { if (event.target.matches('[data-story-request]')) { lifetime.reset(); refinement = null; taleBox.querySelector('[data-story-proposal]').replaceChildren(); } return; }
+      lifetime.reset(); const parts = field.dataset.storyField.split('.');
+      if (parts.length === 2) taleBox.__script.beats[Number(parts[0])][parts[1]] = field.value;
+      else taleBox.__script[parts[0]] = field.value;
+      persistSession();
+    });
+    taleBox.addEventListener("click", async function (e) {
+      if (e.target.closest('[data-story-edit]')) {
+        lifetime.reset(); storeCurrent(); storyCheckpoint(drafts[curTi],'Before editing script');
+        const script = taleBox.__script;
+        const field = (label,path,value) => '<label class="af"><span class="af__label">' + escHtml(label) + '</span><textarea data-story-field="' + path + '" rows="3">' + escHtml(String(value || '')) + '</textarea></label>';
+        taleBox.innerHTML = field('Spine','spine',script.spine) + field('Opening','opener',script.opener) + (script.beats || []).map((beat,index) => field('Beat '+(index+1),index+'.label',beat.label) + '<label class="af">Planned minutes<input type="number" min="0.1" step="0.1" data-story-field="'+index+'.mins" value="'+escAttr(String(beat.mins))+'"></label>' + field('Spoken outline',index+'.say',beat.say) + field('Must land',index+'.must',beat.must)).join('') + field('Close','close',script.close) + field('Skip','skip',script.skip) + field('Delivery tip','tip',script.tip) + '<button type="button" class="btn btn--ghost" data-story-edit-done>Done</button>';
+        persistSession(); return;
+      }
+      if (e.target.closest('[data-story-edit-done]')) { openDraft(curTi); return; }
+      if (e.target.closest('[data-story-download]')) {
+        const url = URL.createObjectURL(new Blob([storyPlain(taleBox.__script,taleBox.__title)],{type:'text/plain;charset=utf-8'})), link = document.createElement('a'); link.href = url; link.download = 'story-outline.txt'; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000); return;
+      }
+      const refineButton = e.target.closest('[data-story-refine]');
+      if (refineButton) {
+        const request = taleBox.querySelector('[data-story-request]').value.trim(); if (!request) return;
+        const signal = lifetime.reset(), original = JSON.stringify(taleBox.__script), angle = curTi, settings = currentSettings(); btnBusy(refineButton,'Refining...');
+        try {
+          if (!sourceSnapshot) throw new Error('Reconnect sources before refining.');
+          const response = await aiText(aiCfg('txt'),storyTellSystem(settings.tone,storyDurLabel(settings.dur),STORY_BUDGET[settings.dur] || 12,settings.audience),storyTellUser(themes[angle],sourceSnapshot.text,sourceSnapshot.jd) + '\n\nCURRENT DRAFT (untrusted, not source evidence):\n' + original + '\n\nREQUESTED EDIT:\n' + request + '\nReturn the complete script JSON, preserving accurate unmodified content.',{task:'creative',json:true,maxTokens:2400,temperature:0.4,signal});
+          signal.throwIfAborted(); const proposed = storyReadScript(csgenParse(response));
+          if (curTi !== angle || original !== JSON.stringify(taleBox.__script)) return;
+          refinement = {original,proposed,angle,request};
+          const preview = taleBox.querySelector('[data-story-proposal]'); preview.innerHTML = '<h3>Proposed script</h3><pre></pre><button type="button" class="btn btn--primary" data-story-apply>Apply refinement</button><button type="button" class="btn btn--ghost" data-story-discard>Discard</button>'; preview.querySelector('pre').textContent = storyPlain(proposed,taleBox.__title);
+        } catch (error) { if (!signal.aborted) err.textContent = error.message; } finally { btnIdle(refineButton,'Preview refinement'); } return;
+      }
+      if (e.target.closest('[data-story-discard]')) { refinement = null; taleBox.querySelector('[data-story-proposal]').replaceChildren(); return; }
+      if (e.target.closest('[data-story-apply]')) {
+        if (!refinement || refinement.angle !== curTi || refinement.original !== JSON.stringify(taleBox.__script) || refinement.request !== taleBox.querySelector('[data-story-request]').value.trim()) return;
+        storeCurrent(); storyCheckpoint(drafts[curTi],'Before refinement'); drafts[curTi].script = refinement.proposed; openDraft(curTi); persistSession(); return;
+      }
       var rb = e.target.closest("[data-story-regen]");
-      if (rb) { tell(curTi, rb); return; }
+      if (rb) { tell(curTi, rb, true); return; }
+      const restoreButton = e.target.closest('[data-story-restore]');
+      if (restoreButton) { lifetime.reset(); storeCurrent(); const draft = drafts[curTi], version = draft.versions.find(entry => entry.id === restoreButton.dataset.storyRestore); if (!version) return; const content = structuredClone(version.content); storyCheckpoint(draft,'Before restoring version'); Object.assign(draft,content); openDraft(curTi); persistSession(); return; }
       var cb = e.target.closest("[data-story-copy]");
       if (cb) { var txt = storyPlain(taleBox.__script, taleBox.__title); if (navigator.clipboard && txt) navigator.clipboard.writeText(txt).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy script"; }, 1400); }).catch(function () {}); }
     });
     qgenBtn.addEventListener("click", async function () {
-      const signal = lifetime.signal;
+      const signal = lifetime.reset();
       if (curTi < 0 || !themes[curTi]) return;
       g.qrole = qroleSel.value;
       var n = g.qrole === "any" ? 10 : 5;
       btnBusy(qgenBtn, "Thinking\u2026"); err.textContent = "";
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating questions.');
-        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(g.tone, g.qrole, n), storyQUser(sourceSnapshot.text, themes[curTi], n, sourceSnapshot.jd), { task: "analysis", json: true, maxTokens: 1800, temperature: 0.8, signal }));
+        const settings = currentSettings();
+        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(settings.tone, g.qrole, n, settings.audience), storyQUser(sourceSnapshot.text, themes[curTi], n, sourceSnapshot.jd), { task: "analysis", json: true, maxTokens: 2200, temperature: 0.5, signal }));
         signal.throwIfAborted();
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("No questions came back \u2014 try again.");
-        questionsArr = raw.map(function (q) { return typeof q === "string" ? { q: q } : (q && q.q ? { q: q.q, role: q.role, why: q.why } : null); }).filter(Boolean);
+        const checked = iprepReadQuestions(raw,n);
+        storeCurrent(); if (questionsArr.length) storyCheckpoint(drafts[curTi],'Before regenerating questions');
+        questionsArr = checked.map((question,index) => ({q:question.q,why:question.why,role:typeof raw[index]?.role === 'string' ? raw[index].role : ''}));
         storyRenderQuestions(qlist, questionsArr);
-        persistSession();
+        persistSession(); paintDraftTools();
       } catch (e) { if (!signal.aborted) err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
       btnIdle(qgenBtn, questionsArr.length ? "Regenerate" : "Generate questions");
     });
     qlist.addEventListener("click", async function (e) {
+      const editButton = e.target.closest('[data-story-qedit]');
+      if (editButton) {
+        lifetime.reset(); storeCurrent(); const index = Number(editButton.dataset.storyQedit), question = questionsArr[index]; storyCheckpoint(drafts[curTi],'Before editing answer');
+        const answer = editButton.closest('.story__q').querySelector('.story__q-a'), text = answer.innerText;
+        answer.innerHTML = '<label class="af">Answer<textarea rows="6" data-story-answer="' + index + '"></textarea></label><button type="button" class="btn btn--ghost" data-story-answer-done>Done</button>'; answer.querySelector('textarea').value = text; persistSession(); return;
+      }
+      if (e.target.closest('[data-story-answer-done]')) { storyRenderQuestions(qlist,questionsArr); paintAnswerEditors(); return; }
       var ab = e.target.closest("[data-story-qans]");
       if (ab) {
         var idx = +ab.dataset.storyQans; var q = questionsArr[idx]; if (!q) return;
         var card = qlist.querySelector('.story__q[data-qi="' + idx + '"]'); if (!card) return;
         var aEl = card.querySelector(".story__q-a");
         var was = btnBusy(ab, "Drafting\u2026"); err.textContent = "";
-        const signal = lifetime.signal;
+        const signal = lifetime.reset();
         try {
           if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating answers.');
-          var html = await aiText(aiCfg("txt"), storyQAnsSystem(g.tone, q.role || storyRoleName(g.qrole)), storyQAnsUser(q.q, sourceSnapshot.text, themes[curTi]) + storyJdUserBlock(sourceSnapshot.jd), { task: "creative", maxTokens: 700, temperature: 0.6, signal });
+          const settings = currentSettings();
+          var html = await aiText(aiCfg("txt"), storyQAnsSystem(settings.tone, q.role || storyRoleName(g.qrole), settings.audience), storyQAnsUser(q.q, sourceSnapshot.text, themes[curTi]) + storyJdUserBlock(sourceSnapshot.jd), { task: "creative", maxTokens: 700, temperature: 0.4, signal });
           signal.throwIfAborted();
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
+          if (!html) throw new Error('The answer was empty. Your saved answer is unchanged.');
+          storeCurrent(); if (q.answer) storyCheckpoint(drafts[curTi],'Before replacing answer');
           aEl.innerHTML = iprepSafeHtml(html); aEl.hidden = false;
-          q.answer = aEl.innerHTML; persistSession();
+          q.answer = aEl.innerHTML; persistSession(); paintDraftTools();
           card.querySelector(".story__q-act").innerHTML = '<button class="btn btn--ghost" data-story-qans="' + idx + '">' + IC.refresh + ' Redo</button><button class="btn btn--ghost" data-story-qcopy="' + idx + '">Copy</button>';
+          paintAnswerEditors();
         } catch (e2) { if (!signal.aborted) err.textContent = (e2 && e2.message) || "Couldn\u2019t draft an answer."; btnIdle(ab, was); }
         return;
       }
       var cb = e.target.closest("[data-story-qcopy]");
       if (cb) { var i2 = +cb.dataset.storyQcopy; var c2 = qlist.querySelector('.story__q[data-qi="' + i2 + '"]'); var a2 = c2 && c2.querySelector(".story__q-a"); var t2 = a2 ? a2.innerText : ""; if (navigator.clipboard && t2) navigator.clipboard.writeText(t2).then(function () { cb.textContent = "Copied"; setTimeout(function () { cb.textContent = "Copy"; }, 1400); }).catch(function () {}); }
     });
+    qlist.addEventListener('input',event => { const field = event.target.closest('[data-story-answer]'); if (!field) return; lifetime.reset(); questionsArr[Number(field.dataset.storyAnswer)].answer = '<p>' + escHtml(field.value).replace(/\n/g,'<br>') + '</p>'; persistSession(); });
+    function paintAnswerEditors() { qlist.querySelectorAll('.story__q').forEach(card => { if (!questionsArr[Number(card.dataset.qi)]?.answer || card.querySelector('[data-story-qedit]')) return; const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn--ghost'; button.dataset.storyQedit = card.dataset.qi; button.innerHTML = IC.edit + ' Edit answer'; card.querySelector('.story__q-act').append(button); }); }
     function persistSession() {
       if (!themes.length) return;
+      storeCurrent();
       var cur = null;
       if (curTi >= 0 && taleBox.__script) cur = { ti: curTi, title: taleBox.__title || "", script: taleBox.__script, questions: questionsArr };
-      var saved = prepPut("story", { id: sessId, tool: "story", kind: "story", title: sourceSnapshot?.projects[0]?.title || (w && w.title) || "Story angles", meta: { count: themes.length, dur: storyDurLabel(g.dur) }, payload: { tone: g.tone, dur: g.dur, qrole: g.qrole, themes: themes, cur: cur, source:sourceSnapshot } });
+      const settings = currentSettings();
+      var saved = prepPut("story", { id: sessId, tool: "story", kind: "story", title: sourceSnapshot?.projects[0]?.title || (w && w.title) || "Story angles", meta: { count: themes.length, dur: storyDurLabel(settings.dur) }, payload: { tone: settings.tone, audience:settings.audience, dur: settings.dur, qrole: g.qrole, themes: themes, drafts, cur: cur, source:sourceSnapshot } });
       sessId = saved.id; paintHist();
     }
-    function paintHist() { var r = modal.querySelector("[data-story-hist]"); if (r) r.innerHTML = storyHistHtml(); }
+    function paintHist() { var r = modal.querySelector("[data-story-hist]"); if (r) { r.innerHTML = storyHistHtml(); const removed = prepList('story').filter(entry => entry.payload?.removedAt); if (removed.length) r.innerHTML += '<details><summary>Recently removed (' + removed.length + ')</summary>' + removed.map(entry => '<button type="button" class="btn btn--ghost" data-story-recover="' + escAttr(entry.id) + '">Restore ' + escHtml(entry.title) + '</button>').join('') + '</details>'; } paintAnswerEditors(); }
     function storyRestore(entry) {
       if (!entry || !entry.payload) return;
       lifetime.reset();
       var p = entry.payload;
+      drafts = storyReadDrafts(p);
       reconnectEntry = null; backBtn.innerHTML = IC.back + ' Change setup'; runBtn.textContent = 'Find story angles';
       curTi = -1; taleBox.__script = null; taleBox.__title = ''; questionsArr = []; qlist.innerHTML = ''; qgenBtn.textContent = 'Generate questions';
       sourceSnapshot = prepReadSource(p.source);
@@ -19716,30 +19853,31 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (storyPick) { const selected = stWorks.findIndex(work => work.id === sourceSnapshot.projects[0].id); if (selected >= 0) storyPick.value = String(selected); }
       }
       if (p.tone) g.tone = p.tone; if (p.dur) g.dur = p.dur; if (p.qrole) g.qrole = p.qrole;
+      g.audience = p.audience || 'portfolio'; modal.querySelector('[data-story-audience]').value = g.audience;
+      setSettings = {tone:g.tone,dur:g.dur,audience:g.audience};
       themes = (p.themes || []).slice();
       sessId = entry.id;
       modal.querySelectorAll("[data-story-dur]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.storyDur === g.dur); });
       modal.querySelectorAll("[data-story-tone]").forEach(function (b) { b.classList.toggle("is-on", b.dataset.storyTone === g.tone); });
       if (qroleSel) qroleSel.value = g.qrole;
       storyRenderThemes(themesBox, themes);
-      if (p.cur && p.cur.script) {
-        curTi = p.cur.ti; taleBox.__script = p.cur.script; taleBox.__title = p.cur.title || "";
-        storyRenderTale(taleBox, p.cur.script);
-        questionsArr = (p.cur.questions || []).slice();
-        if (questionsArr.length) { storyRenderQuestions(qlist, questionsArr); qgenBtn.textContent = "Regenerate"; }
-        l2Title.textContent = p.cur.title || "Your story";
-        showL2();
+      if (p.cur && drafts[p.cur.ti]?.script) {
+        openDraft(p.cur.ti);
       } else { showThemes(); }
       paintHist();
       paintSource();
     }
     modal.querySelector("[data-story-hist]").addEventListener("click", function (e) {
+      const recover = e.target.closest('[data-story-recover]');
+      if (recover) { const entry = prepGet('story',recover.dataset.storyRecover); if (entry) { const copy = structuredClone(entry); delete copy.payload.removedAt; prepPut('story',copy); paintHist(); } return; }
       var del = e.target.closest("[data-story-hist-del]");
-      if (del) { e.stopPropagation(); prepDel("story", del.dataset.storyHistDel); if (sessId === del.dataset.storyHistDel) sessId = null; paintHist(); return; }
+      if (del) { e.stopPropagation(); const entry = prepGet('story',del.dataset.storyHistDel); if (!entry || !confirm('Remove this saved story? You can restore it from Recently removed.')) return; lifetime.reset(); prepPut('story',{...entry,payload:{...structuredClone(entry.payload),removedAt:Date.now()}}); if (sessId === entry.id) { sessId = null; themes = []; drafts = {}; curTi = -1; taleBox.__script = null; sourceSnapshot = null; setSettings = null; showSetup(); paintSource(); } paintHist(); return; }
       var op = e.target.closest("[data-story-hist-open]");
       if (op) storyRestore(prepGet("story", op.dataset.storyHistOpen));
     });
+    modal.querySelector('[data-story-hist]').addEventListener('keydown',event => { if (event.target.matches('[data-story-hist-open]') && ['Enter',' '].includes(event.key)) { event.preventDefault(); event.target.click(); } });
     if (restore) storyRestore(restore); else showSetup();
+    paintHist();
     prepCloudPull("story", paintHist);
   }
 
