@@ -1593,7 +1593,9 @@ test('Journey unseen case outlines transfer on hover and persist after opening w
       await page.keyboard.press('Escape');
       await page.mouse.move(0,0);
     }
+    await page.evaluate(()=>{window.__journeyDesktopResize=new Promise(resolve=>window.addEventListener('resize',()=>requestAnimationFrame(()=>resolve()),{once:true}));});
     await page.setViewportSize({width:1440,height:1000});
+    await page.evaluate(()=>window.__journeyDesktopResize.then(()=>{delete window.__journeyDesktopResize;}));
     await page.keyboard.press('Tab');
     await first.focus();
     await link.waitFor({state:'visible'});
