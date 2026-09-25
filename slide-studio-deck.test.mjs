@@ -2173,17 +2173,20 @@ async function installPrepareReplies(page) {
   await page.addInitScript(() => {
     const original = window.fetch;
     window.preparationCalls = [];
+    window.preparationPlanningCalls = [];
     window.fetch = async (resource, options = {}) => {
       const url = new URL(typeof resource === 'string' ? resource : resource.url, location.href);
       if (url.hostname !== 'api.anthropic.com' || !url.pathname.endsWith('/messages')) return original(resource, options);
       const request = JSON.parse(options.body), system = request.system;
       let text;
       if (system.startsWith("You are Studio's outcome coordinator.")) {
+        window.preparationPlanningCalls.push({maxTokens:request.max_tokens});
         const input = JSON.parse(request.messages[0].content);
         text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',instruction:'',inputs:[],summary:'Use the selected evidence'}});
       } else {
-        window.preparationCalls.push({system,user:JSON.stringify(request.messages)});
+        window.preparationCalls.push({system,user:JSON.stringify(request.messages),maxTokens:request.max_tokens});
         if (system.includes('{"questions":[{"q":string,"category":string,"why":string}]}') && /Generate exactly \d+ questions/.test(JSON.stringify(request.messages))) {
+          if (window.interviewOutputLimit) return Response.json({content:[],stop_reason:'max_tokens',usage:{input_tokens:10,output_tokens:request.max_tokens,output_tokens_details:{thinking_tokens:request.max_tokens}}});
           const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10);
           text = JSON.stringify(window.interviewReply || {questions:Array.from({length:count},(_,index)=>({q:index ? 'What evidence would you seek for alternative '+index+'?' : 'Which decision changed the outcome?',category:'Decisions',why:'Explain the evidence'}))});
         }
@@ -2586,14 +2589,33 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       const request = await page.evaluate(()=>window.preparationCalls.at(-1));
       assert.match(request.user,/LATE_RESULTS_PENDING/);
       assert.match(request.system,/Target seniority and listening audience are separate/);
+      assert.equal(request.maxTokens,2600+4096);
+      assert.ok(await page.evaluate(()=>window.preparationPlanningCalls.every(call=>call.maxTokens === 2048+4096)));
       await page.locator('[data-iprep-ans="0"]').click();
       await page.locator('.iprep__a strong').waitFor();
       const answer = await page.evaluate(()=>window.preparationCalls.at(-1));
       assert.match(answer.user,/LATE_CELL_SEVEN_TO_FOUR/);
       assert.match(answer.system,/No bracketed placeholders/);
+      assert.equal(answer.maxTokens,900+4096);
+    }
+    for (const count of [10,14]) {
+      await page.locator('[data-iprep-new]').click();
+      await page.locator('#iprepCount').selectOption(String(count));
+      await page.locator('[data-iprep-run]').click();
+      await page.waitForFunction(expected=>document.querySelectorAll('.iprep__q').length === expected,count);
+      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).maxTokens),count*320+4096);
     }
     await page.locator('[data-iprep-new]').click();
+    await page.locator('#iprepCount').selectOption('6');
     const history = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
+    const beforeLimit = await page.evaluate(()=>({calls:window.preparationCalls.length,planning:window.preparationPlanningCalls.length}));
+    await page.evaluate(()=>{window.interviewOutputLimit=true;});
+    await page.locator('[data-iprep-run]').click();
+    await page.waitForFunction(()=>document.querySelector('.iprep-modal .pass__err')?.textContent.includes('output limit before returning answer text'));
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),history);
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),beforeLimit.calls+1);
+    assert.equal(await page.evaluate(()=>window.preparationPlanningCalls.length),beforeLimit.planning+1);
+    await page.evaluate(()=>{window.interviewOutputLimit=false;});
     for (const invalid of ['count','duplicate','empty']) {
       await page.evaluate(kind=>{ window.interviewReply = {questions:Array.from({length:kind === 'count' ? 5 : 6},(_,index)=>({q:kind === 'empty' && index === 0 ? ' ' : kind === 'duplicate' ? 'Same question?' : 'Question '+index+'?'}))}; },invalid);
       const calls = await page.evaluate(()=>window.preparationCalls.length);

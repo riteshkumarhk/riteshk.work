@@ -10,6 +10,8 @@ import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./src/js/content-revision.mjs";
 import { createRefreshGate } from "./src/js/studio-refresh.mjs";
+import { agentRequestOptions } from "./src/js/ai-task-agent.mjs";
+import { normalizeAiModel, rankAiModels } from "./src/js/ai-model-router.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
@@ -62,6 +64,32 @@ test('Whiteboard scoring preserves constraint scope and exact candidate evidence
   assert.match(prompt,/only credit an acknowledgement actually present/);
   assert.match(prompt,/Copy evidence IDs exactly from the id field/);
   assert.match(prompt,/An untested skill is not a weakness/);
+});
+
+test("Interview request budgets reserve reasoning separately and scale with the question count", () => {
+  const questionOptions = source.match(/iprepQUser\(ctx, jd, n\), (\{[^\n]+\})\)/)[1];
+  const answerOptions = source.match(/iprepAnsUser\(q\.q, sourceSnapshot\.text, sourceSnapshot\.jd\), (\{[^\n]+\})\)/)[1];
+  const model = normalizeAiModel('test',{id:'reasoning-fixture',input_modalities:['text'],output_modalities:['text'],reasoning:true,max_tokens:16000,max_input_tokens:100000,pricing:{input:2,output:10}});
+  const signal = new AbortController().signal;
+  const budgets = [];
+  for (const count of [6,10,14]) {
+    const options = runInNewContext('('+questionOptions+')',{n:count,signal});
+    assert.equal(options.signal,signal);
+    assert.equal(options.json,true);
+    assert.ok(options.maxTokens >= count * 320);
+    assert.equal(options.reasoningTokens,4096);
+    budgets.push(options.maxTokens);
+    const request = agentRequestOptions('System','Complete source and job description',options);
+    const choice = rankAiModels([model],'analysis',request)[0];
+    assert.equal(choice.outputTokens,options.maxTokens+4096);
+    assert.equal(rankAiModels([{...model,reasoning:false}],'analysis',request)[0].outputTokens,options.maxTokens);
+    assert.equal(rankAiModels([model],'analysis',{...request,maxCost:choice.estimatedCost-0.000001}).length,0);
+  }
+  assert.ok(budgets[2]>budgets[0]);
+  const answer = runInNewContext('('+answerOptions+')',{signal});
+  assert.equal(answer.maxTokens,900);
+  assert.equal(answer.reasoningTokens,4096);
+  assert.equal(answer.signal,signal);
 });
 
 test("Interview complete sources retain late caveats and nested cells without changing legacy extraction", () => {
