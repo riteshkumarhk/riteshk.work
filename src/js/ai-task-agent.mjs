@@ -137,7 +137,7 @@ export function createAiTaskAgent({ router, now = Date.now, randomId = () => cry
       const finalChoices = await choices(request.task || "writing", originalStep);
       const context = { taskHint: request.task || "writing", output: AI_TASKS[request.task || "writing"]?.output || "text", json: !!options.json,
         images: imageParts(request.user).length || (options.images ? 1 : 0), contract: clipped(request.system, 14000), material: clipped(plain(request.user), 24000) };
-      const reasoningTokens = Math.min(options.reasoningTokens ?? 0, limits.delegateTokens);
+      const reasoningTokens = Math.min(options.agentReasoningTokens ?? 0, limits.delegateTokens);
       const coordinatorStep = { role: "coordinator", system: AI_AGENT_SYSTEM, user: JSON.stringify({ job: context }), options: { json: true, maxTokens: limits.coordinatorTokens, reasoningTokens, effort: "low" } };
       const coordinatorChoices = await choices("analysis", coordinatorStep);
       coordinatorChoices.sort((first, second) => (first.estimatedCost ?? Infinity) - (second.estimatedCost ?? Infinity) || second.score - first.score);

@@ -603,22 +603,25 @@ test("the coordinator receives a fresh action schema and unwraps its constrained
 });
 
 test("the agent carries opt-in reasoning headroom through coordination delegation and drafting", async () => {
-  const { orchestrator, config } = orchestratorFixture([model('reasoning-fixture',{reasoning:true,max_tokens:32000,pricing:{input:2,output:10}})]);
-  const agent = createAiTaskAgent({router:orchestrator,now:()=>now});
-  let planning = 0;
-  const roles = [];
-  const result = await agent.run([config],{task:'analysis',system:'Write interview questions',user:'Complete source',options:{maxTokens:3200,reasoningTokens:4096}},async (selected,modelId,step) => {
-    roles.push(step.role);
-    assert.equal(step.options.reasoningTokens,4096);
-    assert.equal(selected.routingMaxTokens,step.options.maxTokens+4096);
-    if (step.role !== 'coordinator') return {ok:true,text:step.role === 'draft' ? 'Complete questions' : 'Source review'};
-    const input = JSON.parse(step.user), modelRef = input.catalogue[0].ref;
-    planning++;
-    const decision = planning === 1 ? {action:'delegate',modelRef,task:'analysis',purpose:'evidence',instruction:'Check the supplied source',inputs:[],summary:'Reviewing source'} : planning === 2 ? {action:'draft',modelRef,task:'analysis',instruction:'',inputs:[],summary:'Writing questions'} : {action:'finish',summary:'Ready'};
-    return {ok:true,text:JSON.stringify({decision})};
-  });
-  assert.equal(result.text,'Complete questions');
-  assert.deepEqual(roles,['coordinator','delegate','coordinator','draft','coordinator']);
+  for (const agentReasoningTokens of [undefined,4096,12000]) {
+    const { orchestrator, config } = orchestratorFixture([model('reasoning-fixture',{reasoning:true,max_tokens:32000,pricing:{input:2,output:10}})]);
+    const agent = createAiTaskAgent({router:orchestrator,now:()=>now});
+    let planning = 0;
+    const roles = [];
+    const result = await agent.run([config],{task:'analysis',system:'Write interview questions',user:'Complete source',options:{maxTokens:3200,reasoningTokens:4096,agentReasoningTokens}},async (selected,modelId,step) => {
+      roles.push(step.role);
+      const headroom = step.role === 'draft' ? 4096 : Math.min(agentReasoningTokens ?? 0,4096);
+      assert.equal(step.options.reasoningTokens,headroom);
+      assert.equal(selected.routingMaxTokens,step.options.maxTokens+headroom);
+      if (step.role !== 'coordinator') return {ok:true,text:step.role === 'draft' ? 'Complete questions' : 'Source review'};
+      const input = JSON.parse(step.user), modelRef = input.catalogue[0].ref;
+      planning++;
+      const decision = planning === 1 ? {action:'delegate',modelRef,task:'analysis',purpose:'evidence',instruction:'Check the supplied source',inputs:[],summary:'Reviewing source'} : planning === 2 ? {action:'draft',modelRef,task:'analysis',instruction:'',inputs:[],summary:'Writing questions'} : {action:'finish',summary:'Ready'};
+      return {ok:true,text:JSON.stringify({decision})};
+    });
+    assert.equal(result.text,'Complete questions');
+    assert.deepEqual(roles,['coordinator','delegate','coordinator','draft','coordinator']);
+  }
 });
 
 test("the agent chooses supported effort using real token-exhaustion facts instead of an unconfigured default", async () => {
