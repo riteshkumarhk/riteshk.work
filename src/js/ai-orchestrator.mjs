@@ -76,7 +76,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
       try {
         const discovered = await catalog.discover(config, { signal: options.signal, refresh: options.refresh, useReference: state.policy.useReference });
         endpoints.set(discovered.scope, config);
-        const maxCost = options.maxCost ?? state.policy.maxCost;
+        const maxCost = options.maxCost ?? (options.costPolicy === "selection" ? null : state.policy.maxCost);
         const ranked = rankAiModels(discovered.models, task, { ...options, maxCost, observations: state.observations, now: now(), scope: discovered.scope,
           incumbent: state.incumbents[JSON.stringify([discovered.scope, task])] });
         ranked.forEach((choice, index) => choices.push({ ...choice, scope: discovered.scope, preferred: index === 0 }));
@@ -100,7 +100,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
     if (!choices.length) {
       if (failures.length === configs.length && failures.length) throw failures[0];
       if (options.allowEmpty) return { choices, endpoints, state };
-      throw new Error("No available model meets this task's capabilities, limits and budget. Refresh models or review AI routing settings.");
+      throw new Error(options.target ? "The selected model is unavailable or cannot handle this task. Choose another model or Auto in AI activity." : "No available model meets this task's capabilities, limits and budget. Refresh models or review AI routing settings.");
     }
     return { choices, endpoints, state };
   }
@@ -137,7 +137,7 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
     },
     async choices(configs, task, options = {}) { return (await selection(configs, task, options)).choices; },
     async run(configs, task, options, invoke) {
-      const selected = await selection(configs, task, options), maxCost = options.maxCost ?? selected.state.policy.maxCost;
+      const selected = await selection(configs, task, options), maxCost = options.maxCost ?? (options.costPolicy === "selection" ? null : selected.state.policy.maxCost);
       let committed = 0, lastFailure, previous;
       const notify = decision => { try { options.onRoute?.(structuredClone(decision)); } catch {} };
       for (const [index, choice] of selected.choices.slice(0, Math.max(1, Math.min(3, options.maxAttempts || 3))).entries()) {

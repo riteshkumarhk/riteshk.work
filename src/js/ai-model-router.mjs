@@ -62,11 +62,13 @@ export function rankAiModels(models, task = "writing", options = {}) {
   const requiresImages = !!(profile.images || options.images), choices = [];
   for (const model of models) {
     if (!model?.id || !model.provider) continue;
-    const reasoningTokens = model.reasoning === true ? Math.max(0, Math.min(options.reasoningTokens || 0,
+    const providerOutput = options.outputPolicy === "model";
+    const reasoningTokens = !providerOutput && model.reasoning === true ? Math.max(0, Math.min(options.reasoningTokens || 0,
       (model.maxOutputTokens || requestedOutputTokens) - requestedOutputTokens,
       model.contextWindow ? model.contextWindow - inputTokens - requestedOutputTokens : Infinity)) : 0;
-    const outputTokens = requestedOutputTokens + reasoningTokens;
-    const explicit = model.sources?.includes("configured model");
+    const outputTokens = providerOutput ? model.maxOutputTokens ? Math.floor(Math.min(model.maxOutputTokens, model.contextWindow ? model.contextWindow - inputTokens : Infinity)) : null : requestedOutputTokens + reasoningTokens;
+    if (providerOutput && (outputTokens != null && outputTokens <= 0 || outputTokens == null && model.provider === "anthropic")) continue;
+    const explicit = model.sources?.includes("configured model") || options.target?.modelId === model.id && options.target.provider === model.provider && (!options.scope || options.target.scope === options.scope);
     if (!model.output && !explicit) continue;
     if (model.output && !model.output.includes(profile.output)) continue;
     if (requiresImages && model.imageInput !== true && !explicit) continue;
@@ -82,7 +84,7 @@ export function rankAiModels(models, task = "writing", options = {}) {
       (!model.releasedAt || item.at >= model.releasedAt));
     if (history.some(item => item.status === "unavailable" && now - item.at < 15 * 60000)) continue;
     if (history.some(item => item.status === "unsupported" && item.task === task && item.requirements === options.requirements && now - item.at < 15 * 60000)) continue;
-    const estimatedCost = estimateAiCost(model, inputTokens, outputTokens, task);
+    const estimatedCost = providerOutput && outputTokens == null ? null : estimateAiCost(model, inputTokens, outputTokens, task);
     if (options.maxCost != null && (estimatedCost == null || estimatedCost > options.maxCost)) continue;
     const ratings = history.filter(item => item.task === task && Number.isFinite(item.quality) && item.quality >= 0 && item.quality <= 1);
     const weight = item => Math.exp(-(now - item.at) / (30 * 86400000)) * Math.min(20, Math.max(1, item.samples || 1)) * (item.source === "accepted" ? 0.25 : 1);
@@ -111,6 +113,7 @@ export function rankAiModels(models, task = "writing", options = {}) {
     if (accepted) reasons.push(accepted + " accepted results used as a weak signal");
     for (const rubric of new Set(ratings.filter(item => item.rubric).map(item => item.rubric))) reasons.push("Evidence rubric: " + rubric);
     if (model.reasoning && profile.reasoning > 1) reasons.push("Declared reasoning support");
+    if (providerOutput) reasons.push(outputTokens == null ? "Service-default output capacity" : "Model output capacity: " + outputTokens.toLocaleString("en-US") + " tokens");
     if (reasoningTokens) reasons.push("Output allowance: " + outputTokens.toLocaleString("en-US") + " tokens including reasoning headroom");
     if (options.structured && model.structured) reasons.push("Declared structured output support");
     if (requiresImages && model.imageInput === true) reasons.push("Declared image input support");

@@ -10,11 +10,25 @@ import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./src/js/content-revision.mjs";
 import { createRefreshGate } from "./src/js/studio-refresh.mjs";
-import { agentRequestOptions } from "./src/js/ai-task-agent.mjs";
+import { agentRequestOptions, prepareRequestOptions } from "./src/js/ai-task-agent.mjs";
 import { normalizeAiModel, rankAiModels } from "./src/js/ai-model-router.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
+test("Prepare transport uses known service capacity or omits optional limits without inventing a cap", async () => {
+  const start=source.indexOf('  async function aiTextRequest('),end=source.indexOf('  function aiProviderFailure(',start),requests=[];
+  const request=runInNewContext(source.slice(start,end)+';aiTextRequest',{aiNoTemperature:new Set(),fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {status:200};}});
+  for(const provider of ['openai','gemini','anthropic']){
+    const body=provider==='gemini'?{generationConfig:{maxOutputTokens:500}}:{max_tokens:500,max_completion_tokens:500};
+    await request({provider,routingMaxTokens:48000},'service-model','mock',{},body,null,{outputPolicy:'model'});
+    assert.deepEqual(requests.at(-1),body);
+    if(provider==='anthropic')await assert.rejects(request({provider},'service-model','mock',{},body,null,{outputPolicy:'model'}),/did not advertise/);
+    else {
+      await request({provider},'service-model','mock',{},body,null,{outputPolicy:'model'});
+      assert.doesNotMatch(JSON.stringify(requests.at(-1)),/max_tokens|max_completion_tokens|maxOutputTokens/);
+    }
+  }
+});
 test("AI output preview keeps incomplete code out of the readable draft and preserves original values", () => {
   for (const text of ['', '{"questions":[{"q":"Still arriving', '```json\n{"title":', '```js\nconst value = 1;\n```']) {
     assert.equal(aiOutputPreview(text).kind, 'pending');
@@ -77,36 +91,36 @@ test('Whiteboard scoring preserves constraint scope and exact candidate evidence
   assert.match(prompt,/An untested skill is not a weakness/);
 });
 
-test("Interview request budgets reserve reasoning separately and scale with the question count", () => {
+test("Prepare Interview uses model capacity instead of count-based output or effort caps", () => {
   const questionOptions = source.match(/iprepQUser\(ctx, jd, n\), (\{[^\n]+\})\)/)[1];
   const answerOptions = source.match(/iprepAnsUser\(q\.q, sourceSnapshot\.text, sourceSnapshot\.jd\), (\{[^\n]+\})\)/)[1];
   const model = normalizeAiModel('test',{id:'reasoning-fixture',input_modalities:['text'],output_modalities:['text'],reasoning:true,max_tokens:16000,max_input_tokens:100000,pricing:{input:2,output:10}});
   const signal = new AbortController().signal;
-  const budgets = [];
   for (const count of [6,10,14]) {
-    const options = runInNewContext('('+questionOptions+')',{n:count,signal});
+    const options = prepareRequestOptions(runInNewContext('('+questionOptions+')',{n:count,signal}));
     assert.equal(options.signal,signal);
     assert.equal(options.json,true);
-    assert.ok(options.maxTokens >= count * 320);
-    assert.equal(options.reasoningTokens,4096);
-    assert.equal(options.agentReasoningTokens,4096);
-    assert.equal(options.maxEffort,'low');
+    assert.equal(options.maxTokens,undefined);
+    assert.equal(options.outputPolicy,'model');
+    assert.equal(options.costPolicy,'selection');
+    assert.equal(options.maxEffort,undefined);
     assert.equal(options.completeAgentContext,true);
-    budgets.push(options.maxTokens);
     const request = agentRequestOptions('System','Complete source and job description',options);
     const choice = rankAiModels([model],'analysis',request)[0];
-    assert.equal(choice.outputTokens,options.maxTokens+4096);
-    assert.equal(rankAiModels([{...model,reasoning:false}],'analysis',request)[0].outputTokens,options.maxTokens);
+    assert.equal(choice.outputTokens,16000);
+    assert.equal(rankAiModels([{...model,reasoning:false}],'analysis',request)[0].outputTokens,16000);
     assert.equal(rankAiModels([model],'analysis',{...request,maxCost:choice.estimatedCost-0.000001}).length,0);
   }
-  assert.ok(budgets[2]>budgets[0]);
-  const answer = runInNewContext('('+answerOptions+')',{signal});
-  assert.equal(answer.maxTokens,900);
-  assert.equal(answer.reasoningTokens,4096);
-  assert.equal(answer.agentReasoningTokens,4096);
-  assert.equal(answer.maxEffort,'low');
+  const answer = prepareRequestOptions(runInNewContext('('+answerOptions+')',{signal}));
+  assert.equal(answer.maxTokens,undefined);
+  assert.equal(answer.outputPolicy,'model');
+  assert.equal(answer.maxEffort,undefined);
   assert.equal(answer.completeAgentContext,true);
   assert.equal(answer.signal,signal);
+  const start=source.indexOf('rkTailorSystem(g.level)'),end=source.indexOf('    aiSessionPanel = mountAiSession');
+  assert.ok(start>0&&end>start);
+  const prepare = source.slice(start,end);
+  assert.doesNotMatch(prepare,/await aiText\(/);
 });
 
 test("Interview complete sources retain late caveats and nested cells without changing legacy extraction", () => {
@@ -351,7 +365,7 @@ test("live resume recheck cannot save into an edited, closed or different docume
       rbReadEditor: () => context.working, rbDesignSnap: () => ({ margin: context.margin }), margin: "normal", rbToPlainText: value => value.name,
       atsRbLayout: "single", atsLevel: "staff", atsState: {}, atsRbPages: 1, btnBusy: () => "Check", btnIdle: () => {},
       atsModelChecks: () => ({ checks: [], structureScore: 90 }), aiCfg: () => ({}), atsSystem: () => "", atsUser: () => "", atsFactsBlock: () => "",
-      csgenParse: value => value, aiText: () => { calls++; return new Promise(done => { resolve = done; }); },
+      csgenParse: value => value, prepareAiText: () => { calls++; return new Promise(done => { resolve = done; }); },
       atsBlendScore: () => ({ score: 90, band: "Strong" }), dirty: true, paintSide: () => {}, rbSaveWorkspace: () => saves++, status: () => {}
     };
     const run = runInNewContext(`(${source.slice(start, end)})`, context);

@@ -88,6 +88,91 @@ test("AI activity presents structured drafts without raw-code flicker and preser
   } finally { await browser.close(); }
 });
 
+test("AI activity discovers connected models and pins the next request without changing an active job", {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.addInitScript(()=>{
+      localStorage.setItem('rk:ai:img:provider','openai'); localStorage.setItem('rk:ai:img:key','synthetic-picker-key');
+      const original=window.fetch; window.modelRequests=[]; window.modelDiscoveries=[];
+      window.fetch=async(resource,options={})=>{
+        const url=new URL(typeof resource==='string'?resource:resource.url,location.href);
+        if(!['api.anthropic.com','api.openai.com'].includes(url.hostname))return original(resource,options);
+        const provider=url.hostname==='api.anthropic.com'?'anthropic':'openai';
+        if(url.pathname.endsWith('/models')){
+          window.modelDiscoveries.push(provider);
+          if(window.failModelDiscovery)return Response.json({error:'Unavailable'},{status:503});
+          const ids=window.emptyModelDiscovery?[]:provider==='anthropic'?['service-choice-a','service-choice-b']:['service-choice-c'];
+          return Response.json({data:ids.map(id=>({id,display_name:id+' live name',input_modalities:['text','image'],output_modalities:['text'],max_input_tokens:200000,max_tokens:48000,pricing:{input:1,output:3},capabilities:{structured_outputs:{supported:true}}}))});
+        }
+        const request=JSON.parse(options.body),system=request.system || request.messages[0].content;
+        const coordinator=system.startsWith("You are Studio's outcome coordinator.");
+        window.modelRequests.push({provider,model:request.model,coordinator});
+        let text='Completed synthetic answer';
+        if(coordinator){
+          const input=JSON.parse(request.messages.at(-1).content);
+          text=JSON.stringify({decision:input.candidate?{action:'finish'}:{action:'draft',modelRef:input.draftModels[0],task:'writing',instruction:'',inputs:[]}});
+        }else if(window.holdModelDraft){await new Promise(resolve=>{window.releaseModelDraft=resolve;});}
+        return Response.json(provider==='anthropic'?{content:[{type:'text',text}],stop_reason:'end_turn',usage:{input_tokens:10,output_tokens:5}}:{choices:[{message:{content:text},finish_reason:'stop'}],usage:{prompt_tokens:10,completion_tokens:5}});
+      };
+    });
+    await openIntegratedFixture(page);
+    const before=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-ai-session-toggle]').click();
+    const panel=page.locator('[data-ai-session-panel]'),select=panel.getByLabel('Model for next request');
+    await page.waitForFunction(()=>document.querySelectorAll('[data-ai-model] optgroup option').length===3);
+    assert.equal(await select.inputValue(),'');
+    assert.deepEqual(await select.locator('optgroup').evaluateAll(groups=>groups.map(group=>group.label)),['anthropic','openai']);
+    assert.equal(await page.evaluate(()=>window.modelRequests.length),0,'Discovery must not generate content');
+    const choose=async model=>select.selectOption({label:model+' live name'});
+    await choose('service-choice-b');
+    await page.getByRole('button',{name:'Close AI activity',exact:true}).click();
+    await page.locator('[data-ai-session-toggle]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-ai-model-status]').textContent==='');
+    assert.match(await select.inputValue(),/service-choice-b/);
+    await page.evaluate(()=>{window.holdModelDraft=true;window.modelResult=null;window.__RKStudio.improveText('Original selected copy',{}).then(value=>{window.modelResult=value;},error=>{window.modelResult=error.message;});});
+    await page.waitForFunction(()=>!!window.releaseModelDraft);
+    await choose('service-choice-c');
+    await page.evaluate(()=>{window.holdModelDraft=false;window.releaseModelDraft();});
+    await page.waitForFunction(()=>window.modelResult!==null);
+    assert.equal(await page.evaluate(()=>window.modelResult),'Completed synthetic answer');
+    assert.ok(await page.evaluate(()=>window.modelRequests.every(request=>request.model==='service-choice-b')),'A picker change cannot switch the running job or review');
+    await page.evaluate(()=>{window.modelRequests=[];window.modelResult=null;window.__RKStudio.improveText('Another selected copy',{}).then(value=>{window.modelResult=value;},error=>{window.modelResult=error.message;});});
+    await page.waitForFunction(()=>window.modelResult!==null);
+    assert.equal(await page.evaluate(()=>window.modelResult),'Completed synthetic answer');
+    assert.ok(await page.evaluate(()=>window.modelRequests.length===3&&window.modelRequests.every(request=>request.model==='service-choice-c'&&request.provider==='openai')));
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:ai:txt:provider')),'anthropic','Manual selection does not rewrite API-key settings');
+    await page.evaluate(()=>{window.failModelDiscovery=true;});
+    await page.getByRole('button',{name:'Refresh models',exact:true}).click();
+    await panel.locator('[data-ai-model-status]').filter({hasText:'HTTP 503'}).waitFor();
+    assert.match(await select.inputValue(),/service-choice-c/);
+    assert.match(await select.locator('option:checked').textContent(),/Unavailable/);
+    await page.evaluate(()=>{window.failModelDiscovery=false;window.emptyModelDiscovery=true;});
+    await page.getByRole('button',{name:'Refresh models',exact:true}).click();
+    await panel.locator('[data-ai-model-status]').filter({hasText:'Selected model unavailable'}).waitFor();
+    await page.evaluate(()=>{window.modelRequests=[];window.modelResult=null;window.__RKStudio.improveText('No fallback',{}).then(value=>{window.modelResult=value;},error=>{window.modelResult=error.message;});});
+    await page.waitForFunction(()=>window.modelResult!==null);
+    assert.match(await page.evaluate(()=>window.modelResult),/selected model is unavailable/);
+    assert.equal(await page.evaluate(()=>window.modelRequests.length),0);
+    await select.selectOption('');
+    await page.evaluate(()=>{window.emptyModelDiscovery=false;});
+    await page.getByRole('button',{name:'Refresh models',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('[data-ai-model] optgroup option').length===3);
+    await page.evaluate(()=>{window.modelRequests=[];window.modelResult=null;window.__RKStudio.improveText('Auto request',{}).then(value=>{window.modelResult=value;},error=>{window.modelResult=error.message;});});
+    await page.waitForFunction(()=>window.modelResult!==null);
+    assert.equal(await page.evaluate(()=>window.modelResult),'Completed synthetic answer');
+    assert.ok(await page.evaluate(()=>window.modelRequests.length===3&&window.modelRequests.every(request=>request.provider==='anthropic')),'Auto retains the configured routing policy');
+    for(const width of [1440,1024]){
+      await page.setViewportSize({width,height:900});
+      assert.ok(await select.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.width>0&&bounds.right<=innerWidth&&bounds.left>=0;}));
+      await page.screenshot({path:join(tmpdir(),'rk-ai-model-picker-'+width+'.png')});
+    }
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
+    assert.deepEqual(errors,[]);
+  }finally{await browser.close();}
+});
+
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
   const tab = page.locator('[data-l2tab="slides"]');
@@ -2660,16 +2745,16 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       const request = await page.evaluate(()=>window.preparationCalls.at(-1));
       assert.match(request.user,/LATE_RESULTS_PENDING/);
       assert.match(request.system,/Target seniority and listening audience are separate/);
-      assert.equal(request.maxTokens,2600+4096);
-      assert.equal(request.effort,'low');
-      assert.ok(await page.evaluate(()=>window.preparationPlanningCalls.every(call=>call.maxTokens === 2048+4096 && call.effort === 'low')));
+      assert.equal(request.maxTokens,16000);
+      assert.equal(request.effort,'high');
+      assert.ok(await page.evaluate(()=>window.preparationPlanningCalls.every(call=>call.maxTokens === 16000 && call.effort === 'low')));
       await page.locator('[data-iprep-ans="0"]').click();
       await page.locator('.iprep__a strong').waitFor();
       const answer = await page.evaluate(()=>window.preparationCalls.at(-1));
       assert.match(answer.user,/LATE_CELL_SEVEN_TO_FOUR/);
       assert.match(answer.system,/No bracketed placeholders/);
-      assert.equal(answer.maxTokens,900+4096);
-      assert.equal(answer.effort,'low');
+      assert.equal(answer.maxTokens,16000);
+      assert.equal(answer.effort,'high');
       const planning = await page.evaluate(()=>window.preparationPlanningCalls.slice(-4));
       assert.deepEqual(planning.map(call=>call.review),[false,true,false,true]);
       for (const [index,call] of planning.entries()) {
@@ -2686,8 +2771,8 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       await page.locator('#iprepCount').selectOption(String(count));
       await page.locator('[data-iprep-run]').click();
       await page.waitForFunction(expected=>document.querySelectorAll('.iprep__q').length === expected,count);
-      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).maxTokens),count*320+4096);
-      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).effort),'low');
+      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).maxTokens),16000);
+      assert.equal(await page.evaluate(()=>window.preparationCalls.at(-1).effort),'high');
     }
     await page.locator('[data-iprep-new]').click();
     await page.locator('#iprepCount').selectOption('6');

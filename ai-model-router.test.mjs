@@ -412,7 +412,7 @@ test("agent-selected models still pass hard eligibility and only accepted result
     assert.equal(modelId, "second"); return { ok: true, text: "PRIVATE PLAN" };
   });
   assert.deepEqual((await store.read()).incumbents, {});
-  await assert.rejects(orchestrator.run([config], "analysis", { target: { ...target, modelId: "not-accessible" } }, async () => { throw new Error("Must not call"); }), /No available model/);
+  await assert.rejects(orchestrator.run([config], "analysis", { target: { ...target, modelId: "not-accessible" } }, async () => { throw new Error("Must not call"); }), /selected model is unavailable/);
   await assert.rejects(orchestrator.acceptAgentResult(coordinator.routing.id, "job-test"), /no longer/);
   await assert.rejects(orchestrator.feedback(coordinator.routing.id, { quality: 1 }), /no longer/);
   const draft = await orchestrator.run([config], "creative", { target, agent: { jobId: "job-test", role: "draft", step: 2 } }, async () => ({ ok: true, text: "PRIVATE DRAFT" }));
@@ -600,6 +600,50 @@ test("the coordinator receives a fresh action schema and unwraps its constrained
   });
   assert.equal(calls, 3);
   assert.equal(result.text, "Final answer");
+});
+
+test("Prepare model capacity reaches every agent stage and manual selection cannot silently switch", async () => {
+  const {prepareRequestOptions} = await import('./src/js/ai-task-agent.mjs');
+  const {orchestrator,config} = orchestratorFixture([model('chosen',{max_tokens:32000,reasoning:true,pricing:{input:2,output:10}}),model('other',{max_tokens:64000,pricing:{input:2,output:10}})]);
+  await orchestrator.configure({maxCost:0.000001});
+  const scope = (await orchestrator.choices([config],'writing',{maxCost:10}))[0].scope;
+  const options = prepareRequestOptions({maxTokens:500,reasoningTokens:4096,maxEffort:'low',modelTarget:{provider:config.provider,scope,modelId:'chosen'}});
+  assert.equal(options.outputTokens,0); assert.equal(options.maxEffort,undefined);
+  let planning=0; const roles=[];
+  const result=await createAiTaskAgent({router:orchestrator,now:()=>now}).run([config],{task:'writing',system:'Write the complete answer',user:'Source',options},async(selected,modelId,step)=>{
+    assert.equal(modelId,'chosen'); assert.equal(selected.routingMaxTokens,32000); roles.push(step.role);
+    if(step.role!=='coordinator')return {ok:true,text:'Complete output'};
+    const input=JSON.parse(step.user);assert.equal(input.catalogue.length,1); assert.equal(input.limits.remainingEstimatedUSD,null);
+    planning++;
+    return {ok:true,text:JSON.stringify(planning===1?{action:'delegate',modelRef:input.catalogue[0].ref,task:'analysis',purpose:'evidence',instruction:'Review',inputs:[]}:planning===2?{action:'draft',modelRef:input.catalogue[0].ref,task:'writing',instruction:'',inputs:[]}:{action:'finish'})};
+  });
+  assert.equal(result.text,'Complete output'); assert.deepEqual(roles,['coordinator','delegate','coordinator','draft','coordinator']);
+  let called=false;
+  await assert.rejects(createAiTaskAgent({router:orchestrator,now:()=>now}).run([config],{task:'writing',system:'Write',user:'Source',options:{...options,modelTarget:{...options.modelTarget,modelId:'removed'}}},async()=>{called=true;}),/selected model is unavailable/);
+  assert.equal(called,false);
+  await assert.rejects(orchestrator.run([config],'writing',{...options,maxCost:0.000001},async()=>{called=true;}),/No available model/);
+  assert.equal(called,false);
+});
+
+test("model output policy uses discovered capacity rather than tool caps and accounts for remaining context", () => {
+  const available = normalizeAiModel('anthropic', {id:'service-model',max_tokens:64000,max_input_tokens:200000,context_window:200000,reasoning:true});
+  for (const outputTokens of [500,900,2200,6000]) {
+    const choice = rankAiModels([available], 'writing', {inputTokens:12000,outputTokens,reasoningTokens:4096,outputPolicy:'model'})[0];
+    assert.equal(choice.outputTokens,64000);
+    assert.equal(choice.reasoningTokens,0);
+  }
+  assert.equal(rankAiModels([available],'analysis',{inputTokens:180000,outputPolicy:'model'})[0].outputTokens,20000);
+  assert.equal(rankAiModels([available],'analysis',{inputTokens:200000,outputPolicy:'model'}).length,0);
+  assert.equal(rankAiModels([available],'writing',{inputTokens:12000,outputTokens:500})[0].outputTokens,500);
+  const unknown = {...available,maxOutputTokens:null};
+  assert.equal(rankAiModels([unknown],'writing',{outputPolicy:'model'}).length,0);
+  assert.equal(rankAiModels([{...unknown,provider:'openai'}],'writing',{outputPolicy:'model'})[0].outputTokens,null);
+  const newlyListed = normalizeAiModel('openai',{id:'new-service-model'}), target={provider:'openai',scope:'api',modelId:'new-service-model'};
+  assert.equal(rankAiModels([newlyListed],'writing',{inputTokens:100,outputPolicy:'model'}).length,0);
+  const selected=rankAiModels([newlyListed],'writing',{inputTokens:100,outputPolicy:'model',scope:'api',target})[0];
+  assert.equal(selected.outputTokens,null); assert.equal(selected.estimatedCost,null);
+  assert.equal(rankAiModels([newlyListed],'writing',{inputTokens:100,outputPolicy:'model',scope:'other',target}).length,0);
+  assert.equal(rankAiModels([newlyListed],'writing',{inputTokens:100,outputPolicy:'model',scope:'api',target,maxCost:1}).length,0);
 });
 
 test("the agent carries opt-in reasoning headroom through coordination delegation and drafting", async () => {

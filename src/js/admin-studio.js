@@ -35,13 +35,13 @@ import { completeStudioBackup } from "./studio-content-backup.mjs";
 import { presentStudioDeck } from "./slide-studio-player.mjs";
 import { openPresenterTab } from "./presenter-tab.mjs";
 import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
-import { createAiCatalog } from "./ai-model-catalog.mjs";
+import { createAiCatalog, aiProviderScope } from "./ai-model-catalog.mjs";
 import { createAiOrchestrator } from "./ai-orchestrator.mjs";
 import { AI_TASKS } from "./ai-model-router.mjs";
 import { parseCompositionResponse, compositionRevision, COMPOSITION_RESPONSE_SCHEMA } from "./slide-merge-ai.mjs";
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
-import { createAiTaskAgent, agentRequestOptions } from "./ai-task-agent.mjs";
+import { createAiTaskAgent, agentRequestOptions, prepareRequestOptions } from "./ai-task-agent.mjs";
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
 import { createPresenterMetadataSync } from "./presenter-metadata-sync.mjs";
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
@@ -2925,7 +2925,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         }
         return neural;
       },
-      complete: async input => csgenParse(await aiText(aiCfg('txt'), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(input.kw, input.flags, input.sem)), { task: 'analysis', json: true, maxTokens: 6000, temperature: 0, signal }))
+      complete: async input => csgenParse(await prepareAiText(aiCfg('txt'), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(input.kw, input.flags, input.sem)), { task: 'analysis', json: true, temperature: 0, signal }))
     });
   }
   async function atsFetchToPanel(panel) {
@@ -3990,7 +3990,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         const keyword = jd ? atsKeywordMatch(text, jd) : null, semantic = jd ? atsSemanticFit(text, jd) : null;
         const checks = atsModelChecks(working, { level, pages: atsRbPages });
-        const result = csgenParse(await aiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(keyword, checks.checks, semantic)), { task: "analysis", json: true, maxTokens: 6000, temperature: 0, signal: rbLifetime.signal }));
+        const result = csgenParse(await prepareAiText(aiCfg("txt"), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(keyword, checks.checks, semantic)), { task: "analysis", json: true, temperature: 0, signal: rbLifetime.signal }));
         if (!current()) return;
         if (snapshot !== JSON.stringify(rbReadEditor(docEl, working)) || design !== JSON.stringify(rbDesignSnap()) || inputs !== JSON.stringify([review.level, review.company, review.jd])) {
           status("The resume changed while checking. The previous assessment is kept; re-check the current version.");
@@ -14964,7 +14964,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     localStorage.removeItem(DRAFT_SIG_KEY);
     aiSessionPanel?.close(false);
     aiAutomaticEvaluation?.abort();
-    aiSession.end();
+    aiSession.end(); aiManualModel = null;
     location.href = "/";
   }
 
@@ -16238,6 +16238,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   const aiTaskAgent = createAiTaskAgent({ router: aiOrchestrator });
   const aiSession = siteAiSession(window);
   let aiSessionPanel = null;
+  let aiManualModel = null;
   let aiCounterMotion = null;
   let aiLastRoute = null;
   let aiAutomaticEvaluation = null, aiEvaluationResult = null, aiEvaluationError = "";
@@ -16264,9 +16265,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         stopEvaluation: () => aiAutomaticEvaluation?.abort(), onPolicy: (key, value) => { if (key === "autoEvaluate" && !value) aiAutomaticEvaluation?.abort(); } });
     });
   }
-  async function aiRoutingConfigs(cfg) {
+  async function aiRoutingConfigs(cfg, allConnected = false) {
     const state = await aiOrchestrator.state();
-    if (state.policy.providers !== "connected" || cfg.provider === "custom" && cfg.model) return [cfg];
+    if (!allConnected && state.policy.providers !== "connected" || cfg.provider === "custom" && cfg.model) return [cfg];
     const configs = [cfg];
     if (aiMode() === "cf" && aiSess()) {
       await new Promise(resolve => aiCfRefresh(resolve));
@@ -16278,6 +16279,19 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       }
     }
     return configs;
+  }
+  async function aiSessionModels({ signal, refresh = false } = {}) {
+    const configs = await aiRoutingConfigs(aiCfg("txt"), true), state = await aiOrchestrator.state();
+    const models = [], errors = [];
+    for (const config of configs) {
+      try {
+        const discovered = await aiCatalog.discover(config, { signal, refresh, useReference: state.policy.useReference });
+        for (const model of discovered.models) if (!model.output || model.output.includes("text")) models.push({
+          provider: model.provider, modelId: model.id, scope: discovered.scope, name: model.name
+        });
+      } catch (error) { signal?.throwIfAborted(); errors.push(config.provider + ": " + error.message); }
+    }
+    return { models, error: errors.join(" ") };
   }
   function aiTaskOptions(system, user, opts = {}) {
     return { ...agentRequestOptions(system, user, opts),
@@ -16291,10 +16305,15 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   async function aiRunTask(cfg, task, system, user, opts, invoke) {
     opts = opts || {};
+    if (task !== "image" && aiManualModel) opts = { ...opts, modelTarget: { ...aiManualModel } };
     const job = aiSession.begin(task, opts.deckAuthoring ? "Draft presentation" : undefined);
     const signal = opts.signal ? AbortSignal.any([opts.signal, job.signal]) : job.signal;
     try {
-      const configs = await aiRoutingConfigs(cfg);
+      let configs = await aiRoutingConfigs(cfg, !!opts.modelTarget);
+      if (opts.modelTarget) {
+        configs = configs.filter(config => aiProviderScope(config) === opts.modelTarget.scope);
+        if (!configs.length) throw new Error("The selected model's service is no longer connected. Choose another model or Auto in AI activity.");
+      }
       signal.throwIfAborted();
       const options = aiTaskOptions(system, user, { ...opts, signal,
         onRoute: route => { aiSession.route(job.id, route); opts.onRoute?.(route); },
@@ -16363,6 +16382,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   const aiNoTemperature = new Set();
   async function aiTextRequest(cfg, model, url, headers, body, signal, options = {}) {
     const sampling = cfg.provider === "gemini" ? body.generationConfig : body;
+    if (options.outputPolicy === "model" && !cfg.routingMaxTokens) {
+      if (cfg.provider === "anthropic") throw new Error("The service did not advertise this model's output capacity. Refresh models or choose another model in AI activity.");
+      delete body.max_tokens; delete body.max_completion_tokens;
+      if (cfg.provider === "gemini") delete sampling.maxOutputTokens;
+    }
     const cacheKey = JSON.stringify([cfg.provider, cfg.base, model]);
     if (cfg.provider === "anthropic" && cfg.routingModel?.reasoning === true) delete sampling.temperature;
     if (cfg.provider === "anthropic" && cfg.routingModel?.effortLevels?.includes(options.effort)) body.output_config = { ...body.output_config, effort: options.effort };
@@ -16557,7 +16581,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   // (no JSON format) with ONE frame of the candidate's shared screen/camera attached.
   async function wbVisionTurn(cfg, model, system, user, img, opts) {
     opts = opts || {};
-    const result = await aiVisionOnce(cfg, model, system, user, img ? [img] : [], { ...opts, maxTokens: opts.maxTokens || 500, json: false });
+    const result = await aiVisionOnce(cfg, model, system, user, img ? [img] : [], prepareRequestOptions({ ...opts, json: false }));
     if (!result.ok) throw new Error(result.err);
     return result.text;
   }
@@ -16606,6 +16630,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     opts = opts || {};
     const result = await aiRunTask(cfg, opts.task || (opts.deckAuthoring ? "creative" : "writing"), system, user, opts, (selected, model, step) => aiChatOnce(selected, model, step.system, step.user, step.options));
     return result.text;
+  }
+  async function prepareAiText(cfg, system, user, opts) {
+    return aiText(cfg, system, user, prepareRequestOptions(opts));
   }
   // Inline "connect an AI service" dialog, shown from a feature when its key is missing.
   // Lets the author pick a provider + key and choose ONE shared key (text + image) or a separate one.
@@ -17822,14 +17849,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         var c = await ensureCtx();
         if (kind === "tailor") {
-          var t = csgenParse(await aiText(aiCfg("txt"), rkTailorSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { json: true, maxTokens: 1400, temperature: 0.5 }));
+          var t = csgenParse(await prepareAiText(aiCfg("txt"), rkTailorSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { json: true, temperature: 0.5 }));
           if (!t || !Array.isArray(t.workIds)) throw new Error("Couldn\u2019t tailor that \u2014 try again.");
           out.__tailorData = t; outBox.__tailor = t; out[kind] = rkRenderTailor(t); outBox.innerHTML = out[kind];
         } else if (kind === "cover") {
-          var html = await aiText(aiCfg("txt"), rkCoverSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { maxTokens: 800, temperature: 0.6 });
+          var html = await prepareAiText(aiCfg("txt"), rkCoverSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { temperature: 0.6 });
           out[kind] = rkRenderCover(iprepSafeHtml(rkCleanHtml(html))); outBox.innerHTML = out[kind];
         } else {
-          var gp = csgenParse(await aiText(aiCfg("txt"), rkGapSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { task: "analysis", json: true, maxTokens: 1900, temperature: 0.5 }));
+          var gp = csgenParse(await prepareAiText(aiCfg("txt"), rkGapSystem(g.level), rkUser(c.ctx, c.jd, c.resume), { task: "analysis", json: true, temperature: 0.5 }));
           if (!gp || (!Array.isArray(gp.strengths) && !Array.isArray(gp.gaps))) throw new Error("Couldn\u2019t analyse that \u2014 try again.");
           out[kind] = rkRenderGap(gp); outBox.innerHTML = out[kind];
         }
@@ -17978,7 +18005,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       if (!original && linked && !evidence?.works.length && !resume.trim()) throw new Error('Select permitted project evidence or a resume in the brief before writing a letter.');
       const company = original ? original.company ?? clState.company : clState.company;
       signal?.throwIfAborted();
-      var text = await aiText(aiCfg("txt"), clSystem(clLevel, clState.length), clUser(ctx, jd, resume, company), { maxTokens: 1200, temperature: variant ? 0.85 : 0.6, signal });
+      var text = await prepareAiText(aiCfg("txt"), clSystem(clLevel, clState.length), clUser(ctx, jd, resume, company), { temperature: variant ? 0.85 : 0.6, signal });
       signal?.throwIfAborted();
       text = String(text || "").replace(/^```[a-z]*/i, "").replace(/```$/, "").trim();
       if (!text) throw new Error("The letter came back empty \u2014 try again.");
@@ -18212,7 +18239,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         iprepCheckInput(sourceSnapshot.text, sourceSnapshot.jd);
         const system = 'You are an interview practice coach for ' + iprepLevelGuide(g.level) + '\n' + iprepEvidenceRules() + '\nReview the candidate response, not a suggested answer. Distinguish a contradiction with saved evidence from an additional unverified claim and from missing detail. Do not call every new detail false or require measured outcomes when results are pending. Assess whether the response answers the exact question, explains the decision and preserves credit and uncertainty. Give concise actionable feedback, not a replacement answer or hiring score. Ask one relevant follow-up without a false premise. Evidence must be exact excerpts from SAVED EVIDENCE, not from the candidate response. Return JSON only: {"verdict":string,"strong":[string],"gaps":[string],"evidence":[string],"nextTry":string,"followup":string}.';
         const input = 'QUESTION:\n' + turn.question + '\n\nCANDIDATE RESPONSE:\n' + answer + '\n\nRESPONSE SECONDS: ' + Math.round(elapsed) + '\n\nSAVED EVIDENCE:\n' + sourceSnapshot.text + '\n\nTARGET ROLE:\n' + sourceSnapshot.jd;
-        const result = csgenParse(await aiText(aiCfg('txt'),system,input,{task:'analysis',json:true,maxTokens:1600,temperature:0.3,signal}));
+        const result = csgenParse(await prepareAiText(aiCfg('txt'),system,input,{task:'analysis',json:true,temperature:0.3,signal}));
         signal.throwIfAborted();
         if (!result || typeof result.verdict !== 'string') throw new Error('No feedback came back. Your response is saved; try again.');
         const strings = values => (Array.isArray(values) ? values : []).filter(value => typeof value === 'string').slice(0,5);
@@ -18264,7 +18291,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const nextSource = prepSourceSnapshot(ctx, jd, requestWorks, linkedBrief());
         signal.throwIfAborted();
         if (!reconnectEntry) {
-          var obj = csgenParse(await aiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { task: "analysis", json: true, maxTokens: Math.max(2600, n * 320), reasoningTokens: 4096, agentReasoningTokens: 4096, maxEffort: "low", completeAgentContext: true, temperature: 0.75, signal }));
+          var obj = csgenParse(await prepareAiText(aiCfg("txt"), iprepSystem(g.level), iprepQUser(ctx, jd, n), { task: "analysis", json: true, completeAgentContext: true, temperature: 0.75, signal }));
           signal.throwIfAborted();
           questions = iprepReadQuestions(obj, n);
           practice = null;
@@ -18289,7 +18316,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved set before generating answers.');
         iprepCheckInput(sourceSnapshot.text, sourceSnapshot.jd);
-        var html = await aiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, sourceSnapshot.text, sourceSnapshot.jd), { task: "analysis", maxTokens: 900, reasoningTokens: 4096, agentReasoningTokens: 4096, maxEffort: "low", completeAgentContext: true, temperature: 0.6, signal });
+        var html = await prepareAiText(aiCfg("txt"), iprepAnsSystem(g.level), iprepAnsUser(q.q, sourceSnapshot.text, sourceSnapshot.jd), { task: "analysis", completeAgentContext: true, temperature: 0.6, signal });
         signal.throwIfAborted();
         html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
         ansEl.innerHTML = iprepSafeHtml(html); ansEl.hidden = false;
@@ -18798,7 +18825,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         var own = (ownEl && ownEl.value.trim()) || "";
         if (own) prompt = { prompt: own, context: "", watchfor: [] };
-        else prompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, maxTokens: 700, temperature: 0.9, signal }));
+        else prompt = csgenParse(await prepareAiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, temperature: 0.9, signal }));
         signal.throwIfAborted();
         if (!prompt || !prompt.prompt) throw new Error("Couldn\u2019t set a prompt \u2014 try again.");
         sessId = null; transcript = ""; sessTurns = []; sessDraft = ""; sessPlan = null; sessTimer = 0;
@@ -18838,7 +18865,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       stage.innerHTML = wbPromptCard(prompt) + '<div class="wb__loading">Building your game-plan\u2026</div>';
       saveSess();
       try {
-        var plan = csgenParse(await aiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { task: "analysis", json: true, maxTokens: 2000, temperature: 0.6, signal }));
+        var plan = csgenParse(await prepareAiText(aiCfg("txt"), wbPlanSystem(st.mins), wbPlanUser(prompt), { task: "analysis", json: true, temperature: 0.6, signal }));
         signal.throwIfAborted();
         sessPlan = plan; saveSess();
         stage.innerHTML = wbPromptCard(prompt) + wbPlanCard(plan, st.mins) + wbDraftCard();
@@ -19122,9 +19149,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           var reply = "";
           if (frame && wModel) {
             try { const result = csgenParse(await wbVisionTurn(aiCfg('txt'), wModel, wbMockSystem(st.mins) + WB_SEE_SYS, usr, frame, {maxTokens:600,temperature:0.6,signal:turnSignal})); if (!result || typeof result.reply !== 'string' || !result.reply.trim()) throw new Error('Empty board reply'); reply = result.reply.trim(); observation.status = ['readable','unreadable','uncertain'].includes(result.readability) ? result.readability : 'uncertain'; }
-            catch (e) { observation.status = turnSignal.aborted ? 'cancelled' : 'failed'; turnSignal.throwIfAborted(); err.textContent = 'Board analysis failed. This reply uses the conversation only.'; reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), usr + '\nNo board image is available for this reply. Do not imply you saw it.', { maxTokens: 500, temperature: 0.75, signal:turnSignal }) || "").trim(); }
+            catch (e) { observation.status = turnSignal.aborted ? 'cancelled' : 'failed'; turnSignal.throwIfAborted(); err.textContent = 'Board analysis failed. This reply uses the conversation only.'; reply = (await prepareAiText(aiCfg("txt"), wbMockSystem(st.mins), usr + '\nNo board image is available for this reply. Do not imply you saw it.', { temperature: 0.75, signal:turnSignal }) || "").trim(); }
           } else {
-            reply = (await aiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { maxTokens: 500, temperature: 0.75, signal:turnSignal }) || "").trim();
+            reply = (await prepareAiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { temperature: 0.75, signal:turnSignal }) || "").trim();
           }
           turnSignal.throwIfAborted(); if (generation !== replyGeneration || !running()) return;
           if (!reply) throw new Error('The interviewer returned no response. Your submitted answer is retained.');
@@ -19223,10 +19250,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           if (finalObservation) sessObservations.push(finalObservation);
           stopWatch();
           if (sFrame && wModel) {
-            try { var vr = await aiVisionOnce(aiCfg("txt"), wModel, wbScoreSystem() + WB_SEE_SCORE, wbScoreUser(prompt, transcript) + evidenceContext() + '\nAttached final image ID: ' + finalObservation.id, [sFrame], { signal }); if (!vr || !vr.ok) throw new Error((vr && vr.err) || "vision score failed"); raw = vr.text; }
-            catch (e) { finalObservation.status = 'failed'; signal.throwIfAborted(); err.textContent = 'Final image analysis failed. This review uses the conversation only.'; raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript) + evidenceContext(), { task: "analysis", json: true, maxTokens: 2200, temperature: 0.4, signal }); }
+            try { var vr = await aiVisionOnce(aiCfg("txt"), wModel, wbScoreSystem() + WB_SEE_SCORE, wbScoreUser(prompt, transcript) + evidenceContext() + '\nAttached final image ID: ' + finalObservation.id, [sFrame], prepareRequestOptions({ signal })); if (!vr || !vr.ok) throw new Error((vr && vr.err) || "vision score failed"); raw = vr.text; }
+            catch (e) { finalObservation.status = 'failed'; signal.throwIfAborted(); err.textContent = 'Final image analysis failed. This review uses the conversation only.'; raw = await prepareAiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript) + evidenceContext(), { task: "analysis", json: true, temperature: 0.4, signal }); }
           } else {
-            raw = await aiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript) + evidenceContext(), { task: "analysis", json: true, maxTokens: 2200, temperature: 0.4, signal });
+            raw = await prepareAiText(aiCfg("txt"), wbScoreSystem(), wbScoreUser(prompt, transcript) + evidenceContext(), { task: "analysis", json: true, temperature: 0.4, signal });
           }
           signal.throwIfAborted();
           var s = csgenParse(raw);
@@ -19265,7 +19292,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const signal = exercise.signal;
         btnBusy(np, "New prompt\u2026");
         try {
-          const nextPrompt = csgenParse(await aiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, maxTokens: 700, temperature: 0.95, signal }));
+          const nextPrompt = csgenParse(await prepareAiText(aiCfg("txt"), wbPromptSystem(), wbPromptUser(st.mins, st.brief), { task: "creative", json: true, temperature: 0.95, signal }));
           signal.throwIfAborted();
           if (!nextPrompt?.prompt) throw new Error('The new prompt was empty. Your previous exercise is still saved.');
           prompt = nextPrompt;
@@ -19284,7 +19311,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (d.length < 20) { err.textContent = "Jot a few lines of your approach first."; return; }
         err.textContent = ""; btnBusy(crit, "Reading the room\u2026");
         try {
-          var c = csgenParse(await aiText(aiCfg("txt"), wbCritiqueSystem(st.mins), wbCritiqueUser(prompt, d), { task: "analysis", json: true, maxTokens: 1500, temperature: 0.55, signal }));
+          var c = csgenParse(await prepareAiText(aiCfg("txt"), wbCritiqueSystem(st.mins), wbCritiqueUser(prompt, d), { task: "analysis", json: true, temperature: 0.55, signal }));
           signal.throwIfAborted();
           sessCritique = c; saveSess();
           var out = stage.querySelector(".wb__crit"); if (out) out.innerHTML = wbCritiqueHtml(c);
@@ -19666,7 +19693,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const nextSource = prepSourceSnapshot(ctx, storyJdText(), [selected], linkedBrief());
         const nextSettings = {tone:g.tone,audience:g.audience,dur:g.dur};
         if (!reconnectEntry) {
-          var obj = csgenParse(await aiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur), g.audience), storyThemesUser(ctx, nextSource.jd), { task: "creative", json: true, maxTokens: 2200, temperature: 0.5, signal }));
+          var obj = csgenParse(await prepareAiText(aiCfg("txt"), storyThemesSystem(g.tone, storyDurLabel(g.dur), g.audience), storyThemesUser(ctx, nextSource.jd), { task: "creative", json: true, temperature: 0.5, signal }));
           signal.throwIfAborted();
           themes = storyReadThemes(obj); drafts = {};
           curTi = -1; taleBox.__script = null; taleBox.__title = ''; questionsArr = []; qlist.innerHTML = '';
@@ -19715,7 +19742,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating a new script.');
         const settings = currentSettings();
-        var s = csgenParse(await aiText(aiCfg("txt"), storyTellSystem(settings.tone, storyDurLabel(settings.dur), STORY_BUDGET[settings.dur] || 12, settings.audience), storyTellUser(t, sourceSnapshot.text, sourceSnapshot.jd), { task: "creative", json: true, maxTokens: 2200, temperature: 0.5, signal }));
+        var s = csgenParse(await prepareAiText(aiCfg("txt"), storyTellSystem(settings.tone, storyDurLabel(settings.dur), STORY_BUDGET[settings.dur] || 12, settings.audience), storyTellUser(t, sourceSnapshot.text, sourceSnapshot.jd), { task: "creative", json: true, temperature: 0.5, signal }));
         signal.throwIfAborted();
         s = storyReadScript(s);
         const draft = drafts[idx] || {questions:[],qrole:g.qrole,versions:[]};
@@ -19753,7 +19780,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const signal = lifetime.reset(), original = JSON.stringify(taleBox.__script), angle = curTi, settings = currentSettings(); btnBusy(refineButton,'Refining...');
         try {
           if (!sourceSnapshot) throw new Error('Reconnect sources before refining.');
-          const response = await aiText(aiCfg('txt'),storyTellSystem(settings.tone,storyDurLabel(settings.dur),STORY_BUDGET[settings.dur] || 12,settings.audience),storyTellUser(themes[angle],sourceSnapshot.text,sourceSnapshot.jd) + '\n\nCURRENT DRAFT (untrusted, not source evidence):\n' + original + '\n\nREQUESTED EDIT:\n' + request + '\nReturn the complete script JSON, preserving accurate unmodified content.',{task:'creative',json:true,maxTokens:2400,temperature:0.4,signal});
+          const response = await prepareAiText(aiCfg('txt'),storyTellSystem(settings.tone,storyDurLabel(settings.dur),STORY_BUDGET[settings.dur] || 12,settings.audience),storyTellUser(themes[angle],sourceSnapshot.text,sourceSnapshot.jd) + '\n\nCURRENT DRAFT (untrusted, not source evidence):\n' + original + '\n\nREQUESTED EDIT:\n' + request + '\nReturn the complete script JSON, preserving accurate unmodified content.',{task:'creative',json:true,temperature:0.4,signal});
           signal.throwIfAborted(); const proposed = storyReadScript(csgenParse(response));
           if (curTi !== angle || original !== JSON.stringify(taleBox.__script)) return;
           refinement = {original,proposed,angle,request};
@@ -19781,7 +19808,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       try {
         if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating questions.');
         const settings = currentSettings();
-        var obj = csgenParse(await aiText(aiCfg("txt"), storyQSystem(settings.tone, g.qrole, n, settings.audience), storyQUser(sourceSnapshot.text, themes[curTi], n, sourceSnapshot.jd), { task: "analysis", json: true, maxTokens: 2200, temperature: 0.5, signal }));
+        var obj = csgenParse(await prepareAiText(aiCfg("txt"), storyQSystem(settings.tone, g.qrole, n, settings.audience), storyQUser(sourceSnapshot.text, themes[curTi], n, sourceSnapshot.jd), { task: "analysis", json: true, temperature: 0.5, signal }));
         signal.throwIfAborted();
         var raw = obj && Array.isArray(obj.questions) ? obj.questions : (Array.isArray(obj) ? obj : null);
         if (!raw || !raw.length) throw new Error("No questions came back \u2014 try again.");
@@ -19811,7 +19838,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         try {
           if (!sourceSnapshot) throw new Error('Reconnect sources to a copy of this saved story before generating answers.');
           const settings = currentSettings();
-          var html = await aiText(aiCfg("txt"), storyQAnsSystem(settings.tone, q.role || storyRoleName(g.qrole), settings.audience), storyQAnsUser(q.q, sourceSnapshot.text, themes[curTi]) + storyJdUserBlock(sourceSnapshot.jd), { task: "creative", maxTokens: 700, temperature: 0.4, signal });
+          var html = await prepareAiText(aiCfg("txt"), storyQAnsSystem(settings.tone, q.role || storyRoleName(g.qrole), settings.audience), storyQAnsUser(q.q, sourceSnapshot.text, themes[curTi]) + storyJdUserBlock(sourceSnapshot.jd), { task: "creative", temperature: 0.4, signal });
           signal.throwIfAborted();
           html = String(html || "").replace(/^```(?:html)?\s*/i, "").replace(/\s*```$/i, "").trim();
           if (!html) throw new Error('The answer was empty. Your saved answer is unchanged.');
@@ -19996,7 +20023,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       const menu = root.querySelector(".adm__case-visibility[open]");
       if (event.key === "Escape" && menu) { event.preventDefault(); event.stopPropagation(); menu.open = false; menu.querySelector("summary").focus(); }
     }, true);
-    aiSessionPanel = mountAiSession(root, aiSession, { close: IC.close, stop: IC.stop, settings: root.querySelector("[data-opensettings]").innerHTML }, {
+    aiSessionPanel = mountAiSession(root, aiSession, { close: IC.close, stop: IC.stop, refresh: IC.refresh, settings: root.querySelector("[data-opensettings]").innerHTML }, {
+      loadModels: aiSessionModels,
+      selectedModel: () => aiManualModel,
+      onModel: model => { aiManualModel = model; },
       onSettings: () => {
         closeBarPops();
         activeSetCat = "ai";
@@ -20368,7 +20398,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     disposeNativeSlides();
     aiSessionPanel?.close(false);
     aiAutomaticEvaluation?.abort();
-    aiSession.end();
+    aiSession.end(); aiManualModel = null;
     aiCounterMotion?.dispose();
     aiCounterMotion = null;
     autopubStop();
@@ -20393,7 +20423,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (nativeSlideSession?.editor && !nativeSlideSession.loadFailed) await nativeSlideSession.editor.flush();
         if (!saveDraft(true)) throw new Error("Your latest draft could not be saved. Retry or download a backup before signing out.");
       }
-      autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); cancelStudyUnlocks();
+      autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); aiManualModel = null; cancelStudyUnlocks();
       root.inert = true;
       document.documentElement.classList.add("rk-session-locked");
       const result = await signOutAdmin({ broadcast: options.broadcast !== false });
@@ -20465,7 +20495,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       aiSession.start(); autopubStart(); return;
     }
     if (signingOut) return;
-    autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); cancelStudyUnlocks();
+    autopubStop(); aiAutomaticEvaluation?.abort(); aiSession.end(); aiManualModel = null; cancelStudyUnlocks();
     saveDraft(true);
     root.inert = true; document.documentElement.classList.add("rk-session-locked");
     if (event.detail?.reason === "signed-out") studioSignOut({ broadcast: false });
@@ -20704,7 +20734,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     const config = resumeStudioConfiguration(caller);
     if (!config.available || input.provider !== config.provider || input.model !== config.model) throw new Error('The Studio AI configuration changed. Reopen the revision request.');
     if (input.stage !== 'revision' || typeof input.system !== 'string' || typeof input.user !== 'string' || input.user.length > 60000 || input.system.length > 20000) throw new Error('Invalid ATS revision request.');
-    const text = await aiText(aiCfg('txt'), input.system, input.user, { task: 'analysis', json: true, maxTokens: 4000, temperature: 0, signal });
+    const text = await prepareAiText(aiCfg('txt'), input.system, input.user, { task: 'analysis', json: true, temperature: 0, signal });
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
     return { text };
   }

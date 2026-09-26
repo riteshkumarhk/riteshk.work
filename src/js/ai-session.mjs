@@ -123,12 +123,48 @@ export function aiOutputPreview(text) {
   return { kind: "text", value: text };
 }
 
-export function mountAiSession(root, session, icons, { onSettings } = {}) {
+export function mountAiSession(root, session, icons, { onSettings, loadModels, selectedModel = () => null, onModel } = {}) {
   const trigger = root.querySelector("[data-ai-session-toggle]"), panel = root.querySelector("[data-ai-session-panel]");
   const document = root.ownerDocument;
   const renderedOutputs = new WeakMap();
   let scheduled = 0;
   panel.innerHTML = '<header class="adm__ai-head"><h2>AI activity</h2>' + (onSettings ? '<button type="button" class="adm__ai-close" data-ai-settings aria-label="AI settings" title="AI settings">' + icons.settings + '</button>' : '') + '<button type="button" class="adm__ai-close" data-ai-close aria-label="Close AI activity" title="Close AI activity">' + icons.close + '</button></header><div class="adm__ai-total" data-ai-total></div><div class="adm__ai-jobs" data-ai-jobs></div>';
+  let modelController = null, modelChoices = new Map();
+  const modelKey = model => model ? JSON.stringify([model.scope, model.provider, model.modelId]) : "";
+  if (loadModels) {
+    const controls = document.createElement("div"); controls.className = "adm__ai-model";
+    controls.innerHTML = '<label>Model for next request<select data-ai-model><option value="">Auto</option></select></label><button type="button" class="adm__ai-close" data-ai-model-refresh aria-label="Refresh models" title="Refresh models">' + (icons.refresh || icons.settings || "") + '</button><p data-ai-model-status role="status"></p>';
+    panel.querySelector(".adm__ai-head").after(controls);
+    controls.querySelector("select").onchange = event => onModel?.(modelChoices.get(event.target.value) || null);
+    controls.querySelector("button").onclick = () => refreshModels(true);
+  }
+  async function refreshModels(refresh = false) {
+    if (!loadModels) return;
+    modelController?.abort();
+    const controller = new AbortController(); modelController = controller;
+    const select = panel.querySelector("[data-ai-model]"), status = panel.querySelector("[data-ai-model-status]"), button = panel.querySelector("[data-ai-model-refresh]");
+    button.disabled = true; status.textContent = "Loading models";
+    try {
+      const result = await loadModels({ signal: controller.signal, refresh });
+      controller.signal.throwIfAborted();
+      const chosen = selectedModel(), groups = new Map(); modelChoices = new Map();
+      select.replaceChildren();
+      const automatic = document.createElement("option"); automatic.value = ""; automatic.textContent = "Auto"; select.append(automatic);
+      for (const model of result.models || []) {
+        const key = modelKey(model); if (modelChoices.has(key)) continue;
+        modelChoices.set(key, model);
+        let group = groups.get(model.provider);
+        if (!group) { group = document.createElement("optgroup"); group.label = model.provider; groups.set(model.provider, group); select.append(group); }
+        const option = document.createElement("option"); option.value = key; option.textContent = model.name || model.modelId; group.append(option);
+      }
+      const missing = chosen && !modelChoices.has(modelKey(chosen));
+      if (missing) { const unavailable = document.createElement("option"); unavailable.value = modelKey(chosen); unavailable.textContent = "Unavailable: " + (chosen.name || chosen.modelId); unavailable.disabled = true; select.append(unavailable); }
+      select.value = modelKey(chosen);
+      status.textContent = result.error || (missing ? "Selected model unavailable. Choose another model or Auto." : !modelChoices.size ? "No models available. Check the service connection in AI settings." : "");
+    } catch (error) {
+      if (!controller.signal.aborted) status.textContent = error.message || "Model discovery failed. Refresh models or check AI settings.";
+    } finally { if (modelController === controller) button.disabled = false; }
+  }
   function fieldLabel(key) {
     return ({ q: "Question", why: "Focus", a: "Answer" })[key] || key.replace(/[_-]/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, letter => letter.toUpperCase());
   }
@@ -224,11 +260,11 @@ export function mountAiSession(root, session, icons, { onSettings } = {}) {
     if (atBottom) list.scrollTop = list.scrollHeight;
   }
   function schedule() { if (!scheduled) scheduled = requestAnimationFrame(render); }
-  trigger.onclick = () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); render(); if (!panel.hidden) panel.querySelector("[data-ai-close]").focus(); };
+  trigger.onclick = () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); render(); if (!panel.hidden) { panel.querySelector("[data-ai-close]").focus(); refreshModels(); } };
   panel.querySelector("[data-ai-close]").onclick = () => close();
   if (onSettings) panel.querySelector("[data-ai-settings]").onclick = () => { close(false); onSettings(); };
   const escape = event => { if (event.key === "Escape" && !panel.hidden && ![...document.querySelectorAll('.pass,[role="dialog"][aria-modal="true"]')].some(dialog => dialog.getClientRects().length)) { event.preventDefault(); close(); } };
   document.addEventListener("keydown", escape);
   const unsubscribe = session.subscribe(schedule); render();
-  return { close, dispose() { unsubscribe(); cancelAnimationFrame(scheduled); document.removeEventListener("keydown", escape); } };
+  return { close, dispose() { modelController?.abort(); unsubscribe(); cancelAnimationFrame(scheduled); document.removeEventListener("keydown", escape); } };
 }
