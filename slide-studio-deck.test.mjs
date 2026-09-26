@@ -19,6 +19,75 @@ import { publicDeckPayload, setDeckVisibility } from "./src/js/slide-merge-visib
 import { Miniflare } from "miniflare";
 import { presenterMetadataRoute } from "./worker/presenter-metadata.mjs";
 
+test("AI activity presents structured drafts without raw-code flicker and preserves details and cancellation", { timeout: 90000 }, async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const response = JSON.stringify({questions:[{q:'How would you validate the outcome?',why:'Separate observations from assumptions.'},{q:'What would you test next?',why:'Explore the next decision.'}],score:0,confirmed:false,title:'<img src=x onerror=alert(1)>'});
+  try {
+    await openIntegratedFixture(page);
+    const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-ai-session-toggle]').click();
+    await page.evaluate(() => {
+      const session = window.__rkAiSession, job = session.begin('analysis', 'Interview questions');
+      window.__activityJob = job;
+      session.route(job.id, {id:'display-fixture',agentRole:'draft',provider:'fixture',modelName:'Test model',status:'running'});
+      session.activity(job.id,{id:'draft',summary:'Drafting questions from selected evidence.',status:'running'});
+      session.output(job.id,'display-fixture','{"questions":[');
+      session.recordUsage(1200,180,{sessionId:job.sessionId,jobId:job.id,callId:'display-fixture'});
+    });
+    const panel = page.locator('[data-ai-session-panel]');
+    await panel.getByText('Receiving structured draft', {exact:false}).waitFor();
+    assert.doesNotMatch(await panel.innerText(), /\{"questions"|Test model/);
+    assert.equal(await panel.locator('pre').isVisible(), false);
+    assert.equal(await panel.locator('[data-ai-jobstatus]').innerText(), 'Drafting');
+    await page.evaluate(response => window.__rkAiSession.output(window.__activityJob.id,'display-fixture',response.slice('{"questions":['.length)),response);
+    await panel.getByText('How would you validate the outcome?',{exact:true}).waitFor();
+    assert.equal(await panel.locator('.adm__ai-readable dt').filter({hasText:/^Question$/}).count(),2);
+    assert.equal(await panel.locator('.adm__ai-readable img').count(),0);
+    assert.match(await panel.locator('.adm__ai-readable').innerText(), /Score\s+0\s+Confirmed\s+false/);
+    assert.equal(await panel.locator('pre').isVisible(),false);
+    for (const [width,theme,motion] of [[1440,'night','no-preference'],[1024,'day','reduce']]) {
+      await page.setViewportSize({width,height:900});
+      await page.emulateMedia({reducedMotion:motion});
+      await page.evaluate(theme=>document.documentElement.setAttribute('data-theme',theme),theme);
+      await page.evaluate(()=>document.fonts.ready);
+      const bounds = await panel.evaluate(element => {
+        const box=element.getBoundingClientRect();
+        return {visible:box.width>0&&box.height>0,inside:box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,overflow:element.scrollWidth>element.clientWidth,font:getComputedStyle(element.querySelector('.adm__ai-readable')).fontFamily};
+      });
+      assert.ok(bounds.visible&&bounds.inside&&!bounds.overflow,JSON.stringify(bounds));
+      assert.doesNotMatch(bounds.font,/monospace/i);
+      await page.screenshot({path:join(tmpdir(),'rk-ai-structured-'+width+'-'+theme+'.png')});
+    }
+    const disclosure=panel.locator('summary').filter({hasText:'Original response'});
+    await disclosure.focus(); await page.keyboard.press('Enter');
+    await panel.locator('pre').waitFor({state:'visible'});
+    assert.equal(await panel.locator('pre').innerText(),response);
+    await page.evaluate(()=>window.__rkAiSession.activity(window.__activityJob.id,{id:'review',summary:'Checking the draft against the source.',status:'running'}));
+    await panel.locator('[data-ai-current]').filter({hasText:'Checking the draft against the source.'}).waitFor();
+    assert.equal(await panel.locator('pre').isVisible(),true,'Stream updates retain the disclosure state');
+    await disclosure.click();
+    await panel.locator('[data-ai-request-details] summary').click();
+    await panel.getByText('draft / Test model / running',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Stop AI request',exact:true}).click();
+    await panel.getByText('Stopped',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__activityJob.signal.aborted),true);
+    assert.equal(await panel.locator('[data-ai-output-state]').innerText(),'Partial');
+    await page.evaluate(()=>window.__rkAiSession.output(window.__activityJob.id,'display-fixture','IGNORED LATE CHUNK'));
+    assert.equal(await page.evaluate(()=>window.__rkAiSession.state().jobs[0].outputs[0].text),response);
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
+    assert.doesNotMatch(await page.evaluate(()=>sessionStorage.getItem('rk:ai:admin-session')),/How would you|questions|onerror/);
+    await page.evaluate(()=>{
+      const session=window.__rkAiSession,job=session.begin('writing','Incomplete response');
+      session.output(job.id,'broken','{"title":"Unfinished'); session.finish(job.id,'error','Connection ended before completion.');
+    });
+    await panel.getByText('Structured preview unavailable',{exact:false}).waitFor();
+    await panel.getByRole('alert').filter({hasText:'Connection ended before completion.'}).waitFor();
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 async function openProjectSlides(page, index = 0) {
   await page.locator('[data-act="study-toggle"][data-index="' + index + '"]').click();
   const tab = page.locator('[data-l2tab="slides"]');

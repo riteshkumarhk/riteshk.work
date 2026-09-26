@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import postcss from "postcss";
 import { selectStudioDraft, studioDraftContent } from "./src/js/studio-draft-recovery.mjs";
 import { completeStudioBackup } from "./src/js/studio-content-backup.mjs";
-import { AI_SESSION_KEY, createAiSession } from "./src/js/ai-session.mjs";
+import { AI_SESSION_KEY, createAiSession, aiOutputPreview } from "./src/js/ai-session.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { prepareBrief, prepareBriefWorks } from "./src/js/prepare-brief.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./src/js/content-revision.mjs";
@@ -15,6 +15,17 @@ import { normalizeAiModel, rankAiModels } from "./src/js/ai-model-router.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
+test("AI output preview keeps incomplete code out of the readable draft and preserves original values", () => {
+  for (const text of ['', '{"questions":[{"q":"Still arriving', '```json\n{"title":', '```js\nconst value = 1;\n```']) {
+    assert.equal(aiOutputPreview(text).kind, 'pending');
+  }
+  const text = '{"questions":[{"q":"What changed?","why":"Evidence & scope"}],"score":0,"confirmed":false}';
+  assert.deepEqual(aiOutputPreview(text), {kind:'structured',value:JSON.parse(text)});
+  assert.deepEqual(aiOutputPreview('```json\n'+text+'\n```'), aiOutputPreview(text));
+  assert.deepEqual(aiOutputPreview('A readable answer\n\nStill arriving'), {kind:'text',value:'A readable answer\n\nStill arriving'});
+  assert.equal(aiOutputPreview('{"title":"<img src=x onerror=alert(1)>"}').value.title, '<img src=x onerror=alert(1)>');
+});
+
 function interviewHelpers(data = {}) {
   const start = source.indexOf('function iprepStrip('), end = source.indexOf('async function iprepResolveJd', start);
   const briefStart = source.indexOf('function prepBriefEvidence('), briefEnd = source.indexOf('var _prepSaveT', briefStart);

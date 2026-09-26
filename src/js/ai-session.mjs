@@ -110,11 +110,47 @@ export function siteAiSession(host = window) {
   return host.__rkAiSession;
 }
 
+export function aiOutputPreview(text) {
+  const source = String(text || "").trim();
+  if (!source) return { kind: "pending" };
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)(?:\n```)?$/.exec(source);
+  const candidate = fenced ? fenced[1] : source;
+  if (/^[\[{]/.test(candidate)) {
+    try { return { kind: "structured", value: JSON.parse(candidate) }; }
+    catch { return { kind: "pending" }; }
+  }
+  if (/^```/.test(source)) return { kind: "pending" };
+  return { kind: "text", value: text };
+}
+
 export function mountAiSession(root, session, icons, { onSettings } = {}) {
   const trigger = root.querySelector("[data-ai-session-toggle]"), panel = root.querySelector("[data-ai-session-panel]");
   const document = root.ownerDocument;
+  const renderedOutputs = new WeakMap();
   let scheduled = 0;
   panel.innerHTML = '<header class="adm__ai-head"><h2>AI activity</h2>' + (onSettings ? '<button type="button" class="adm__ai-close" data-ai-settings aria-label="AI settings" title="AI settings">' + icons.settings + '</button>' : '') + '<button type="button" class="adm__ai-close" data-ai-close aria-label="Close AI activity" title="Close AI activity">' + icons.close + '</button></header><div class="adm__ai-total" data-ai-total></div><div class="adm__ai-jobs" data-ai-jobs></div>';
+  function fieldLabel(key) {
+    return ({ q: "Question", why: "Focus", a: "Answer" })[key] || key.replace(/[_-]/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, letter => letter.toUpperCase());
+  }
+  function readableValue(value, depth = 0, budget = { remaining: 400 }) {
+    const element = document.createElement(value && typeof value === "object" ? Array.isArray(value) ? "ol" : "dl" : "p");
+    if (depth > 8 || --budget.remaining < 0) { element.textContent = "More content in Original response."; return element; }
+    if (Array.isArray(value)) {
+      element.className = "adm__ai-items";
+      for (const item of value) {
+        const row = document.createElement("li"); row.append(readableValue(item, depth + 1, budget)); element.append(row);
+        if (budget.remaining < 0) break;
+      }
+    } else if (value && typeof value === "object") {
+      element.className = "adm__ai-fields";
+      for (const [key, item] of Object.entries(value)) {
+        const label = document.createElement("dt"), content = document.createElement("dd");
+        label.textContent = fieldLabel(key); content.append(readableValue(item, depth + 1, budget)); element.append(label, content);
+        if (budget.remaining < 0) break;
+      }
+    } else element.textContent = value === null ? "Not specified" : String(value);
+    return element;
+  }
   function close(focus = true) { panel.hidden = true; trigger.setAttribute("aria-expanded", "false"); if (focus && trigger.isConnected) trigger.focus(); }
   function render() {
     scheduled = 0;
@@ -128,7 +164,10 @@ export function mountAiSession(root, session, icons, { onSettings } = {}) {
       panel.querySelector("[data-ai-total]").textContent = "";
     }
     if (panel.hidden) return;
-    panel.querySelector("[data-ai-total]").textContent = state.inputTokens.toLocaleString("en-US") + " input / " + state.outputTokens.toLocaleString("en-US") + " output tokens";
+    const total = panel.querySelector("[data-ai-total]");
+    if (!total.children.length) total.innerHTML = '<span>Session tokens</span><dl><div><dt>Input</dt><dd data-ai-input-count></dd></div><div><dt>Output</dt><dd data-ai-output-count></dd></div></dl>';
+    total.querySelector("[data-ai-input-count]").textContent = state.inputTokens.toLocaleString("en-US");
+    total.querySelector("[data-ai-output-count]").textContent = state.outputTokens.toLocaleString("en-US");
     const list = panel.querySelector("[data-ai-jobs]"), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 48;
     const existing = new Map([...list.children].map(element => [element.dataset.jobId, element]));
     if (!state.jobs.length) { list.textContent = "No AI requests in this view."; return; }
@@ -137,13 +176,19 @@ export function mountAiSession(root, session, icons, { onSettings } = {}) {
       let entry = existing.get(job.id);
       if (!entry) {
         entry = document.createElement("article"); entry.className = "adm__ai-job"; entry.dataset.jobId = job.id;
-        entry.innerHTML = '<div class="adm__ai-jobhead"><h3></h3><button type="button" class="adm__ai-stop" aria-label="Stop AI request" title="Stop AI request">' + icons.stop + '</button></div><p data-ai-jobstatus role="status"></p><ol data-ai-steps></ol><div data-ai-outputs></div><p data-ai-error role="alert"></p>';
+        entry.innerHTML = '<div class="adm__ai-jobhead"><h3></h3><button type="button" class="adm__ai-stop" aria-label="Stop AI request" title="Stop AI request">' + icons.stop + '</button></div><p data-ai-jobstatus role="status"></p><p class="adm__ai-current" data-ai-current></p><div data-ai-outputs></div><details class="adm__ai-details" data-ai-request-details><summary>Request details</summary><ol data-ai-steps></ol></details><p data-ai-error role="alert"></p>';
         entry.querySelector("button").onclick = () => session.cancel(job.id); list.append(entry);
       }
       existing.delete(job.id);
+      entry.dataset.status = job.status;
       entry.querySelector("h3").textContent = job.label;
       const stop = entry.querySelector("button"); stop.hidden = job.status !== "running";
-      entry.querySelector("[data-ai-jobstatus]").textContent = [job.status === "running" ? job.phase === "answering" ? "Answering" : "Working" : job.status === "complete" ? "Complete" : job.status === "cancelled" ? "Cancelled" : "Failed", job.inputTokens + job.outputTokens ? (job.inputTokens + job.outputTokens).toLocaleString("en-US") + " tokens" : ""].filter(Boolean).join(" / ");
+      const status = job.status === "running" ? job.phase === "answering" ? "Drafting" : "Working" : job.status === "complete" ? "Complete" : job.status === "cancelled" ? "Stopped" : "Failed";
+      const statusElement = entry.querySelector("[data-ai-jobstatus]");
+      if (statusElement.textContent !== status) statusElement.textContent = status;
+      const current = entry.querySelector("[data-ai-current]");
+      current.textContent = job.activity.at(-1)?.summary || (job.status === "running" ? "Waiting for the response" : "");
+      current.hidden = !current.textContent;
       const steps = entry.querySelector("[data-ai-steps]"); steps.replaceChildren();
       for (const request of job.requests) {
         const item = document.createElement("li"); item.textContent = [request.role, request.model, request.status].filter(Boolean).join(" / "); steps.append(item);
@@ -151,9 +196,27 @@ export function mountAiSession(root, session, icons, { onSettings } = {}) {
       for (const activity of job.activity) { const item = document.createElement("li"); item.textContent = activity.summary; steps.append(item); }
       const outputs = entry.querySelector("[data-ai-outputs]");
       for (const output of job.outputs) {
-        let pre = [...outputs.children].find(element => element.dataset.callId === output.id);
-        if (!pre) { pre = document.createElement("pre"); pre.dataset.callId = output.id; pre.tabIndex = 0; pre.setAttribute("aria-label", "Generated output"); outputs.append(pre); }
-        pre.textContent = output.text + (output.truncated ? "\n[Display limit reached]" : "");
+        let section = [...outputs.children].find(element => element.dataset.callId === output.id);
+        if (!section) {
+          section = document.createElement("section"); section.className = "adm__ai-output"; section.dataset.callId = output.id;
+          section.innerHTML = '<div class="adm__ai-outputhead"><h4></h4><span data-ai-output-state></span></div><div class="adm__ai-readable" aria-label="Generated output" tabindex="0"></div><p class="adm__ai-receiving" data-ai-receiving></p><details class="adm__ai-details"><summary>Original response</summary><pre aria-label="Original response" tabindex="0"></pre></details>';
+          outputs.append(section);
+        }
+        const request = job.requests.find(item => item.id === output.id);
+        section.querySelector("h4").textContent = request?.role === "delegate" ? "Supporting notes" : request?.role === "revision" ? "Revised draft" : "Draft";
+        section.querySelector("[data-ai-output-state]").textContent = job.status === "error" || job.status === "cancelled" ? "Partial" : request?.status === "running" && job.status === "running" ? "In progress" : "Received";
+        const previous = renderedOutputs.get(section);
+        if (previous?.text !== output.text || previous?.status !== job.status || previous?.truncated !== output.truncated) {
+          const preview = aiOutputPreview(output.text), readable = section.querySelector(".adm__ai-readable"), receiving = section.querySelector("[data-ai-receiving]");
+          readable.replaceChildren();
+          if (preview.kind === "structured") readable.append(readableValue(preview.value));
+          else if (preview.kind === "text") readable.textContent = preview.value;
+          readable.hidden = preview.kind === "pending";
+          receiving.hidden = preview.kind !== "pending" && !output.truncated;
+          receiving.textContent = output.truncated ? "Preview limit reached. The request can continue." : preview.kind === "pending" ? (job.status === "running" ? "Receiving structured draft" : "Structured preview unavailable") + " · " + output.text.length.toLocaleString("en-US") + " characters" : "";
+          section.querySelector("pre").textContent = output.text + (output.truncated ? "\n[Display limit reached]" : "");
+          renderedOutputs.set(section, { text: output.text, status: job.status, truncated: output.truncated });
+        }
       }
       entry.querySelector("[data-ai-error]").textContent = job.error || "";
     }
