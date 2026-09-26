@@ -3552,13 +3552,13 @@ test('Prepare Whiteboard floating companion shares draft pause and fallback with
   } finally { await browser.close(); }
 });
 
-test('Prepare Whiteboard voice preparation is untimed and late recognition preserves the draft', {timeout:45000}, async () => {
+test('Prepare Whiteboard voice preparation is untimed and late recognition preserves the draft', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   try {
     await page.addInitScript(() => {
-      window.SpeechRecognition = class { constructor() { window.testRecognition=this; } start() { window.recognitionStarts=(window.recognitionStarts||0)+1; } stop() { this.onend?.(); } abort() {} };
+      window.SpeechRecognition = class { constructor() { window.testRecognition=this; } start() { window.recognitionStarts=(window.recognitionStarts||0)+1; } stop() { if (!window.speechEndMissing) this.onend?.(); } abort() { window.recognitionAborts=(window.recognitionAborts||0)+1; } };
       navigator.mediaDevices.getUserMedia = async () => ({getTracks:()=>[{stop(){}}]});
       navigator.mediaDevices.getDisplayMedia = () => { throw new Error('Unexpected screen request'); };
     });
@@ -3570,11 +3570,56 @@ test('Prepare Whiteboard voice preparation is untimed and late recognition prese
     await page.locator('[data-wb-mic]').click(); await page.waitForFunction(()=>window.recognitionStarts===1);
     await page.evaluate(()=>{window.testRecognition.onresult({results:[Object.assign([{transcript:'Retain this spoken draft'}],{isFinal:true})]});window.testRecognition.onend();});
     assert.equal(await page.evaluate(()=>window.recognitionStarts),2); assert.equal(await page.locator('.wb__turn--you').count(),0);
-    await page.locator('[data-wb-ready]').click(); await page.evaluate(()=>window.testRecognition.onresult({results:[Object.assign([{transcript:'late unwanted result'}],{isFinal:true})]}));
+    await page.evaluate(()=>{window.lateSpeechResult=window.testRecognition.onresult;});
+    await page.locator('[data-wb-ready]').click(); await page.evaluate(()=>window.lateSpeechResult({results:[Object.assign([{transcript:'late unwanted result'}],{isFinal:true})]}));
     assert.equal(await page.locator('.wb__msg').inputValue(),'Retain this spoken draft');
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].draft),'Retain this spoken draft');
     await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-mic]').click(); await page.locator('[data-wb-mic]').click();
     await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===2&&!document.querySelector('[data-wb-send]').disabled); assert.equal(await page.locator('.wb__turn--you').count(),1); assert.deepEqual(errors,[]);
+    for (const finish of ['send','mic']) {
+      await page.locator('[data-wb-mic]').click();
+      await page.evaluate(()=>{
+        window.speechEndMissing=true;window.deferWhiteboardReply=true;window.releaseWhiteboardReply=null;
+        window.testRecognition.onresult({results:[Object.assign([{transcript:'Please clarify'}],{isFinal:true}),Object.assign([{transcript:'the question'}],{isFinal:false})]});
+        window.lateSpeechResult=window.testRecognition.onresult;window.lateSpeechEnd=window.testRecognition.onend;
+      });
+      const before=await page.evaluate(()=>({turns:document.querySelectorAll('.wb__turn--you').length,calls:window.preparationCalls.length,starts:window.recognitionStarts}));
+      await page.locator('[data-wb-'+finish+']').click();
+      await page.waitForFunction(()=>!!window.releaseWhiteboardReply,null,{timeout:4000});
+      assert.equal(await page.locator('[data-wb-mic].is-live').count(),0,'Recognition stops before waiting for the reply');
+      assert.equal(await page.locator('.wb__turn--you').last().textContent().then(text=>text.includes('Please clarify the question')),true,'Final and latest interim words are submitted together');
+      await page.evaluate(()=>{window.lateSpeechResult({results:[Object.assign([{transcript:'Unwanted late words'}],{isFinal:true})]});window.lateSpeechEnd();});
+      assert.equal(await page.locator('.wb__msg').inputValue(),'');
+      assert.equal(await page.locator('.wb__turn--you').count(),before.turns+1);
+      assert.equal(await page.evaluate(()=>window.recognitionStarts),before.starts);
+      assert.equal(await page.evaluate(()=>window.preparationCalls.length),before.calls+1);
+      assert.match(await page.locator('[data-wb-send]').textContent(),/Replying/);
+      assert.ok(await page.locator('.wb__composer-act').evaluate(element=>element.scrollWidth<=element.clientWidth));
+      await page.screenshot({path:join(tmpdir(),'rk-whiteboard-speech-handoff.png')});
+      await page.evaluate(()=>{window.deferWhiteboardReply=false;window.releaseWhiteboardReply();});
+      await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    }
+    await page.evaluate(()=>{navigator.mediaDevices.getUserMedia=()=>new Promise(resolve=>{window.releaseMicrophone=()=>resolve({getTracks:()=>[{stop(){}}]});});});
+    await page.locator('[data-wb-mic]').click();
+    await page.locator('.wb__msg').fill('Typed while microphone permission opens');
+    await page.locator('[data-wb-send]').click();
+    const starts=await page.evaluate(()=>window.recognitionStarts);
+    await page.evaluate(()=>window.releaseMicrophone());
+    await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    assert.equal(await page.evaluate(()=>window.recognitionStarts),starts);
+    assert.equal(await page.locator('[data-wb-mic].is-live').count(),0);
+    await page.clock.install();
+    await page.evaluate(()=>{navigator.mediaDevices.getUserMedia=async()=>({getTracks:()=>[{stop(){}}]});});
+    await page.locator('[data-wb-mic]').click();
+    await page.evaluate(()=>window.testRecognition.onresult({results:[Object.assign([{transcript:'Retain this unfinished answer'}],{isFinal:true})]}));
+    const paused=await page.evaluate(()=>({calls:window.preparationCalls.length,turns:document.querySelectorAll('.wb__turn--you').length}));
+    await page.locator('[data-wb-mic]').click();
+    await page.locator('[data-wb-ready]').click();
+    await page.clock.runFor(1500);
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),paused.calls);
+    assert.equal(await page.locator('.wb__turn--you').count(),paused.turns);
+    assert.equal(await page.locator('.wb__msg').inputValue(),'Retain this unfinished answer');
+    assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
 });
 

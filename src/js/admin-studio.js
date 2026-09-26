@@ -18909,6 +18909,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var log = stage.querySelector("[data-wb-log]");
       var msgEl = stage.querySelector(".wb__msg");
       var sendBtn = stage.querySelector("[data-wb-send]");
+      var finishListening = null;
       var scoreBtn = stage.querySelector("[data-wb-score]");
       const retryReply = stage.querySelector('[data-wb-reply-retry]');
       retryReply.hidden = opening !== 'resume' || sessPhase === 'briefing' || sessPhase === 'debrief' || sessTurns.at(-1)?.who === 'int';
@@ -19139,7 +19140,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         retryReply.hidden = true;
         replyController = new AbortController(); const turnSignal = AbortSignal.any([signal, replyController.signal]);
         wTurnBusy = true; wLastTurn = Date.now();
-        btnBusy(sendBtn, "\u2026"); paintTimer();
+        btnBusy(sendBtn, "Replying\u2026"); paintTimer();
         try {
           var frame = (anyFeed() && wCanSee) ? grabFrame() : null;
           let observation = null;
@@ -19165,21 +19166,35 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         btnIdle(sendBtn, "Send"); paintTimer();
       }
       if (msgEl) { msgEl.value = sessDraft; msgEl.addEventListener('input', () => { lastInputAt = Date.now(); sessDraft = msgEl.value; saveSess(); companionPaint?.(); }); }
-      if (sendBtn) sendBtn.addEventListener("click", async function () { var m = (msgEl && msgEl.value.trim()) || ""; if (!m || !running() || wTurnBusy) return; thinking = false; transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; addTurn("you", m); msgEl.value = ""; sessDraft = ''; saveSess(); await interviewerTurn(m); });
+      if (sendBtn) sendBtn.addEventListener("click", async function () { if (!running() || wTurnBusy) return; if (listening && finishListening) { finishListening(); return; } var m = (msgEl && msgEl.value.trim()) || ""; if (!m) return; if (voiceOn) micCleanup?.(); thinking = false; transcript += (transcript ? "\n" : "") + "CANDIDATE: " + m; addTurn("you", m); msgEl.value = ""; sessDraft = ''; saveSess(); await interviewerTurn(m); });
       if (msgEl) msgEl.addEventListener("keydown", function (e) { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (sendBtn) sendBtn.click(); } });
       if (voiceOn) {
         var micBtn = stage.querySelector("[data-wb-mic]"), liveEl = stage.querySelector("[data-wb-live]"), spkBtn = stage.querySelector("[data-wb-spk]");
         var rec = null, listening = false, stopping = false, killed = false, committed = "", accumulated = "";
-        let micRequest = 0, micStarting = false;
+        let micRequest = 0, micStarting = false, finishTimer = 0;
         var micText = function () { return micBtn && micBtn.querySelector(".wb__mic-t"); };
-        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); var t = micText(); if (t) t.textContent = on ? "Listening\u2026 tap when done" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (pipMic) pipMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
-        micCleanup = function () { micRequest++; micStarting = false; killed = true; setMic(false); if (rec) { try { rec.abort(); } catch (e) {} } };
+        var setMic = function (on) { listening = on; if (micBtn) { micBtn.classList.toggle("is-live", on); micBtn.setAttribute('aria-busy', String(on && stopping)); var t = micText(); if (t) t.textContent = on ? stopping ? "Finishing\u2026" : "Listening\u2026 tap when done" : "Tap to talk"; } if (miniMic) miniMic.classList.toggle("is-live", on); if (pipMic) pipMic.classList.toggle("is-live", on); if (!on && liveEl) liveEl.textContent = ""; };
+        micCleanup = function () { clearTimeout(finishTimer); finishTimer = 0; micRequest++; micStarting = false; killed = true; stopping = false; setMic(false); if (rec) { const previous = rec; rec = null; previous.onresult = previous.onend = previous.onerror = null; try { previous.abort(); } catch (e) {} } };
+        function finishSpeech(recognition) {
+          if (killed || rec !== recognition || !stopping || !activeExercise() || !running()) return;
+          const text = (accumulated + ' ' + (liveEl?.textContent || '')).replace(/\s+/g, ' ').trim();
+          micCleanup(); committed = ''; accumulated = '';
+          if (msgEl) { msgEl.value = text; sessDraft = text; saveSess(); }
+          if (text) sendBtn?.click();
+        }
+        finishListening = function () {
+          if (!listening || stopping || !rec) return;
+          const recognition = rec;
+          stopping = true; setMic(true);
+          finishTimer = setTimeout(() => finishSpeech(recognition), 1200);
+          try { recognition.stop(); } catch (error) { finishSpeech(recognition); }
+        };
         var startListening = async function () {
           if (!activeExercise() || micStarting || sessPhase === 'debrief' || scoring) return;
           const testing = !running();
           if (wTurnBusy) interruptReply(); thinking = false;
           // Tapping while listening = "I'm done" \u2014 finalise + send. A think-pause alone never sends.
-          if (listening) { stopping = true; if (rec) { try { rec.stop(); } catch (e) {} } return; }
+          if (listening) { finishListening(); return; }
           wbSpeech.stop();
           var t0 = micText(); if (t0) t0.textContent = "Starting\u2026";
           const request = ++micRequest; micStarting = true;
@@ -19191,10 +19206,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           if (testing || !running()) { setMic(false); err.textContent = 'Microphone available. Session clock is stopped.'; companionPaint?.(); return; }
           err.textContent = "";
           rec = wbSpeech.makeRec(); if (!rec) { setMic(false); err.textContent = "Talk mode needs Chrome or Edge."; return; }
+          const recognition = rec;
           try { rec.continuous = true; rec.interimResults = true; } catch (e) {}
           committed = (msgEl && msgEl.value.trim()) || ""; accumulated = committed; stopping = false; killed = false;
           rec.onresult = function (ev) {
-            if (killed) return; // ignore any trailing result once the turn has been finalised + sent
+            if (killed || rec !== recognition) return;
             var finalT = "", interim = "";
             for (var i = 0; i < ev.results.length; i++) { if (ev.results[i].isFinal) finalT += ev.results[i][0].transcript; else interim += ev.results[i][0].transcript; }
             accumulated = (committed + " " + finalT).replace(/\s+/g, " ").trim();
@@ -19203,25 +19219,19 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
             if (liveEl) liveEl.textContent = interim.trim();
           };
           rec.onerror = function (ev) {
+            if (killed || rec !== recognition) return;
             var er = ev && ev.error;
             if (er === "no-speech" || er === "aborted") return; // a think-pause / cleanup \u2014 let onend decide whether to keep listening
-            killed = true; setMic(false);
+            micCleanup();
             if (er === "not-allowed" || er === "service-not-allowed") err.textContent = "Microphone access was denied \u2014 allow it in the address bar, then tap again.";
             else if (er === "audio-capture") err.textContent = "No microphone found \u2014 check your input device.";
             else err.textContent = "Talk mode hit a snag \u2014 tap the mic to try again.";
           };
           rec.onend = function () {
-            if (killed) { setMic(false); return; }
+            if (killed || rec !== recognition) return;
             // The recognizer stops on silence \u2014 if the user hasn't tapped "done", keep the answer so far and resume listening so a think-pause never sends.
-            if (!stopping) { committed = accumulated; try { rec.start(); return; } catch (e) { setMic(false); if (liveEl) liveEl.textContent = ""; return; } }
-            // Finalising: capture the answer, then FULLY tear the recognizer down so no trailing result can
-            // repopulate the composer or double-send, and clear the buffers so the next turn starts empty.
-            var t = (accumulated + " " + (liveEl ? liveEl.textContent : "")).replace(/\s+/g, " ").trim();
-            killed = true; committed = ""; accumulated = "";
-            try { rec.onresult = rec.onerror = null; rec.abort(); } catch (e) {}
-            setMic(false);
-            if (liveEl) liveEl.textContent = "";
-            if (t && msgEl) { msgEl.value = t; if (sendBtn) sendBtn.click(); }
+            if (!stopping) { committed = accumulated; try { recognition.start(); return; } catch (e) { micCleanup(); return; } }
+            finishSpeech(recognition);
           };
           try { rec.start(); setMic(true); } catch (e) { setMic(false); err.textContent = "Couldn\u2019t start listening \u2014 tap again."; }
         };
