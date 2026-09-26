@@ -80,6 +80,7 @@ test("Interview request budgets reserve reasoning separately and scale with the 
     assert.equal(options.reasoningTokens,4096);
     assert.equal(options.agentReasoningTokens,4096);
     assert.equal(options.maxEffort,'low');
+    assert.equal(options.completeAgentContext,true);
     budgets.push(options.maxTokens);
     const request = agentRequestOptions('System','Complete source and job description',options);
     const choice = rankAiModels([model],'analysis',request)[0];
@@ -93,6 +94,7 @@ test("Interview request budgets reserve reasoning separately and scale with the 
   assert.equal(answer.reasoningTokens,4096);
   assert.equal(answer.agentReasoningTokens,4096);
   assert.equal(answer.maxEffort,'low');
+  assert.equal(answer.completeAgentContext,true);
   assert.equal(answer.signal,signal);
 });
 

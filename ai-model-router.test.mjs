@@ -911,24 +911,33 @@ test("an agent cannot report completion without a host-validated candidate", asy
   assert.equal(calls, 7);
 });
 
-test("delegates receive full source material while coordination uses a labelled excerpt", async () => {
-  const { orchestrator, config } = orchestratorFixture();
-  const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+test("complete agent context is opt-in and preserves late evidence through planning and review", async () => {
   const material = "Source evidence ".repeat(2000) + "FINAL SOURCE FACT";
-  let turns = 0;
-  const result = await agent.run([config], { task: "writing", system: "Return a complete answer", user: material, options: { maxTokens: 1000 } }, async (selected, modelId, step) => {
-    if (step.role === "coordinator") {
-      const input = JSON.parse(step.user); turns++;
-      assert.equal(input.job.material.truncated, true);
-      const action = turns === 1 ? { action: "delegate", modelRef: input.catalogue[0].ref, task: "analysis", purpose: "evidence", instruction: "Inspect all evidence", inputs: [], summary: "Checking all source evidence" }
-        : turns === 2 ? { action: "draft", modelRef: input.catalogue[0].ref, task: "writing", instruction: "", inputs: [input.work[0].id], summary: "Writing the answer" }
-        : { action: "finish", summary: "The answer is complete" };
-      return { ok: true, text: JSON.stringify(action) };
-    }
-    if (step.role === "delegate") assert.equal(JSON.parse(step.user[0].text).originalJob.material, material);
-    return { ok: true, text: "Checked answer" };
-  });
-  assert.equal(result.text, "Checked answer");
+  const contract = "Evidence rule. ".repeat(1000) + "FINAL CONTRACT RULE";
+  for (const completeAgentContext of [undefined, true]) {
+    const { orchestrator, config } = orchestratorFixture();
+    const agent = createAiTaskAgent({ router: orchestrator, now: () => now });
+    let turns = 0;
+    const result = await agent.run([config], { task: "writing", system: contract, user: material, options: { maxTokens: 1000, completeAgentContext } }, async (selected, modelId, step) => {
+      if (step.role === "coordinator") {
+        const input = JSON.parse(step.user); turns++;
+        assert.equal(input.job.material.truncated, !completeAgentContext);
+        assert.ok(input.job.material.text === (completeAgentContext ? material : material.slice(0, 24000)), 'Coordinator must receive the requested source scope');
+        assert.equal(input.job.contract.truncated, !completeAgentContext);
+        assert.ok(input.job.contract.text === (completeAgentContext ? contract : contract.slice(0, 14000)), 'Coordinator must receive the requested contract scope');
+        assert.equal(step.options.maxTokens, 2048);
+        const action = turns === 1 ? { action: "delegate", modelRef: input.catalogue[0].ref, task: "analysis", purpose: "evidence", instruction: "Inspect all evidence", inputs: [], summary: "Checking all source evidence" }
+          : turns === 2 ? { action: "draft", modelRef: input.catalogue[0].ref, task: "writing", instruction: "", inputs: [input.work[0].id], summary: "Writing the answer" }
+          : { action: "finish", summary: "The answer is complete" };
+        return { ok: true, text: JSON.stringify(action) };
+      }
+      if (step.role === "delegate") assert.equal(JSON.parse(step.user[0].text).originalJob.material, material);
+      else assert.equal(step.user[0].text, material);
+      return { ok: true, text: "Checked answer" };
+    });
+    assert.equal(result.text, "Checked answer");
+    assert.equal(turns, 3);
+  }
 });
 
 test("an agent cannot keep using another provider after that permission is withdrawn", async () => {

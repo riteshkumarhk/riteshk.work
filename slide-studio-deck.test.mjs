@@ -2181,8 +2181,8 @@ async function installPrepareReplies(page) {
       const request = JSON.parse(options.body), system = request.system;
       let text;
       if (system.startsWith("You are Studio's outcome coordinator.")) {
-        window.preparationPlanningCalls.push({maxTokens:request.max_tokens,effort:request.output_config?.effort});
         const input = JSON.parse(request.messages[0].content);
+        window.preparationPlanningCalls.push({maxTokens:request.max_tokens,effort:request.output_config?.effort,job:input.job,review:!!input.candidate});
         text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',effort:window.interviewEffortCeilingTest ? 'high' : undefined,instruction:'',inputs:[],summary:'Use the selected evidence'}});
       } else {
         window.preparationCalls.push({system,user:JSON.stringify(request.messages),maxTokens:request.max_tokens,effort:request.output_config?.effort});
@@ -2567,7 +2567,7 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
     await installPrepareReplies(page);
     await page.addInitScript(()=>{window.interviewEffortCeilingTest=true;});
     await openIntegratedFixture(page,[
-      {type:'text',body:'Earlier evidence. '.repeat(700)},
+      {type:'text',body:'Earlier evidence. '.repeat(1800)},
       {type:'rows',items:[{cells:[{heading:'Reported design',body:'LATE_CELL_SEVEN_TO_FOUR'}]}]},
       {type:'text',body:'LATE_RESULTS_PENDING'},
       {type:'text',locked:true,body:'EXCLUDED_LOCKED_SOURCE'}
@@ -2601,6 +2601,16 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       assert.match(answer.system,/No bracketed placeholders/);
       assert.equal(answer.maxTokens,900+4096);
       assert.equal(answer.effort,'low');
+      const planning = await page.evaluate(()=>window.preparationPlanningCalls.slice(-4));
+      assert.deepEqual(planning.map(call=>call.review),[false,true,false,true]);
+      for (const [index,call] of planning.entries()) {
+        const draft = index < 2 ? request : answer;
+        assert.equal(call.job.material.truncated,false);
+        assert.ok(call.job.material.text.indexOf('LATE_RESULTS_PENDING') > 24000);
+        assert.ok(call.job.material.text === JSON.parse(draft.user)[0].content);
+        assert.ok(call.job.contract.text === draft.system);
+        assert.doesNotMatch(call.job.material.text,/EXCLUDED_LOCKED_SOURCE/);
+      }
     }
     for (const count of [10,14]) {
       await page.locator('[data-iprep-new]').click();
