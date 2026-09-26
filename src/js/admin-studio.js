@@ -18893,18 +18893,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
       var timerLeft = opening === "resume" ? Math.max(0, sessTimer) : totalSec; sessTimer = timerLeft;
-      stage.innerHTML = '<div class="wb__view-tabs" role="group" aria-label="Session view"><button type="button" data-wb-view="conversation" aria-pressed="true">Conversation</button><button type="button" data-wb-view="board" aria-pressed="false">Board</button></div><div class="wb__cols"><section class="wb__board" aria-label="Shared board"><div class="wb__board-empty" data-wb-board-empty>' + IC.board + '<h3>No board shared</h3><p>Figma, FigJam, a document or paper</p></div><div class="wb__board-tools">' + capInline + '<label class="wb__record"><input type="checkbox" data-wb-record> Record selected feed <small>(video only)</small></label></div><div class="wb__watch" data-wb-watch-bar hidden></div></section><div class="wb__main">' + immHtml + '<div class="wb__latest" data-wb-latest aria-live="polite">' + escHtml(prompt.prompt) + '</div>' +
+      stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div data-wb-latest hidden>' + escHtml(prompt.prompt) + '</div><div class="wb__chat" data-wb-log role="log" aria-label="Conversation"></div>' +
         '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
         (voiceOn ? '<span class="wb__voice-live" data-wb-live></span>' : "") +
-        '<div class="wb__composer-act">' + micInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div><details class="wb__transcript"><summary>Transcript</summary><div class="wb__chat" data-wb-log></div></details></div>' +
+        '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
+        '<section class="wb__board" aria-label="Shared board" hidden><label class="wb__record"><input type="checkbox" data-wb-record> Record selected feed <small>(video only)</small></label><div class="wb__watch" data-wb-watch-bar hidden></div></section></div>' +
         '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l" data-wb-phase></span></div>' +
         wbPromptCard(prompt) +
-        '<div class="wb__rail-acts"><button class="btn btn--primary" data-wb-ready>Ready, start</button><button class="btn btn--ghost" data-wb-think aria-pressed="false">Thinking time</button><button class="btn btn--ghost" data-wb-recap>Move to recap</button><button class="btn btn--ghost" data-wb-hint>Ask for a hint</button><button class="btn btn--auto" data-wb-score>End &amp; review</button><button class="btn btn--ghost" data-wb-pause>Save &amp; leave</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div></aside></div><details class="wb__memory"><summary>Working assumptions &amp; open questions</summary><label>My assumptions<textarea data-wb-notes="assumptions" rows="2">' + escHtml(sessNotes.assumptions) + '</textarea></label><label>Open questions<textarea data-wb-notes="questions" rows="2">' + escHtml(sessNotes.questions) + '</textarea></label></details>';
-      const toolbar = document.createElement('div'); toolbar.className = 'wb__sessionbar';
-      toolbar.append(stage.querySelector('[data-wb-timer]'),stage.querySelector('.wb__rail-acts'));
-      stage.prepend(toolbar);
-      const exerciseDetails = document.createElement('details'); exerciseDetails.className = 'wb__exercise'; exerciseDetails.innerHTML = '<summary>Exercise details</summary>';
-      exerciseDetails.append(stage.querySelector('.wb__prompt')); stage.querySelector('.wb__rail').replaceWith(exerciseDetails);
+        '<div class="wb__rail-acts"><button class="btn btn--primary" data-wb-ready>Ready, start</button><button class="btn btn--auto" data-wb-score>Wrap up &amp; score me</button><button class="btn btn--ghost" data-wb-pause>Save &amp; leave</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div><details class="wb__session-tools"><summary>Session tools</summary><div class="wb__rail-acts"><button class="btn btn--ghost" data-wb-think aria-pressed="false">Thinking time</button><button class="btn btn--ghost" data-wb-recap>Move to recap</button><button class="btn btn--ghost" data-wb-hint>Ask for a hint</button></div></details><details class="wb__memory"><summary>Working assumptions &amp; open questions</summary><label>My assumptions<textarea data-wb-notes="assumptions" rows="2">' + escHtml(sessNotes.assumptions) + '</textarea></label><label>Open questions<textarea data-wb-notes="questions" rows="2">' + escHtml(sessNotes.questions) + '</textarea></label></details></aside></div>';
       wireStage();
       var log = stage.querySelector("[data-wb-log]");
       var msgEl = stage.querySelector(".wb__msg");
@@ -18918,8 +18914,6 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0, cued5 = timerLeft <= 300;
       let clockStarted = null, clockBudget = timerLeft, thinking = false, scoring = false, lastClockSave = null;
       const readyBtn = stage.querySelector('[data-wb-ready]'), thinkBtn = stage.querySelector('[data-wb-think]');
-      stage.dataset.view = 'conversation';
-      stage.querySelectorAll('[data-wb-view]').forEach(button => button.addEventListener('click', () => { stage.dataset.view = button.dataset.wbView; stage.querySelectorAll('[data-wb-view]').forEach(option => option.setAttribute('aria-pressed', String(option === button))); }));
       msgEl.setAttribute('aria-label', 'Your response');
       stage.querySelectorAll('[data-wb-notes]').forEach(input => input.addEventListener('input', () => { sessNotes[input.dataset.wbNotes] = input.value; saveSess(); }));
       function sessionContext() { updateClock(); return '\n\nSESSION STATE (authoritative): ' + JSON.stringify({phase:sessPhase,remainingSeconds:Math.ceil(timerLeft),level:st.level,assisted:sessAssisted,retry:sessRetry,assumptions:sessNotes.assumptions,openQuestions:sessNotes.questions}) + '\nPreserve previously confirmed clarifications in the transcript. Candidate notes are assumptions/questions, not new scenario facts. If retry is set, focus only on that practice task.'; }
@@ -18940,9 +18934,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       };
       function updateClock() { if (clockStarted !== null) timerLeft = Math.max(0, clockBudget - (Date.now() - clockStarted) / 1000); sessTimer = timerLeft; }
       function paintTimer() {
+        stage.dataset.phase = sessPhase;
         curTimerText = wbFmtClock(Math.ceil(timerLeft)); if (timerTEl) timerTEl.textContent = curTimerText;
         if (timerEl) { timerEl.classList.toggle('is-low', timerLeft > 0 && timerLeft <= 300); timerEl.classList.toggle('is-done', timerLeft <= 0); }
-        stage.querySelector('[data-wb-phase]').textContent = sessPhase === 'briefing' ? 'Briefing / clock stopped' : sessPhase;
+        stage.querySelector('[data-wb-phase]').textContent = sessPhase === 'briefing' ? 'Briefing / clock stopped' : sessPhase === 'debrief' ? 'Review' : sessPhase;
         readyBtn.textContent = running() ? 'Pause' : sessPhase === 'briefing' ? 'Ready, start' : 'Resume'; readyBtn.hidden = sessPhase === 'debrief';
         readyBtn.disabled = scoring;
         stage.querySelector('[data-wb-interrupt]').hidden = scoring || !wTurnBusy && !window.speechSynthesis?.speaking;
@@ -19093,7 +19088,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       function paintWatch() {
         if (!watchBar || !activeExercise()) return;
         const downloads = recordings.map((recording,index) => '<a class="wb__watch-dl" href="' + recording.url + '" download="whiteboard-' + recording.source + '-' + (index + 1) + (recording.type?.includes('mp4') ? '.mp4' : '.webm') + '">Download recording ' + (index + 1) + '</a>').join('');
-        stage.querySelector('[data-wb-board-empty]').hidden = !!anyFeed();
+        stage.querySelector('.wb__board').hidden = !anyFeed() && !recordings.length;
         if (!anyFeed()) {
           watchBar.classList.remove("is-live");
           watchBar.innerHTML = downloads;
@@ -19277,7 +19272,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           showReview();
         } catch (e) { if (activeExercise()) err.textContent = (e && e.message) || "Couldn\u2019t score that \u2014 try again."; }
         if (!activeExercise()) return; scoring = wTurnBusy = false;
-        btnIdle(scoreBtn, "End & review");
+        btnIdle(scoreBtn, "Wrap up & score me");
         paintTimer();
       });
       function showReview() {
@@ -19286,7 +19281,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (sessParent) { const parent = prepGet('wb',sessParent); if (parent?.score) { const comparison = document.createElement('details'); comparison.className = 'wb__comparison'; comparison.innerHTML = '<summary>Previous attempt / different practice conditions</summary><p>' + escHtml((wbLevelMeta(parent.level)?.[1] || parent.level) + ' / ' + parent.mins + ' min / ' + (parent.assisted ? 'assisted' : 'no recorded assistance')) + '</p><p>' + escHtml(parent.score.overall || '') + '</p><p>' + escHtml(parent.score.topfix || '') + '</p>'; card.append(comparison); } }
         card.addEventListener('click', event => { const link = event.target.closest('[data-wb-evidence]'); if (link) { const id = link.dataset.wbEvidence; const target = [...stage.querySelectorAll('[data-wb-turn],[data-wb-observation]')].find(element => element.dataset.wbTurn === id || element.dataset.wbObservation === id); if (target) { const disclosure = target.closest('details'); if (disclosure) disclosure.open = true; stage.dataset.view = 'conversation'; stage.querySelectorAll('[data-wb-view]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.wbView === 'conversation'))); target.focus(); target.scrollIntoView({block:'center'}); } }
           const retry = event.target.closest('[data-wb-retry]'); if (retry) { const task = sessScore.improvements[Number(retry.dataset.wbRetry)]?.retry; if (!task) return; const parent = sessId; stopExercise(); sessId = null; sessParent = parent; sessRetry = task; st.mins = '5'; transcript = ''; sessTurns = []; sessDraft = ''; sessPlan = null; sessScore = sessCritique = null; sessObservations = []; sessAssisted = false; sessAutoLooks = 0; sessPhase = 'briefing'; sessResumePhase = 'working'; wbRunMock(true); } });
-        stage.append(card); card.scrollIntoView({block:'nearest'});
+        stage.querySelector('.wb__main').prepend(card); card.scrollIntoView({block:'start'});
       }
       if (opening === "resume") { sessTurns.forEach(function (rt) { renderTurn(rt.who, rt.text, rt); }); if (log) log.scrollTop = log.scrollHeight; }
       else if (opening) { saveSess(); }
