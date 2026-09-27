@@ -18673,6 +18673,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         '<button class="btn btn--auto" data-wb-start>Start</button>' +
       "</div>" +
       '<div class="pass__note">Practice history syncs to your Prepare library, never your public site. Shared images go to your configured AI on a turn or review. Recordings stay in this tab; download before leaving. Browser speech may use an online service.</div></div>';
+    modal.querySelector('.wb__deeper-body').append(modal.querySelector('.wb__brief').closest('.af'));
     const header = document.createElement('header'); header.className = 'wb__header';
     header.innerHTML = '<button type="button" class="adm__hist-btn" data-wb-exit title="Back to Prepare" aria-label="Back to Prepare">' + IC.back + '</button><h2>Whiteboard coach</h2><button type="button" class="btn btn--ghost" data-wb-history title="Saved sessions" aria-label="Saved sessions">' + IC.history + ' <span>Saved sessions</span></button>';
     header.append(modal.querySelector('[data-wb-chrome]'));
@@ -18680,9 +18681,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     document.body.appendChild(modal);
     prepMountStorage(modal);
     const lifetime = prepDialogLifetime(modal,'Whiteboard coach');
-    modal.setAttribute('aria-modal','false');
-    const coveredStudio = [...(root?.querySelectorAll('.adm__main,.adm__workbar') || [])].map(element => ({element,inert:element.inert}));
+    const coveredStudio = [...(root?.querySelectorAll('.adm__main,.adm__workbar,.adm__bar,.adm__statusbar') || [])].map(element => ({element,inert:element.inert}));
     coveredStudio.forEach(({element}) => { element.inert = true; });
+    function setSessionView(active) {
+      modal.classList.toggle('wb-modal--stage',active);
+      modal.setAttribute('aria-modal',String(!active));
+      coveredStudio.forEach(({element,inert}) => { if (element.matches('.adm__bar,.adm__statusbar')) element.inert = active ? inert : true; });
+    }
     function fitStudioFrame() {
       modal.style.top = Math.max(0,root?.querySelector('.adm__bar')?.getBoundingClientRect().bottom || 0) + 'px';
       modal.style.bottom = Math.max(0,window.innerHeight - (root?.querySelector('.adm__statusbar')?.getBoundingClientRect().top || window.innerHeight)) + 'px';
@@ -18830,8 +18835,8 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { if (!canLeaveSession()) return; stopExercise(); saveSess(); prompt = null; sessId = null; stage.removeAttribute('data-immersive'); if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45'; setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage",'wb-modal--focus'); err.textContent = ""; paintHist(); }
-    function showStage() { setup.hidden = true; stage.hidden = false; stage.removeAttribute('data-immersive'); backBtn.hidden = false; startBtn.hidden = true; wbMinBtn.disabled = st.mode !== 'mock'; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
+    function showSetup() { if (!canLeaveSession()) return; stopExercise(); saveSess(); prompt = null; sessId = null; stage.removeAttribute('data-immersive'); if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45'; setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; setSessionView(false); modal.classList.remove('wb-modal--focus'); err.textContent = ""; paintHist(); }
+    function showStage() { setup.hidden = true; stage.hidden = false; stage.removeAttribute('data-immersive'); backBtn.hidden = false; startBtn.hidden = true; wbMinBtn.disabled = st.mode !== 'mock'; setSessionView(true); err.textContent = ""; }
     backBtn.addEventListener("click", showSetup);
     startBtn.addEventListener("click", async function () {
       stopExercise();

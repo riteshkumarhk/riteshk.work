@@ -2495,18 +2495,15 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
       await modal.waitFor();
       await page.waitForFunction(selector => document.querySelector(selector)?.contains(document.activeElement), ['ats','cl'].includes(tool) ? '.prep-dialog' : '.'+tool+'-modal');
       assert.equal(await modal.getAttribute('role'),'dialog');
-      assert.equal(await modal.getAttribute('aria-modal'),tool === 'wb' ? 'false' : 'true');
+      assert.equal(await modal.getAttribute('aria-modal'),'true');
       await modal.evaluate(element => { const controls = [...element.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(control=>control.getClientRects().length); controls.at(-1).focus(); });
       await page.keyboard.press('Tab');
       if (tool === 'wb') {
         assert.equal(await page.locator('.adm__main').evaluate(element=>element.inert),true);
         assert.equal(await page.locator('.adm__workbar').evaluate(element=>element.inert),true);
-        assert.equal(await page.evaluate(()=>document.activeElement.closest('.adm__main,.adm__workbar') === null),true);
-        await page.locator('.adm__tab[data-tab="ai"]').focus();
-        assert.equal(await page.locator('.adm__tab[data-tab="ai"]').evaluate(element=>element === document.activeElement),true);
-      } else {
-        assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
+        assert.equal(await page.locator('.adm__bar').evaluate(element=>element.inert),true);
       }
+      assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
       await modal.getByRole('button',{name:'Use brief',exact:true}).click();
       if (tool === 'ats' || tool === 'cl') {
         assert.equal(await page.evaluate(tool => JSON.parse(localStorage.getItem('rk:prep:draft'))[tool].state.preparationBrief.id,tool),brief.id);
@@ -3337,6 +3334,7 @@ test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup
     await page.locator('.wb-modal [data-use-prep-brief]').click();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).preparationBrief.id),'original-role');
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).fixedRole),true);
+    await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('Original synthetic exercise');
     await page.locator('[data-wb-start]').click();
     await page.locator('.wb__draft').fill('I would first clarify the user need and choose a measurable outcome.');
@@ -3363,6 +3361,7 @@ test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup
     assert.equal(preserved.mode,'coach');
     assert.equal(preserved.critique.verdict,'SAVED_COACHING_FEEDBACK');
     await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('A mock synthetic exercise');
     await page.locator('[data-wb-start]').click();
     await page.locator('[data-wb-ready]').click();
@@ -3433,6 +3432,7 @@ test('Prepare Whiteboard clock ownership interrupted turns evidence and independ
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
     assert.equal(await page.locator('[data-wb-lvl]').count(),4);
     await page.locator('[data-wb-lvl="leader"]').click(); await page.locator('[data-wb-mode="mock"]').click();
+    await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('Keep the warehouse delay fixed at five days.'); await page.locator('[data-wb-start]').click();
     await page.clock.fastForward(65000); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),'60:00');
     assert.equal(await page.evaluate(() => window.preparationCalls.length),0);
@@ -3492,8 +3492,43 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       navigator.mediaDevices.getUserMedia = async () => { throw new Error('No physical device permitted'); };
     });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    if (width === 1440) {
+      const setupShell = await page.locator('.wb-modal .pass__box').boundingBox();
+      const studioHeader = await page.locator('.adm__bar').boundingBox(), studioStatus = await page.locator('.adm__statusbar').boundingBox();
+      assert.ok(setupShell.x > 0 && setupShell.width <= 880,'Setup is a contained window over Studio');
+      assert.ok(setupShell.y > studioHeader.y + studioHeader.height,'Setup leaves space below the Studio navigation');
+      assert.ok(setupShell.y + setupShell.height < studioStatus.y,'Setup leaves space above Studio status');
+      assert.equal(await page.locator('.wb-modal').getAttribute('aria-modal'),'true');
+      assert.equal(await page.getByRole('button',{name:'Back to Prepare',exact:true}).isVisible(),true);
+      assert.equal(await page.locator('.wb__chrome').isVisible(),false,'Setup needs no maximise action');
+    }
+    assert.equal(await page.locator('[data-wb-deeper]').getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('.wb__brief').isVisible(),false);
+    assert.equal(await page.locator('.wb__own').isVisible(),false);
+    await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__brief').fill('Refund onboarding');
+    await page.locator('.wb__own').fill('Design a clear refund status.');
+    await page.locator('[data-wb-deeper]').click();
+    assert.equal(await page.locator('.wb__brief').inputValue(),'Refund onboarding');
+    assert.equal(await page.locator('.wb__own').inputValue(),'Design a clear refund status.');
+    assert.equal(await page.locator('.wb__own').isVisible(),false);
+    if (width === 1440) {
+      for (const viewport of [{width:1024,height:768,theme:'day'},{width:1920,height:1080,theme:'night'}]) {
+        await page.setViewportSize({width:viewport.width,height:viewport.height});
+        await page.evaluate(theme => { document.documentElement.dataset.theme = theme; },viewport.theme);
+        const box = await page.locator('.wb-modal .pass__box').boundingBox();
+        const form = await page.locator('.wb__setup .ats__main').boundingBox(), history = await page.locator('[data-wb-hist]').boundingBox();
+        const footer = await page.locator('.wb__foot').boundingBox();
+        assert.ok(box.x > 0 && box.width <= 880 && box.y > 0 && box.y + box.height < viewport.height);
+        assert.ok(form.x + form.width <= history.x,'Saved sessions remain beside the setup fields');
+        assert.ok(footer.y >= box.y && footer.y + footer.height <= box.y + box.height,'Footer actions stay inside the setup window');
+        assert.equal(await page.locator('.wb-modal .pass__box').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
+        await page.screenshot({path:join(tmpdir(),'rk-whiteboard-compact-setup-' + viewport.width + '.png')});
+      }
+      await page.setViewportSize({width,height:1000});
+    }
     await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-setup-' + width + '.png')});
-    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('.wb__own').fill('Design a clear refund status.'); await page.locator('[data-wb-start]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-start]').click();
     if (width === 1440) {
       assert.equal(await page.getByRole('button',{name:'Start immersive session',exact:true}).isVisible(),true,'Immersive mode is an explicit option for the same interview');
       assert.equal(await page.locator('.wb__cols').evaluate(element => element.firstElementChild.classList.contains('wb__main')),true,'The conversation leads the restored layout');
@@ -3590,6 +3625,18 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     assert.equal(await page.locator('.wb__stage').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
     assert.equal(await page.evaluate(() => window.boardStream.getTracks().every(track=>track.readyState==='ended')),true);
     assert.equal(await page.evaluate(() => window.mediaRequests.length),1); assert.equal(await page.evaluate(() => window.mediaRequests[0].options.audio),false);
+    const callsBeforeSetup = await page.evaluate(() => window.preparationCalls.length);
+    page.once('dialog',dialog=>dialog.accept());
+    await page.getByRole('button',{name:'Saved sessions',exact:true}).click();
+    assert.equal(await page.locator('.wb-modal').getAttribute('aria-modal'),'true');
+    assert.equal(await page.locator('.wb-modal').evaluate(element=>element.classList.contains('wb-modal--stage')),false);
+    assert.equal(await page.locator('.wb__brief').inputValue(),'Refund onboarding');
+    assert.equal(await page.locator('.wb__own').inputValue(),'Design a clear refund status.');
+    assert.equal(await page.locator('.wb__own').isVisible(),false);
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeSetup);
+    if (width === 1440) assert.ok((await page.locator('.wb-modal .pass__box').boundingBox()).width <= 880);
+    await page.locator('.wb-modal [data-cancel]').click();
+    assert.equal(await page.locator('.adm__bar').evaluate(element=>element.inert),false);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
 });
@@ -3630,7 +3677,7 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
       };
     });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
-    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('.wb__own').fill('Keep the refund experience clear.'); await page.locator('[data-wb-start]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('Keep the refund experience clear.'); await page.locator('[data-wb-start]').click();
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 1 && !document.querySelector('[data-wb-send]').disabled);
     await page.locator('.wb__msg').fill('My uninterrupted draft');
     const before = await page.evaluate(() => ({session:JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],calls:window.preparationCalls.length}));
@@ -3712,6 +3759,7 @@ test('Prepare Whiteboard floating companion shares draft pause and fallback with
     await installPrepareReplies(page); await openIntegratedFixture(page);
     await page.evaluate(() => { navigator.mediaDevices.getDisplayMedia = navigator.mediaDevices.getUserMedia = () => { throw new Error('Unexpected capture'); }; });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click();
+    await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('A synthetic companion exercise'); await page.locator('[data-wb-start]').click(); await page.locator('[data-wb-ready]').click();
     await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 1 && !document.querySelector('[data-wb-send]').disabled);
     await page.waitForLoadState('networkidle'); await context.unrouteAll({behavior:'wait'});
@@ -3747,7 +3795,7 @@ test('Prepare Whiteboard voice preparation is untimed and late recognition prese
       navigator.mediaDevices.getDisplayMedia = () => { throw new Error('Unexpected screen request'); };
     });
     await installPrepareReplies(page); await openIntegratedFixture(page);
-    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-convo="voice"]').click(); await page.locator('.wb__own').fill('Voice test exercise'); await page.locator('[data-wb-start]').click();
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-convo="voice"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('Voice test exercise'); await page.locator('[data-wb-start]').click();
     await page.locator('[data-wb-mic]').click(); await page.getByText('Microphone available. Session clock is stopped.',{exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.recognitionStarts||0),0); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),'60:00');
     await page.locator('[data-wb-spk]').click(); await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
@@ -3819,7 +3867,7 @@ test('Prepare Whiteboard vision is explicit change-aware bounded and quiet durin
       const canvas=document.createElement('canvas');canvas.width=640;canvas.height=400;const drawing=canvas.getContext('2d');drawing.fillStyle='#fff';drawing.fillRect(0,0,640,400);window.visionCanvas=canvas;
       navigator.mediaDevices.getDisplayMedia=async()=>{window.visionStream=canvas.captureStream(10);setInterval(()=>{drawing.fillRect(0,0,2,2);window.visionStream.getVideoTracks()[0].requestFrame?.();},100);return window.visionStream;};
     });
-    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('.wb__own').fill('A synthetic board exercise'); await page.locator('[data-wb-start]').click();
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('A synthetic board exercise'); await page.locator('[data-wb-start]').click();
     await page.locator('[data-wb-watch="screen"]').click(); await page.waitForFunction(()=>document.querySelector('.wb__feed-vid')?.videoWidth===640); await page.locator('.wb__watch-options > summary').click(); await page.locator('[data-wb-shownow]').waitFor();
     assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);

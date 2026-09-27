@@ -3140,7 +3140,10 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 
 .wb-workspace.pass { padding: 0; background: var(--bg); }
 .wb-workspace.pass .pass__box { width: 100%; max-width: none; height: 100%; max-height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; corner-shape: round; display: flex; flex-direction: column; overflow: hidden; text-align: left; background: var(--bg); }
+.wb-workspace.pass:not(.wb-modal--stage) { padding: 16px; box-sizing: border-box; background: rgba(0,0,0,.2); -webkit-backdrop-filter: none; backdrop-filter: none; }
+.wb-workspace:not(.wb-modal--stage) .pass__box { width: min(880px,100%); height: min(820px,100%); box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; corner-shape: squircle; background: var(--bg-2); }
 .wb-workspace .wb__header { display: flex; align-items: center; gap: 12px; min-height: 62px; padding: 12px 24px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.wb-workspace:not(.wb-modal--stage) .wb__header { min-height: 52px; padding: 12px 16px; }
 .wb-workspace .wb__header h2 { font: 500 19px/1.4 var(--serif); margin: 0 auto 0 0; }
 .wb-workspace .wb__header .adm__hist-btn { width: 34px; height: 34px; flex: 0 0 34px; }
 .wb-workspace .wb__header .btn svg { width: 16px; height: 16px; }
@@ -3151,6 +3154,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .wb-workspace .pass__sub { padding: 20px 24px 0; margin: 0; max-width: 960px; }
 .wb-workspace.wb-modal--stage .pass__sub { display: none; }
 .wb-workspace .wb__setup { overflow: auto; flex: 1; min-height: 0; padding: 24px; width: 100%; max-width: 880px; align-self: center; }
+.wb-workspace:not(.wb-modal--stage) .wb__setup { box-sizing: border-box; max-width: none; }
 .wb-workspace .wb__stage { overflow: auto; flex: 1; min-height: 0; max-height: none; padding: 24px; display: block; width: 100%; max-width: 1920px; align-self: center; box-sizing: border-box; }
 .wb-workspace .wb__stage[hidden] { display: none; }
 .wb-workspace .wb__foot { margin: 0; padding: 12px 24px; border-top: 1px solid var(--line); flex-shrink: 0; }
