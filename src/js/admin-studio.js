@@ -2547,7 +2547,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     labelFields();
     const observer = new MutationObserver(labelFields); observer.observe(modal,{childList:true,subtree:true});
     const onKey = event => {
-      if (event.key !== 'Tab' || [...document.querySelectorAll('.pass,.atsv')].filter(element => element.getClientRects().length).at(-1) !== modal) return;
+      if (event.key !== 'Tab' || modal.getAttribute('aria-modal') === 'false' || [...document.querySelectorAll('.pass,.atsv')].filter(element => element.getClientRects().length).at(-1) !== modal) return;
       const items = controls(), index = items.indexOf(document.activeElement);
       if (!items.length) { event.preventDefault(); modal.focus(); }
       else if (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === items.length - 1) { event.preventDefault(); items[event.shiftKey ? items.length - 1 : 0].focus(); }
@@ -18680,6 +18680,16 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     document.body.appendChild(modal);
     prepMountStorage(modal);
     const lifetime = prepDialogLifetime(modal,'Whiteboard coach');
+    modal.setAttribute('aria-modal','false');
+    const coveredStudio = [...(root?.querySelectorAll('.adm__main,.adm__workbar') || [])].map(element => ({element,inert:element.inert}));
+    coveredStudio.forEach(({element}) => { element.inert = true; });
+    function fitStudioFrame() {
+      modal.style.top = Math.max(0,root?.querySelector('.adm__bar')?.getBoundingClientRect().bottom || 0) + 'px';
+      modal.style.bottom = Math.max(0,window.innerHeight - (root?.querySelector('.adm__statusbar')?.getBoundingClientRect().top || window.innerHeight)) + 'px';
+    }
+    const frameObserver = new ResizeObserver(fitStudioFrame);
+    for (const element of [root?.querySelector('.adm__bar'),root?.querySelector('.adm__statusbar')].filter(Boolean)) frameObserver.observe(element);
+    window.addEventListener('resize',fitStudioFrame); fitStudioFrame();
     var err = modal.querySelector(".pass__err");
     var setup = modal.querySelector(".wb__setup");
     var stage = modal.querySelector(".wb__stage");
@@ -18707,7 +18717,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       catch (e2) { if (errEl) errEl.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
       btnIdle(wbJdFetch, "Fetch");
     });
-    var watchCleanup = null, micCleanup = null, timerCleanup = null;
+    var watchCleanup = null, micCleanup = null, timerCleanup = null, hasSessionMedia = null;
     var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
     var pipWin = null, pipTimeEl = null, pipMic = null;
     let companionPaint = null;
@@ -18716,12 +18726,17 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       exercise.abort(); exercise = new AbortController();
       try { wbSpeech.stop(); } catch {}
       for (const cleanup of [watchCleanup, micCleanup, timerCleanup]) { try { cleanup?.(); } catch {} }
-      watchCleanup = micCleanup = timerCleanup = doListen = companionPaint = null;
+      watchCleanup = micCleanup = timerCleanup = doListen = companionPaint = hasSessionMedia = null;
       if (pipWin) { try { pipWin.close(); } catch {} pipWin = null; }
       miniEl?.remove(); miniEl = miniMic = null;
       modal.style.display = "";
     }
-    var close = function () { if (closed) return; timerCleanup?.(); saveSess(); closed = true; stopExercise(); lifetime.dispose(); window.removeEventListener("pagehide", close); modal.remove(); };
+    function canLeaveSession() { return !hasSessionMedia?.() || window.confirm('Recordings stay in this tab and will be discarded when you leave this session. Cancel to download them first. Leave anyway?'); }
+    function beforeLeavePage(event) { if (hasSessionMedia?.()) { event.preventDefault(); event.returnValue = ''; } }
+    window.addEventListener('beforeunload',beforeLeavePage);
+    var close = function (event) { if (closed) return true; if (event?.type !== 'pagehide' && !canLeaveSession()) return false; timerCleanup?.(); saveSess(); closed = true; stopExercise(); lifetime.dispose(); frameObserver.disconnect(); coveredStudio.forEach(({element,inert}) => { element.inert = inert; }); window.removeEventListener('resize',fitStudioFrame); window.removeEventListener('beforeunload',beforeLeavePage); root?.removeEventListener('click',leaveForStudio,true); window.removeEventListener("pagehide", close); modal.remove(); return true; };
+    function leaveForStudio(event) { if (event.target.closest('.adm__tab,[data-exit-save],[data-return-site]') && !close()) { event.preventDefault(); event.stopImmediatePropagation(); } }
+    root?.addEventListener('click',leaveForStudio,true);
     window.addEventListener("pagehide", close);
     function hideMini() { modal.style.display = ""; if (miniEl) miniEl.hidden = true; wbMinBtn.focus(); }
     function companionContent(root, restore) {
@@ -18815,9 +18830,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { stopExercise(); saveSess(); prompt = null; sessId = null; if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45'; setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage",'wb-modal--focus'); err.textContent = ""; paintHist(); }
-    function showStage() { setup.hidden = true; stage.hidden = false; backBtn.hidden = false; startBtn.hidden = true; wbMinBtn.disabled = st.mode !== 'mock'; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
-    backBtn.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
+    function showSetup() { if (!canLeaveSession()) return; stopExercise(); saveSess(); prompt = null; sessId = null; stage.removeAttribute('data-immersive'); if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45'; setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; modal.classList.remove("wb-modal--stage",'wb-modal--focus'); err.textContent = ""; paintHist(); }
+    function showStage() { setup.hidden = true; stage.hidden = false; stage.removeAttribute('data-immersive'); backBtn.hidden = false; startBtn.hidden = true; wbMinBtn.disabled = st.mode !== 'mock'; modal.classList.add("wb-modal--stage"); err.textContent = ""; }
+    backBtn.addEventListener("click", showSetup);
     startBtn.addEventListener("click", async function () {
       stopExercise();
       const signal = exercise.signal;
@@ -18876,10 +18891,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     async function wbRunMock(opening) {
       const signal = exercise.signal;
       const activeExercise = () => !closed && !signal.aborted && modal.isConnected;
+      stage.dataset.immersive = 'false';
       if (watchCleanup) { try { watchCleanup(); } catch (e) {} }
       if (micCleanup) { try { micCleanup(); } catch (e) {} }
       if (timerCleanup) { try { timerCleanup(); } catch (e) {} }
-      var voiceOn = (st.convo === "voice") && wbSpeech.sttOk;
+      var voiceOn = wbSpeech.sttOk;
       doListen = null;
       var WB_IC_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
       var WB_IC_SCREEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3.5" width="20" height="13" rx="2"/><path d="M8 21h8M12 16.5V21"/></svg>';
@@ -18888,13 +18904,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var WB_IC_SPK_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
       var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic title="Tap to talk \u2014 pause to think anytime; tap again when you\u2019re done"><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
       var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk wb__spk--icon is-on" data-wb-spk title="AI narration \u2014 on (the interviewer reads its replies aloud)" aria-label="AI narration \u2014 on"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span></button>' : "";
-      var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" title="Share your screen so the interviewer can see your board"><span class="wb__ico">' + WB_IC_SCREEN + '</span>Share screen</button><button type="button" class="wb__cap" data-wb-watch="camera" title="Turn on your camera so the interviewer can watch"><span class="wb__ico">' + WB_IC_CAM + '</span>Camera</button>';
-      var immHtml = voiceOn ? '<div class="wb__imm" data-wb-imm-bar><span class="wb__imm-note">Voice conversation</span><button type="button" class="btn btn--ghost" data-wb-immersive>Start voice</button></div>' : "";
+      var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" aria-label="Share screen" title="Share screen"><span class="wb__ico">' + WB_IC_SCREEN + '</span></button><button type="button" class="wb__cap" data-wb-watch="camera" aria-label="Camera" title="Camera"><span class="wb__ico">' + WB_IC_CAM + '</span></button>';
+      var immHtml = '<div class="wb__imm" data-wb-imm-bar><button type="button" class="btn btn--ghost" data-wb-immersive title="Request screen, camera and microphone access; recording stays off">Start immersive session</button><div class="wb__immersive-actions"></div></div>';
       if (foot) foot.hidden = true;
       var totalSec = (parseInt(st.mins, 10) || 45) * 60;
       var timerLeft = opening === "resume" ? Math.max(0, sessTimer) : totalSec; sessTimer = timerLeft;
       stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div data-wb-latest hidden>' + escHtml(prompt.prompt) + '</div><div class="wb__chat" data-wb-log role="log" aria-label="Conversation"></div>' +
-        '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="' + (voiceOn ? "Tap the mic and talk \u2014 or type here (\u2318/Ctrl+Enter to send)\u2026" : "Type your next move \u2014 think out loud like you would at the board (\u2318/Ctrl+Enter to send)\u2026") + '"></textarea>' +
+        '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="Your response..."></textarea>' +
         (voiceOn ? '<span class="wb__voice-live" data-wb-live></span>' : "") +
         '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
         '<section class="wb__board" aria-label="Shared board" hidden><label class="wb__record"><input type="checkbox" data-wb-record> Record selected feed <small>(video only)</small></label><div class="wb__watch" data-wb-watch-bar hidden></div></section></div>' +
@@ -18910,10 +18926,35 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       const retryReply = stage.querySelector('[data-wb-reply-retry]');
       retryReply.hidden = opening !== 'resume' || sessPhase === 'briefing' || sessPhase === 'debrief' || sessTurns.at(-1)?.who === 'int';
       retryReply.addEventListener('click', () => interviewerTurn(''));
-      var speakOn = wbSpeech.ttsOk;
+      var speakOn = st.convo === 'voice' && wbSpeech.ttsOk;
       var timerTEl = stage.querySelector("[data-wb-timer-t]"), timerEl = stage.querySelector("[data-wb-timer]"), timerInt = 0, cued5 = timerLeft <= 300;
       let clockStarted = null, clockBudget = timerLeft, thinking = false, scoring = false, lastClockSave = null;
       const readyBtn = stage.querySelector('[data-wb-ready]'), thinkBtn = stage.querySelector('[data-wb-think]');
+      const board = stage.querySelector('.wb__board'), rail = stage.querySelector('.wb__rail'), main = stage.querySelector('.wb__main');
+      const sessionActions = rail.querySelector('.wb__rail-acts'), timer = rail.querySelector('[data-wb-timer]');
+      const sources = document.createElement('div'); sources.className = 'wb__sources'; board.append(sources);
+      const promptDetails = document.createElement('details'); promptDetails.className = 'wb__immersive-prompt';
+      promptDetails.innerHTML = '<summary>Prompt &amp; session notes</summary><div></div>';
+      main.insertBefore(promptDetails,stage.querySelector('.wb__chat'));
+      const promptCard = rail.querySelector('.wb__prompt'), notes = rail.querySelector('.wb__memory'), sessionTools = rail.querySelector('.wb__session-tools');
+      sessionActions.append(stage.querySelector('[data-wb-hint]'));
+      stage.querySelector('.wb__composer').append(stage.querySelector('.wb__record'));
+      let immersive = false, immersiveRequest = 0;
+      function setImmersive(on) {
+        immersive = on; stage.dataset.immersive = String(on); if (!on) immersiveRequest++;
+        const destination = on ? stage.querySelector('.wb__cols') : main;
+        if (destination.moveBefore) destination.moveBefore(board,null); else destination.append(board);
+        (on ? stage.querySelector('.wb__immersive-actions') : rail).append(sessionActions);
+        (on ? promptDetails.querySelector('div') : rail).append(promptCard,sessionTools,notes);
+        if (!on) rail.insertBefore(promptCard,sessionActions);
+        if (on) sources.append(timer); else rail.prepend(timer);
+        const button = stage.querySelector('[data-wb-immersive]');
+        button.textContent = on ? 'Exit immersive session' : 'Start immersive session';
+        button.setAttribute('aria-pressed',String(on));
+        button.title = on ? 'Return to conversation and stop sharing; the interview timer continues' : 'Request screen, camera and microphone access; recording stays off';
+        button.focus({preventScroll:true});
+        paintWatch();
+      }
       msgEl.setAttribute('aria-label', 'Your response');
       stage.querySelectorAll('[data-wb-notes]').forEach(input => input.addEventListener('input', () => { sessNotes[input.dataset.wbNotes] = input.value; saveSess(); }));
       function sessionContext() { updateClock(); return '\n\nSESSION STATE (authoritative): ' + JSON.stringify({phase:sessPhase,remainingSeconds:Math.ceil(timerLeft),level:st.level,assisted:sessAssisted,retry:sessRetry,assumptions:sessNotes.assumptions,openQuestions:sessNotes.questions}) + '\nPreserve previously confirmed clarifications in the transcript. Candidate notes are assumptions/questions, not new scenario facts. If retry is set, focus only on that practice task.'; }
@@ -18948,6 +18989,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         retryReply.disabled = !running() || wTurnBusy;
         stage.querySelector('[data-wb-hint]').disabled = !turnAvailable();
         stage.querySelectorAll('[data-wb-shownow]').forEach(button => { button.disabled = !turnAvailable(); });
+        stage.querySelectorAll('[data-wb-interviewer-status]').forEach(element => { element.textContent = wTurnBusy ? 'Replying' : window.speechSynthesis?.speaking ? 'Speaking' : 'Interviewer'; });
         if (miniEl && !miniEl.hidden) { var mt = miniEl.querySelector('[data-wb-mini-t]'); if (mt) mt.textContent = curTimerText; }
         if (pipTimeEl) pipTimeEl.textContent = curTimerText;
         companionPaint?.();
@@ -18971,17 +19013,19 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       timerCleanup = stopTimer;
       stage.querySelector('[data-wb-hint]').addEventListener('click', () => { if (!turnAvailable()) return; sessAssisted = true; saveSess(); interviewerTurn('I request a small hint. Label your response Assistance.'); });
       var pauseBtn = stage.querySelector("[data-wb-pause]"); if (pauseBtn) pauseBtn.addEventListener("click", close);
-      var railBack = stage.querySelector("[data-wb-rail-back]"); if (railBack) railBack.addEventListener("click", function () { if (watchCleanup) { try { watchCleanup(); } catch (e) {} } showSetup(); });
+      var railBack = stage.querySelector("[data-wb-rail-back]"); if (railBack) railBack.addEventListener("click", showSetup);
       function renderTurn(who, text, turn) { var d = document.createElement("div"); d.className = "wb__turn wb__turn--" + who; d.tabIndex = -1; d.dataset.wbTurn = turn.id; var wl = document.createElement("span"); wl.className = "wb__who"; wl.textContent = (who === "int" ? "Interviewer" : "You") + (turn.at == null ? '' : ' / ' + wbFmtClock(turn.at)); var bu = document.createElement("div"); bu.className = "wb__bubble"; bu.textContent = text; d.appendChild(wl); d.appendChild(bu); log.appendChild(d); log.scrollTop = log.scrollHeight; if (who === 'int') stage.querySelector('[data-wb-latest]').textContent = text; }
       function addTurn(who, text) { updateClock(); const turn = {id:'turn-' + (sessTurns.length + 1),who,text,at:Math.max(0,totalSec - timerLeft)}; renderTurn(who, text, turn); sessTurns.push(turn); saveSess(); return turn; }
       // ---- Let the interviewer WATCH: screen/camera capture + local recording + per-turn vision ----
       var watchBar = stage.querySelector("[data-wb-watch-bar]");
       var feeds = { screen: null, camera: null };   // each: { stream, video }
       const feedRequests = { screen:0, camera:0 }, pendingFeeds = new Set();
-      var wFocus = "";                               // which feed the AI analyses + records
+      var wFocus = "", previewSource = '', recordSource = '';
+      let aiSourceChosen = false;
       var wRec = null, wRecUrl = "", wRecOn = false, wRecSrc = "";
-      let recordWanted = false;
+      let recordWanted = false, pendingRecordings = 0;
       const recordings = [];
+      hasSessionMedia = () => wRecOn || pendingRecordings > 0 || recordWanted || recordings.length > 0;
       var wCanSee = null, wModel = null, wModelTried = false;
       var wGlanceOn = false, wGlanceTimer = 0, wLastTurn = Date.now(), wTurnBusy = false;
       let replyController = null, replyGeneration = 0, lastInputAt = 0, lastPixels = null, lastLookAt = 0, autoLooks = sessAutoLooks;
@@ -18997,7 +19041,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       }
       function wStopTracks(s) { if (s) { try { s.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} } }
       function anyFeed() { return feeds.screen || feeds.camera; }
-      function focusFeed() { return (wFocus && feeds[wFocus]) || feeds.screen || feeds.camera || null; }
+      function focusFeed() { return feeds[wFocus] || null; }
       function grabFrame() {
         try {
           var f = focusFeed(), v = f && f.video;
@@ -19021,12 +19065,12 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           var rec = mt ? new MediaRecorder(rs, { mimeType: mt }) : new MediaRecorder(rs);
           var chunks = [];
           rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) chunks.push(ev.data); };
-          rec.onstop = function () { if (!activeExercise()) return; try { const recording = new Blob(chunks, {type:rec.mimeType || 'video/webm'}); if (recording.size) { wRecUrl = URL.createObjectURL(recording); recordings.push({url:wRecUrl,type:rec.mimeType,source:src}); } else err.textContent = 'No recording frames were captured. Keep the selected feed active before stopping.'; } catch (e) { err.textContent = 'The recording could not be prepared for download.'; } if (wRec === rec) wRecOn = false; paintWatch(); };
-          rec.start(1000); wRec = rec; wRecOn = true;
+          rec.onstop = function () { pendingRecordings--; if (!activeExercise()) return; try { const recording = new Blob(chunks, {type:rec.mimeType || 'video/webm'}); if (recording.size) { wRecUrl = URL.createObjectURL(recording); recordings.push({url:wRecUrl,type:rec.mimeType,source:src}); } else err.textContent = 'No recording frames were captured. Keep the selected feed active before stopping.'; } catch (e) { err.textContent = 'The recording could not be prepared for download.'; } if (wRec === rec) wRecOn = false; paintWatch(); };
+          rec.start(1000); pendingRecordings++; wRec = rec; wRecOn = true;
         } catch (e) { wRec = null; wRecOn = false; recordWanted = false; stage.querySelector('[data-wb-record]').checked = false; err.textContent = 'Recording could not start. Your shared preview remains available.'; }
       }
       function stopRec() { if (wRec && wRecOn) { wRecOn = false; try { wRec.stop(); } catch (e) {} } }
-      function syncRec() { if (!recordWanted || !anyFeed()) { stopRec(); return; } if (!wRecOn || wRecSrc !== wFocus) startRec(wFocus); }
+      function syncRec() { if (!recordWanted || !feeds[recordSource]) { stopRec(); return; } if (!wRecOn || wRecSrc !== recordSource) startRec(recordSource); }
       stage.querySelector('[data-wb-record]').addEventListener('change', event => { recordWanted = event.target.checked; syncRec(); paintWatch(); });
       function glanceTick() {
         if (!anyFeed() || !wCanSee || !turnAvailable()) return;
@@ -19046,14 +19090,16 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         try { var vm = await visionModels(aiCfg("txt")); wModel = (vm && vm[0]) || null; wCanSee = !!wModel; } catch (e) { wCanSee = false; }
         if (activeExercise()) paintWatch();
       }
-      function setFocus(src) { if (!feeds[src]) return; wFocus = src; lastPixels = null; syncRec(); paintWatch(); }
+      function setFocus(src) { if (src && !feeds[src]) return; aiSourceChosen = true; wFocus = src; lastPixels = null; if (!src) setGlance(false); paintWatch(); }
       function stopFeed(src) {
         feedRequests[src]++; pendingFeeds.delete(src);
         var f = feeds[src]; if (!f) return;
         wStopTracks(f.stream);
         try { f.video.srcObject = null; } catch (e) {}
         feeds[src] = null;
-        if (wFocus === src) wFocus = feeds.screen ? "screen" : (feeds.camera ? "camera" : "");
+        if (wFocus === src) { wFocus = ''; setGlance(false); }
+        if (previewSource === src) previewSource = feeds.screen ? 'screen' : feeds.camera ? 'camera' : '';
+        if (recordSource === src) { recordWanted = false; stage.querySelector('[data-wb-record]').checked = false; stopRec(); recordSource = ''; }
         if (!anyFeed()) { setGlance(false); stopRec(); } else syncRec();
         paintWatch();
       }
@@ -19066,19 +19112,20 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         var stream;
         try {
           if (src === "screen") stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false });
-          else stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 } }, audio: false });
-        } catch (e) { pendingFeeds.delete(src); if (activeExercise() && request === feedRequests[src]) err.textContent = "Couldn\u2019t start " + (src === "screen" ? "screen sharing" : "the camera") + " \u2014 you may need to allow permission."; return; }
+          else stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: immersive ? "user" : "environment", width: { ideal: 1280 } }, audio: false });
+        } catch (e) { if (request === feedRequests[src]) { pendingFeeds.delete(src); if (activeExercise()) err.textContent = "Couldn\u2019t start " + (src === "screen" ? "screen sharing" : "the camera") + " \u2014 you may need to allow permission."; } return; }
         if (!activeExercise() || request !== feedRequests[src]) { wStopTracks(stream); return; }
         var video = document.createElement("video"); video.className = "wb__feed-vid"; video.muted = true; video.autoplay = true; video.playsInline = true; video.srcObject = stream;
         feeds[src] = { stream: stream, video: video };
-        if (!wFocus) wFocus = src;
+        if (!aiSourceChosen && !wFocus && (!immersive || src === 'screen')) wFocus = src;
+        if (!previewSource || immersive && src === 'screen') previewSource = src;
+        if (!recordSource || immersive && src === 'screen' && !recordWanted) recordSource = src;
         paintWatch();
         try { await video.play(); } catch (e) {}
         pendingFeeds.delete(src);
         if (!activeExercise() || request !== feedRequests[src]) { wStopTracks(stream); video.srcObject = null; return; }
         feeds[src] = { stream: stream, video: video };
         stream.getVideoTracks().forEach(function (t) { t.addEventListener("ended", function () { if (feeds[src]?.stream === stream) stopFeed(src); }); });
-        if (!wFocus) wFocus = src;
         watchCleanup = stopWatch;
         syncRec();
         paintWatch();
@@ -19088,45 +19135,58 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       function paintWatch() {
         if (!watchBar || !activeExercise()) return;
         const downloads = recordings.map((recording,index) => '<a class="wb__watch-dl" href="' + recording.url + '" download="whiteboard-' + recording.source + '-' + (index + 1) + (recording.type?.includes('mp4') ? '.mp4' : '.webm') + '">Download recording ' + (index + 1) + '</a>').join('');
-        stage.querySelector('.wb__board').hidden = !anyFeed() && !recordings.length;
-        if (!anyFeed()) {
-          watchBar.classList.remove("is-live");
-          watchBar.innerHTML = downloads;
-          watchBar.hidden = !recordings.length;
-          updateCaps();
-          return;
+        board.hidden = !immersive && !anyFeed() && !recordings.length;
+        stage.classList.toggle('wb__has-media',!!anyFeed() || recordings.length > 0);
+        watchBar.hidden = board.hidden;
+        watchBar.classList.toggle('is-live',!!anyFeed());
+        if (!watchBar.querySelector('.wb__feeds')) {
+          watchBar.innerHTML = '<div class="wb__preview"><video class="wb__preview-video" muted autoplay playsinline aria-label="Selected preview"></video><div class="wb__preview-empty">Choose a screen or camera to share.</div></div><div class="wb__feeds"></div><details class="wb__watch-options"><summary>Sharing &amp; recording options</summary><div class="wb__watch-meta"></div></details><div class="wb__downloads"></div>';
+          const identity = document.createElement('div'); identity.className = 'wb__interviewer';
+          identity.innerHTML = '<span class="wb__identity-icon" aria-hidden="true">' + IC.board + '</span><span data-wb-interviewer-status>Interviewer</span>';
+          sources.prepend(identity);
+          watchBar.append(sources);
         }
-        watchBar.hidden = false;
-        watchBar.classList.add("is-live");
         var order = ["screen", "camera"].filter(function (s) { return feeds[s]; });
-        var both = order.length > 1;
-        var feedsHtml = order.map(function (s) {
-          var isF = wFocus === s;
-          return '<div class="wb__feed' + (isF ? " is-focus" : "") + '" data-feed="' + s + '">' +
-            '<div class="wb__feed-vidwrap" data-feed-vid="' + s + '">' + (wRecOn && wRecSrc === s ? '<span class="wb__watch-rec">REC</span>' : "") + (isF && wCanSee ? '<span class="wb__feed-eye">Selected for AI</span>' : "") + "</div>" +
-            '<div class="wb__feed-bar"><span class="wb__feed-tag">' + feedTag(s) + "</span>" +
-            (both && !isF ? '<button type="button" class="wb__feed-focus" data-wb-focus="' + s + '">Select feed</button>' : "") +
-            '<button type="button" class="wb__feed-x" data-wb-feedstop="' + s + '" title="Turn off ' + feedTag(s).toLowerCase() + '" aria-label="Turn off ' + feedTag(s).toLowerCase() + '">' + IC.close + '</button></div>' +
-            "</div>";
-        }).join("");
+        for (const source of ['screen','camera']) {
+          let tile = watchBar.querySelector('[data-feed="' + source + '"]');
+          if (!feeds[source]) { tile?.remove(); continue; }
+          if (!tile) {
+            tile = document.createElement('div'); tile.className = 'wb__feed'; tile.dataset.feed = source;
+            tile.innerHTML = '<div class="wb__feed-vidwrap"><span class="wb__watch-rec" hidden>REC</span></div><div class="wb__feed-bar"><button type="button" class="wb__feed-focus" data-wb-preview="' + source + '" title="Enlarge ' + feedTag(source).toLowerCase() + ' preview">' + (source === 'camera' && immersive ? 'You' : feedTag(source)) + '</button><button type="button" class="wb__feed-x" data-wb-feedstop="' + source + '" title="Turn off ' + feedTag(source).toLowerCase() + '" aria-label="Turn off ' + feedTag(source).toLowerCase() + '">' + IC.close + '</button></div>';
+            tile.querySelector('.wb__feed-vidwrap').prepend(feeds[source].video);
+            tile.querySelector('[data-wb-preview]').addEventListener('click',() => { previewSource = source; paintWatch(); });
+            tile.querySelector('[data-wb-feedstop]').addEventListener('click',() => stopFeed(source));
+            watchBar.querySelector('.wb__feeds').append(tile);
+          }
+          tile.classList.toggle('is-focus',previewSource === source);
+          tile.querySelector('[data-wb-preview]').setAttribute('aria-pressed',String(previewSource === source));
+          tile.querySelector('.wb__watch-rec').hidden = !(wRecOn && wRecSrc === source);
+        }
+        const preview = watchBar.querySelector('.wb__preview-video'), previewStream = immersive ? feeds[previewSource]?.stream || null : null;
+        if (preview.srcObject !== previewStream) { preview.srcObject = previewStream; if (previewStream) preview.play().catch(() => {}); }
+        preview.hidden = !previewStream;
+        watchBar.querySelector('.wb__preview-empty').hidden = !!previewStream;
         var seeHtml = wCanSee === null ? '<span class="wb__watch-see">Checking if the interviewer can see\u2026</span>'
-          : wCanSee ? '<span class="wb__watch-see is-on">' + EYE_ON + ' Images sent on each turn' + (lastLookAt ? ' / Last sent ' + new Date(lastLookAt).toLocaleTimeString() : ' / Not sent yet') + '</span>'
-          : '<span class="wb__watch-see">Preview only / image input unavailable</span>';
+          : wCanSee && wFocus ? '<span class="wb__watch-see is-on">' + EYE_ON + ' ' + feedTag(wFocus) + ' images on each turn' + (lastLookAt ? ' / Last sent ' + new Date(lastLookAt).toLocaleTimeString() : ' / Not sent yet') + '</span>'
+          : '<span class="wb__watch-see">' + (wCanSee && !wFocus ? 'No images sent to AI' : 'Preview only / image input unavailable') + '</span>';
         const lastObservation = [...sessObservations].reverse().find(observation => observation.source === wFocus);
         if (lastObservation) seeHtml += '<span class="wb__watch-see">Last analysis: ' + escHtml(lastObservation.status) + '</span>';
-        watchBar.innerHTML =
-          '<div class="wb__feeds">' + feedsHtml + "</div>" +
-          '<div class="wb__watch-meta"><div class="wb__watch-srcrow">' + seeHtml + "</div>" +
-          '<div class="wb__watch-acts">' + (wCanSee ? '<button type="button" class="btn btn--auto" data-wb-shownow>Review board now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance aria-pressed="' + wGlanceOn + '" title="Changed boards only, at least 60 seconds apart, up to 6 automatic requests per attempt">' + (wGlanceOn ? 'Auto-observe on' : 'Auto-observe off') + '</button><span class="wb__watch-see">' + autoLooks + '/6 automatic requests</span>' : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop sharing</button></div>' + downloads + '</div>';
-        order.forEach(function (s) { var w = watchBar.querySelector('[data-feed-vid="' + s + '"]'); if (w && feeds[s]) w.insertBefore(feeds[s].video, w.firstChild); });
-        watchBar.querySelectorAll("[data-wb-focus]").forEach(function (b) { b.addEventListener("click", function () { setFocus(b.dataset.wbFocus); }); });
-        watchBar.querySelectorAll("[data-wb-feedstop]").forEach(function (b) { b.addEventListener("click", function () { stopFeed(b.dataset.wbFeedstop); }); });
+        const options = order.map(source => '<option value="' + source + '">' + feedTag(source) + '</option>').join('');
+        watchBar.querySelector('.wb__watch-meta').innerHTML = '<div class="wb__watch-srcrow">' + seeHtml + '</div><div class="wb__source-options"><label>AI images<select data-wb-ai-source><option value="">No images</option>' + options + '</select></label><label>Recording source<select data-wb-record-source><option value="">Choose feed</option>' + options + '</select></label></div>' +
+          '<div class="wb__watch-acts">' + (wCanSee && wFocus ? '<button type="button" class="btn btn--auto" data-wb-shownow>Review board now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance aria-pressed="' + wGlanceOn + '" title="Changed boards only, at least 60 seconds apart, up to 6 automatic requests per attempt">' + (wGlanceOn ? 'Auto-observe on' : 'Auto-observe off') + '</button><span class="wb__watch-see">' + autoLooks + '/6 automatic requests</span>' : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop sharing</button></div>';
+        watchBar.querySelector('[data-wb-ai-source]').value = wFocus;
+        watchBar.querySelector('[data-wb-ai-source]').addEventListener('change',event => setFocus(event.target.value));
+        watchBar.querySelector('[data-wb-record-source]').value = recordSource;
+        watchBar.querySelector('[data-wb-record-source]').addEventListener('change',event => { recordSource = event.target.value; syncRec(); paintWatch(); });
+        watchBar.querySelector('.wb__downloads').innerHTML = downloads;
+        stage.querySelector('[data-wb-record]').disabled = !feeds[recordSource];
+        stage.querySelector('.wb__record small').textContent = '(' + (recordSource ? feedTag(recordSource).toLowerCase() + ', ' : '') + 'video only)';
         var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
         var gl = watchBar.querySelector("[data-wb-glance]"); if (gl) gl.addEventListener("click", function () { setGlance(!wGlanceOn); paintWatch(); });
         var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
         updateCaps();
       }
-      function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!feeds[b.dataset.wbWatch]); }); }
+      function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!feeds[b.dataset.wbWatch]); b.setAttribute('aria-pressed',String(!!feeds[b.dataset.wbWatch])); }); }
       stage.querySelectorAll(".wb__cap").forEach(function (b) { b.addEventListener("click", function () { var s = b.dataset.wbWatch; if (feeds[s]) stopFeed(s); else startFeed(s); }); });
       paintWatch();
       async function interviewerTurn(userMsg, nudge) {
@@ -19234,16 +19294,18 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (micBtn) micBtn.addEventListener("click", startListening);
         var setSpk = function (on) { speakOn = on; if (spkBtn) { spkBtn.classList.toggle("is-on", on); var si = spkBtn.querySelector("[data-wb-spk-ico]"); if (si) si.innerHTML = on ? WB_IC_SPK : WB_IC_SPK_OFF; spkBtn.title = "AI narration \u2014 " + (on ? "on (the interviewer reads its replies aloud)" : "off"); spkBtn.setAttribute("aria-label", "AI narration \u2014 " + (on ? "on" : "off")); } if (!on) wbSpeech.stop(); };
         if (spkBtn) spkBtn.addEventListener("click", function () { setSpk(!speakOn); });
-        var immBar = stage.querySelector("[data-wb-imm-bar]");
-        function resetImmBar() { if (!immBar) return; immBar.innerHTML = '<span class="wb__imm-note">Voice conversation</span><button type="button" class="btn btn--ghost" data-wb-immersive>Start voice</button>'; var g = immBar.querySelector("[data-wb-immersive]"); if (g) g.addEventListener("click", goImmersive); }
-        async function goImmersive() {
-          if (!running()) { err.textContent = 'Start or resume the session before speaking.'; return; }
-          setSpk(true);
-          await startListening();
-          resetImmBar();
-        }
-        var immGo0 = stage.querySelector("[data-wb-immersive]"); if (immGo0) immGo0.addEventListener("click", goImmersive);
+        setSpk(speakOn);
       }
+      stage.querySelector('[data-wb-immersive]').addEventListener('click',async () => {
+        if (immersive) { setImmersive(false); micCleanup?.(); wbSpeech.stop(); stopWatch(); return; }
+        const request = ++immersiveRequest; setImmersive(true);
+        const screenRequest = startFeed('screen');
+        setSpk?.(true);
+        await Promise.allSettled([screenRequest,startFeed('camera'),!wTurnBusy && !listening ? doListen?.() : null]);
+        if (!activeExercise() || request !== immersiveRequest) return;
+        if (!anyFeed()) { setImmersive(false); micCleanup?.(); wbSpeech.stop(); err.textContent = 'No screen or camera was shared. Your conversation is still available.'; }
+        paintWatch();
+      });
       if (scoreBtn) scoreBtn.addEventListener("click", async function () {
         if (!transcript) { err.textContent = "Have a bit of the exercise first \u2014 then I\u2019ll score it."; return; }
         if (wTurnBusy) { err.textContent = 'Wait for the current reply before scoring the exercise.'; return; }
@@ -19276,11 +19338,12 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         paintTimer();
       });
       function showReview() {
+        if (immersive) setImmersive(false);
         stage.querySelector('.wb__scorewrap')?.remove();
         const card = document.createElement('div'); card.className = 'wb__scorewrap'; card.innerHTML = '<p class="wb__conditions">' + escHtml((wbLevelMeta(st.level)?.[1] || st.level) + ' / ' + st.mins + ' min / ' + (sessAssisted ? 'assisted' : 'no recorded assistance') + (sessRetry ? ' / targeted retry' : '')) + '</p>' + wbScoreHtml(sessScore) + '<details class="wb__observations"><summary>Board observations</summary>' + sessObservations.map(observation => '<p tabindex="-1" data-wb-observation="' + escAttr(observation.id) + '">' + escHtml(observation.id + ' / ' + wbFmtClock(observation.at) + ' / ' + observation.source + ' / ' + observation.status) + '. Image not retained.</p>').join('') + '</details>';
         if (sessParent) { const parent = prepGet('wb',sessParent); if (parent?.score) { const comparison = document.createElement('details'); comparison.className = 'wb__comparison'; comparison.innerHTML = '<summary>Previous attempt / different practice conditions</summary><p>' + escHtml((wbLevelMeta(parent.level)?.[1] || parent.level) + ' / ' + parent.mins + ' min / ' + (parent.assisted ? 'assisted' : 'no recorded assistance')) + '</p><p>' + escHtml(parent.score.overall || '') + '</p><p>' + escHtml(parent.score.topfix || '') + '</p>'; card.append(comparison); } }
         card.addEventListener('click', event => { const link = event.target.closest('[data-wb-evidence]'); if (link) { const id = link.dataset.wbEvidence; const target = [...stage.querySelectorAll('[data-wb-turn],[data-wb-observation]')].find(element => element.dataset.wbTurn === id || element.dataset.wbObservation === id); if (target) { const disclosure = target.closest('details'); if (disclosure) disclosure.open = true; stage.dataset.view = 'conversation'; stage.querySelectorAll('[data-wb-view]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.wbView === 'conversation'))); target.focus(); target.scrollIntoView({block:'center'}); } }
-          const retry = event.target.closest('[data-wb-retry]'); if (retry) { const task = sessScore.improvements[Number(retry.dataset.wbRetry)]?.retry; if (!task) return; const parent = sessId; stopExercise(); sessId = null; sessParent = parent; sessRetry = task; st.mins = '5'; transcript = ''; sessTurns = []; sessDraft = ''; sessPlan = null; sessScore = sessCritique = null; sessObservations = []; sessAssisted = false; sessAutoLooks = 0; sessPhase = 'briefing'; sessResumePhase = 'working'; wbRunMock(true); } });
+          const retry = event.target.closest('[data-wb-retry]'); if (retry) { const task = sessScore.improvements[Number(retry.dataset.wbRetry)]?.retry; if (!task || !canLeaveSession()) return; const parent = sessId; stopExercise(); sessId = null; sessParent = parent; sessRetry = task; st.mins = '5'; transcript = ''; sessTurns = []; sessDraft = ''; sessPlan = null; sessScore = sessCritique = null; sessObservations = []; sessAssisted = false; sessAutoLooks = 0; sessPhase = 'briefing'; sessResumePhase = 'working'; wbRunMock(true); } });
         stage.querySelector('.wb__main').prepend(card); card.scrollIntoView({block:'start'});
       }
       if (opening === "resume") { sessTurns.forEach(function (rt) { renderTurn(rt.who, rt.text, rt); }); if (log) log.scrollTop = log.scrollHeight; }
@@ -19292,6 +19355,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     function wireStage() {
       var np = stage.querySelector("[data-wb-newprompt]");
       if (np) np.addEventListener("click", async function () {
+        if (!canLeaveSession()) return;
         saveSess();
         stopExercise();
         const signal = exercise.signal;
