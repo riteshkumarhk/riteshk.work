@@ -18385,10 +18385,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     ["mock", "Mock interview", "I play the interviewer \u2014 back-and-forth, then a scorecard"]
   ];
   var WB_LEVELS = [
-    ["exec", "VP / Exec", "Outcomes, strategy, business altitude"],
-    ["leader", "Head / Director", "Team direction, delivery and organisational judgement"],
+    ["senior", "Senior", "Craft, decisions &amp; the how"],
     ["staff", "Staff / Principal", "Ambiguity, systems, cross-team leverage"],
-    ["senior", "Senior", "Craft, decisions &amp; the how"]
+    ["leader", "Head / Director", "Team direction, delivery and organisational judgement"],
+    ["exec", "VP / Exec", "Outcomes, strategy, business altitude"]
   ];
   // Deeper configuration \u2014 optional knobs that feed our existing generator MORE signal so the
   // prompt lands more precisely. Defaults are "any" so out-of-the-box behaviour is unchanged.
@@ -18447,7 +18447,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   })();
   function wbMinsLabel(m) { for (var i = 0; i < WB_MINS.length; i++) if (WB_MINS[i][0] === m) return WB_MINS[i][1]; return m + " min"; }
   function wbCompany() { return String(wbState.company || "").trim(); }
-  function wbJdText() { var t = String(wbState.jd || "").trim(); return wbState.fixedRole ? t : t || storyJdText(); }
+  function wbJdText() { return String(wbState.jd || "").trim(); }
   function wbLevelMeta(id) { for (var i = 0; i < WB_LEVELS.length; i++) if (WB_LEVELS[i][0] === id) return WB_LEVELS[i]; return null; }
   function wbChallengeMeta(id) { for (var i = 0; i < WB_CHALLENGES.length; i++) if (WB_CHALLENGES[i][0] === id) return WB_CHALLENGES[i]; return null; }
   function wbIndustryMeta(id) { for (var i = 0; i < WB_INDUSTRIES.length; i++) if (WB_INDUSTRIES[i][0] === id) return WB_INDUSTRIES[i]; return null; }
@@ -18568,7 +18568,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   function wbDraftCard() {
     return '<div class="wb__draftwrap"><h4>Rehearse \u2014 draft your approach</h4>' +
-      '<textarea class="cl__jd wb__draft" rows="6" placeholder="Talk through how you\u2019d attack it \u2014 clarifiers, users, goal, a couple of ideas, what you\u2019d prioritise and why, the core flow, edge cases, trade-offs\u2026"></textarea>' +
+      '<textarea class="cl__jd wb__draft" rows="6" aria-label="Your approach" placeholder="Talk through how you\u2019d attack it \u2014 clarifiers, users, goal, a couple of ideas, what you\u2019d prioritise and why, the core flow, edge cases, trade-offs\u2026"></textarea>' +
       '<div class="imgblk__row"><button class="btn btn--primary" type="button" data-wb-critique>Get coaching</button></div>' +
       '<div class="wb__crit"></div></div>';
   }
@@ -18626,10 +18626,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     var modal = document.createElement("div");
     modal.className = "pass pass--wide wb-modal wb-workspace";
     modal.innerHTML =
-      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="wb__chrome-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="wb__chrome-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">' + IC.board + ' Whiteboard coach</div>' +
-      '<div class="pass__sub">Rehearse a live design exercise. Pick the length and a mode \u2014 I\u2019ll set a realistic prompt' + (storyJdText() ? " tailored to your target role" : "") + ", give you a timed game-plan, then coach you or run a mock.</div>" +
+      '<div class="pass__box"><div class="wb__chrome" data-wb-chrome><button type="button" class="adm__hist-btn" data-wb-min title="Pop out \u2014 float the timer + mic on top while you whiteboard elsewhere" aria-label="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none"/></svg></button><button type="button" class="adm__hist-btn" data-wb-max title="Maximise" aria-label="Maximise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button></div><div class="pass__title">' + IC.board + ' Whiteboard coach</div>' +
       '<div class="wb__setup">' +
-        '<div class="ats__cols"><div class="ats__main">' +
+        '<div class="ats__cols" data-wb-new><div class="ats__main">' +
         '<div class="af"><label class="af__label">How long is the exercise</label><div class="story__opts wb__opts3">' +
           WB_MINS.map(function (d) { return '<button type="button" class="story__opt' + (st.mins === d[0] ? " is-on" : "") + '" data-wb-mins="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
@@ -18643,8 +18642,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         '<div class="af"><label class="af__label">The level you\u2019re whiteboarding for</label><div class="iprep__levels wb__levels">' +
           WB_LEVELS.map(function (d) { return '<button type="button" class="iprep__lvl' + (st.level === d[0] ? " is-on" : "") + '" data-wb-lvl="' + d[0] + '"><span class="iprep__lvl-name">' + d[1] + '</span><span class="iprep__lvl-desc">' + d[2] + "</span></button>"; }).join("") +
         '</div><div class="af__hint">Sets the altitude \u2014 the prompt, the probes and the scoring all shift to match.</div></div>' +
-        '<div class="af wb__deeper"><button type="button" class="wb__deeper-tog" data-wb-deeper aria-expanded="false">Advanced <span class="wb__deeper-caret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>' +
-          '<div class="wb__deeper-body" hidden>' +
+        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
+          '<input type="text" class="wb__company" aria-label="Company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
+          '<div class="cl__row"><input type="url" class="cl__url" data-wb-jd-url aria-label="Job posting URL" placeholder="Paste the job posting URL\u2026" /><button class="btn btn--ghost" type="button" data-wb-jd-fetch>Fetch</button></div>' +
+          '<textarea class="cl__jd wb__jd" rows="4" aria-label="Job description" placeholder="\u2026or paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
+          '<div class="af__hint">Company tailoring is inferred, not a verified interview format. Both optional.</div>' +
+        "</div>" +
+        '<div class="af wb__deeper" id="wb-advanced-settings" hidden>' +
+          '<div class="wb__deeper-body">' +
             '<label class="af__label">What kind of challenge</label><div class="story__opts wb__opts-wrap">' +
               WB_CHALLENGES.map(function (d) { return '<button type="button" class="story__opt wb__copt' + (st.challenge === d[0] ? " is-on" : "") + '" data-wb-chal="' + d[0] + '"><span class="story__opt-name">' + escHtml(d[1]) + '</span><span class="story__opt-desc">' + escHtml(d[2]) + "</span></button>"; }).join("") +
             "</div>" +
@@ -18653,29 +18658,28 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
             "</div>" +
             '<div class="af__hint">Optional \u2014 these sharpen the generated prompt. Leave on defaults and I\u2019ll choose.</div>' +
           "</div></div>" +
-        '<div class="af"><label class="af__label">Company &amp; job description <span class="af__opt">(optional)</span></label>' +
-          '<input type="text" class="wb__company" placeholder="Company you\u2019re interviewing at \u2014 e.g. Stripe, Google\u2026" value="' + escAttr(st.company || "") + '" />' +
-          '<div class="cl__row"><input type="url" class="cl__url" data-wb-jd-url placeholder="Paste the job posting URL\u2026" /><button class="btn btn--ghost" type="button" data-wb-jd-fetch>Fetch</button></div>' +
-          '<textarea class="cl__jd wb__jd" rows="4" placeholder="\u2026or paste the job description \u2014 I\u2019ll bias the prompt, the probes and the scoring toward what the role demands.">' + escHtml(st.jd || "") + '</textarea>' +
-          '<div class="af__hint">Company tailoring is inferred, not a verified interview format. ' + (storyJdText() ? 'Leave the description blank to reuse your \u201cAlign to a role\u201d target from the storyteller.' : 'Both optional.') + '</div>' +
-        "</div>" +
         '<div class="af"><label class="af__label">Flavour / your own prompt (optional)</label>' +
-          '<input type="text" class="wb__brief" placeholder="Domain or product to riff on \u2014 e.g. fintech onboarding, transit app\u2026" value="' + escAttr(st.brief || "") + '" />' +
-          '<textarea class="cl__jd wb__own" rows="3" placeholder="\u2026or paste a specific prompt to use verbatim (leave blank and I\u2019ll invent one)."></textarea>' +
+          '<input type="text" class="wb__brief" aria-label="Flavour" placeholder="Domain or product to riff on \u2014 e.g. fintech onboarding, transit app\u2026" value="' + escAttr(st.brief || "") + '" />' +
+          '<textarea class="cl__jd wb__own" rows="3" aria-label="Your own prompt" placeholder="\u2026or paste a specific prompt to use verbatim (leave blank and I\u2019ll invent one)."></textarea>' +
         "</div>" +
-        '</div><aside class="prep-hist" data-wb-hist></aside></div>' +
+        '</div></div><div data-wb-existing inert aria-hidden="true"><section class="wb__saved-brief" data-wb-brief hidden></section><aside class="prep-hist" data-wb-hist></aside></div>' +
       "</div>" +
       '<div class="wb__stage" hidden></div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions wb__foot">' +
+        '<button type="button" class="btn btn--ghost" data-wb-deeper aria-expanded="false" aria-controls="wb-advanced-settings">Advanced options</button>' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
         '<button class="btn btn--ghost" data-wb-back hidden>' + IC.back + ' Change setup</button>' +
-        '<button class="btn btn--auto" data-wb-start>Start</button>' +
-      "</div>" +
-      '<div class="pass__note">Practice history syncs to your Prepare library, never your public site. Shared images go to your configured AI on a turn or review. Recordings stay in this tab; download before leaving. Browser speech may use an online service.</div></div>';
+        '<button class="btn btn--auto" data-wb-start>' + IC.play + ' Start</button>' +
+      "</div></div>";
     modal.querySelector('.wb__deeper-body').append(modal.querySelector('.wb__brief').closest('.af'));
     const header = document.createElement('header'); header.className = 'wb__header';
-    header.innerHTML = '<button type="button" class="adm__hist-btn" data-wb-exit title="Back to Prepare" aria-label="Back to Prepare">' + IC.back + '</button><h2>Whiteboard coach</h2><button type="button" class="btn btn--ghost" data-wb-history title="Saved sessions" aria-label="Saved sessions">' + IC.history + ' <span>Saved sessions</span></button>';
+    header.innerHTML = '<button type="button" class="adm__hist-btn" data-wb-exit title="Back to Prepare" aria-label="Back to Prepare" hidden>' + IC.back + '</button><h2 class="pass__title">Whiteboard coach</h2><button type="button" class="btn btn--ghost" data-wb-history title="Saved sessions" aria-label="Saved sessions" hidden>' + IC.history + ' <span>Saved sessions</span></button>';
+    const viewSwitch = document.createElement('div');
+    viewSwitch.className = 'adm__hm-seg'; viewSwitch.dataset.wbViewSwitch = '';
+    viewSwitch.setAttribute('role','group'); viewSwitch.setAttribute('aria-label','Whiteboard setup');
+    viewSwitch.innerHTML = '<button type="button" data-wb-view="new" aria-pressed="false" aria-controls="wb-new-setup">New</button><button type="button" data-wb-view="existing" aria-pressed="false" aria-controls="wb-existing-setup">Existing</button>';
+    header.append(viewSwitch);
     header.append(modal.querySelector('[data-wb-chrome]'));
     modal.querySelector('.pass__title').remove(); modal.querySelector('.pass__box').prepend(header);
     document.body.appendChild(modal);
@@ -18686,6 +18690,10 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     function setSessionView(active) {
       modal.classList.toggle('wb-modal--stage',active);
       modal.setAttribute('aria-modal',String(!active));
+      header.querySelector('[data-wb-history]').hidden = !active;
+      header.querySelector('[data-wb-exit]').hidden = !active || st.mode !== 'mock';
+      viewSwitch.hidden = active || !hasExisting;
+      deeperTog.hidden = active || setupView !== 'new';
       coveredStudio.forEach(({element,inert}) => { if (element.matches('.adm__bar,.adm__statusbar')) element.inert = active ? inert : true; });
     }
     function fitStudioFrame() {
@@ -18699,22 +18707,57 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     var setup = modal.querySelector(".wb__setup");
     var stage = modal.querySelector(".wb__stage");
     var startBtn = modal.querySelector("[data-wb-start]");
+    var deeperTog = modal.querySelector('[data-wb-deeper]');
+    var deeperPanel = modal.querySelector('#wb-advanced-settings');
     var backBtn = modal.querySelector("[data-wb-back]");
     var foot = modal.querySelector(".wb__foot");
     var briefEl = modal.querySelector(".wb__brief");
     var ownEl = modal.querySelector(".wb__own");
     var companyEl = modal.querySelector(".wb__company");
     var jdEl = modal.querySelector(".wb__jd");
-    prepUseBrief(modal, brief => {
-      if (setup.hidden) throw new Error('Choose Change setup before loading another brief.');
-      stopExercise();
-      st.company = prepBriefTarget(brief); st.jd = brief.jd; st.fixedRole = true; st.preparationBrief = clone(brief); st.level = brief.level;
-      companyEl.value = st.company; jdEl.value = brief.jd; modal.querySelector('[data-wb-jd-url]').value = brief.url;
-      modal.querySelectorAll('[data-wb-lvl]').forEach(button => button.classList.toggle('is-on',button.dataset.wbLvl === st.level));
-      wbSave();
-    });
     var wbJdUrl = modal.querySelector("[data-wb-jd-url]");
     var wbJdFetch = modal.querySelector("[data-wb-jd-fetch]");
+    const newSetup = setup.querySelector('[data-wb-new]'), existingSetup = setup.querySelector('[data-wb-existing]'), savedBrief = setup.querySelector('[data-wb-brief]');
+    newSetup.id = 'wb-new-setup'; existingSetup.id = 'wb-existing-setup';
+    let setupView = 'new', setupChosen = false, hasExisting = false;
+    function paintSetupChoices() {
+      for (const [attribute,label] of [['mins','Exercise length'],['mode','Mode'],['convo','Conversation'],['lvl','Seniority'],['chal','Challenge'],['ind','Industry']]) {
+        const buttons = newSetup.querySelectorAll('[data-wb-' + attribute + ']');
+        const group = buttons[0].parentElement;
+        group.setAttribute('role','group'); group.setAttribute('aria-label',label);
+        buttons.forEach(button => button.setAttribute('aria-pressed',String(button.classList.contains('is-on'))));
+      }
+    }
+    function paintSetupView() {
+      if (!hasExisting) setupView = 'new';
+      newSetup.inert = setupView !== 'new'; existingSetup.inert = setupView !== 'existing';
+      newSetup.setAttribute('aria-hidden',String(newSetup.inert)); existingSetup.setAttribute('aria-hidden',String(existingSetup.inert));
+      viewSwitch.hidden = setup.hidden || !hasExisting;
+      for (const button of viewSwitch.querySelectorAll('[data-wb-view]')) {
+        const selected = button.dataset.wbView === setupView;
+        button.classList.toggle('is-on',selected); button.setAttribute('aria-pressed',String(selected));
+      }
+      startBtn.hidden = setup.hidden || setupView !== 'new';
+      deeperTog.hidden = setup.hidden || setupView !== 'new';
+      paintSetupChoices();
+    }
+    viewSwitch.addEventListener('click', event => {
+      const button = event.target.closest('[data-wb-view]'); if (!button) return;
+      stopExercise(); btnIdle(startBtn,IC.play + ' Start');
+      setupChosen = true; setupView = button.dataset.wbView; paintSetupView();
+    });
+    newSetup.addEventListener('input', () => { setupChosen = true; });
+    newSetup.addEventListener('click', () => { setupChosen = true; paintSetupChoices(); });
+    savedBrief.addEventListener('click', event => {
+      if (!event.target.closest('[data-wb-use-brief]')) return;
+      const brief = prepareBrief(prepRead(PREP_BRIEF_KEY));
+      if (!brief.id) { paintHist(); return; }
+      st.company = prepBriefTarget(brief); st.jd = brief.jd; st.level = brief.level;
+      st.fixedRole = true; st.preparationBrief = clone(brief);
+      companyEl.value = st.company; jdEl.value = st.jd; wbJdUrl.value = brief.url;
+      modal.querySelectorAll('[data-wb-lvl]').forEach(button => button.classList.toggle('is-on',button.dataset.wbLvl === st.level));
+      wbSave(); setupChosen = true; setupView = 'new'; paintSetupView(); companyEl.focus();
+    });
     if (wbJdFetch) wbJdFetch.addEventListener("click", async function () {
       var errEl = modal.querySelector(".pass__err"); if (errEl) errEl.textContent = "";
       btnBusy(wbJdFetch, "Fetching\u2026");
@@ -18746,7 +18789,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     function hideMini() { modal.style.display = ""; if (miniEl) miniEl.hidden = true; wbMinBtn.focus(); }
     function companionContent(root, restore) {
       root.className = 'wb__companion';
-      root.innerHTML = '<header><b>Whiteboard</b><span data-companion-phase></span><span class="wb__mini-t" data-companion-time></span><button type="button" class="wb__chrome-btn" data-companion-back title="Back to session" aria-label="Back to session">' + IC.back + '</button></header><p data-companion-latest></p><div class="wb__companion-acts"><button type="button" class="btn btn--primary" data-companion-ready>Ready, start</button><button type="button" class="btn btn--ghost" data-companion-think aria-pressed="false">Thinking time</button><button type="button" class="wb__mic" data-companion-mic title="Microphone" aria-label="Microphone"><span class="wb__ico">' + WB_MIC_SVG + '</span></button><button type="button" class="btn btn--ghost" data-companion-stop hidden>Stop reply</button></div><details><summary>Response</summary><textarea rows="3" aria-label="Your response" data-companion-draft></textarea><button type="button" class="btn btn--auto" data-companion-send>Send</button></details><div role="status" data-companion-error></div>';
+      root.innerHTML = '<header><b>Whiteboard</b><span data-companion-phase></span><span class="wb__mini-t" data-companion-time></span><button type="button" class="adm__hist-btn" data-companion-back title="Back to session" aria-label="Back to session">' + IC.back + '</button></header><p data-companion-latest></p><div class="wb__companion-acts"><button type="button" class="btn btn--primary" data-companion-ready>Ready, start</button><button type="button" class="btn btn--ghost" data-companion-think aria-pressed="false">Thinking time</button><button type="button" class="wb__mic" data-companion-mic title="Microphone" aria-label="Microphone"><span class="wb__ico">' + WB_MIC_SVG + '</span></button><button type="button" class="btn btn--ghost" data-companion-stop hidden>Stop reply</button></div><details><summary>Response</summary><textarea rows="3" aria-label="Your response" data-companion-draft></textarea><button type="button" class="btn btn--auto" data-companion-send>Send</button></details><div role="status" data-companion-error></div>';
       root.querySelector('[data-companion-back]').addEventListener('click', restore);
       for (const name of ['ready','think','send','interrupt']) root.querySelector('[data-companion-' + (name === 'interrupt' ? 'stop' : name) + ']').addEventListener('click', () => stage.querySelector('[data-wb-' + name + ']')?.click());
       root.querySelector('[data-companion-mic]').addEventListener('click', () => doListen?.());
@@ -18796,46 +18839,72 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     // Soft-dismiss (backdrop click + Escape) intentionally disabled \u2014 a mock can be a long recorded/voice session, so only the explicit Close button dismisses it.
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelector('[data-wb-exit]').addEventListener('click', close);
-    modal.querySelector('[data-wb-history]').addEventListener('click', () => { showSetup(); histBar?.scrollIntoView({block:'nearest'}); histBar?.querySelector('[data-wb-hist-open]')?.focus(); });
+    modal.querySelector('[data-wb-history]').addEventListener('click', () => { if (!showSetup('existing')) return; histBar?.scrollIntoView({block:'nearest'}); histBar?.querySelector('[data-wb-hist-open]')?.focus(); });
     modal.querySelectorAll("[data-wb-mins]").forEach(function (b) { b.addEventListener("click", function () { st.mins = b.dataset.wbMins; modal.querySelectorAll("[data-wb-mins]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-mode]").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.wbMode; modal.querySelectorAll("[data-wb-mode]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-lvl]").forEach(function (b) { b.addEventListener("click", function () { st.level = b.dataset.wbLvl; modal.querySelectorAll("[data-wb-lvl]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-chal]").forEach(function (b) { b.addEventListener("click", function () { st.challenge = b.dataset.wbChal; modal.querySelectorAll("[data-wb-chal]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     modal.querySelectorAll("[data-wb-ind]").forEach(function (b) { b.addEventListener("click", function () { st.industry = b.dataset.wbInd; modal.querySelectorAll("[data-wb-ind]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
-    var deeperTog = modal.querySelector("[data-wb-deeper]");
-    if (deeperTog) deeperTog.addEventListener("click", function () { var body = modal.querySelector(".wb__deeper-body"); var opening = body.hasAttribute("hidden"); if (opening) body.removeAttribute("hidden"); else body.setAttribute("hidden", ""); deeperTog.setAttribute("aria-expanded", opening ? "true" : "false"); deeperTog.classList.toggle("is-open", opening); });
+    deeperTog.addEventListener('click', () => {
+      deeperPanel.hidden = !deeperPanel.hidden;
+      deeperTog.setAttribute('aria-expanded',String(!deeperPanel.hidden));
+      deeperTog.textContent = deeperPanel.hidden ? 'Advanced options' : 'Hide options';
+      setupChosen = true;
+      if (!deeperPanel.hidden) deeperPanel.scrollIntoView({block:'start'});
+    });
     modal.querySelectorAll("[data-wb-convo]").forEach(function (b) { b.addEventListener("click", function () { st.convo = b.dataset.wbConvo; modal.querySelectorAll("[data-wb-convo]").forEach(function (x) { x.classList.toggle("is-on", x === b); }); wbSave(); }); });
     var convoHint = modal.querySelector(".wb__convo-hint");
     if (convoHint) convoHint.textContent = wbSpeech.sttOk ? "Talk mode uses your mic \u2014 speak your moves and the interviewer replies out loud. Works best in Chrome or Edge." : "Talk mode needs Chrome or Edge \u2014 typing works everywhere.";
     var histBar = modal.querySelector("[data-wb-hist]");
     function wbHistHtml() {
       var items = prepList("wb");
-      var head = '<div class="prep-hist__h">Saved sessions</div>';
+      var head = '<h3 class="prep-hist__h">Saved sessions</h3>';
       if (!items.length) return head + '<div class="prep-hist__empty">Your coaching and mock sessions save here automatically \u2014 resume any one with its prompt, plan and exchanges intact.</div>';
       var LV = { exec: "VP / Exec", leader: 'Head / Director', staff: "Staff / Principal", senior: "Senior" };
       return head + '<div class="prep-hist__list">' + items.map(function (e) {
         var m = e.meta || {};
         var sub = (m.mode === "coach" ? "Coaching" : "Mock interview") + (m.mins ? " \u00b7 " + m.mins + " min" : "") + (m.level ? " \u00b7 " + (LV[m.level] || m.level) : "") + (m.turns ? " \u00b7 " + m.turns + " exchange" + (m.turns === 1 ? "" : "s") : "");
-        return '<div class="prep-h prep-h--txt" role="button" tabindex="0" data-wb-hist-open="' + e.id + '">' +
-          '<div class="prep-h__x"><b>' + escHtml(m.snippet || e.title || "Session") + '</b><i>' + escHtml(sub) + '</i><em>' + prepAgo(e.at) + '</em></div>' +
-          '<span class="prep-h__del" data-wb-hist-del="' + e.id + '" title="Delete" aria-label="Delete">' + IC.trash + '</span>' +
+        return '<div class="prep-h prep-h--txt">' +
+          '<button type="button" class="prep-h__x" data-wb-hist-open="' + escAttr(e.id) + '"><b>' + escHtml(m.snippet || e.title || "Session") + '</b><i>' + escHtml(sub) + '</i><em>' + prepAgo(e.at) + '</em></button>' +
+          '<button type="button" class="prep-h__del" data-wb-hist-del="' + escAttr(e.id) + '" title="Delete session" aria-label="Delete session">' + IC.trash + '</button>' +
           "</div>";
       }).join("") + "</div>";
     }
-    function paintHist() { if (histBar) histBar.innerHTML = wbHistHtml(); }
+    function paintHist() {
+      if (closed) return;
+      const hadFocus = existingSetup.contains(document.activeElement);
+      const brief = prepareBrief(prepRead(PREP_BRIEF_KEY)), items = prepList('wb');
+      histBar.innerHTML = wbHistHtml(); histBar.hidden = !items.length;
+      savedBrief.hidden = !brief.id;
+      savedBrief.innerHTML = brief.id ? '<div class="wb__brief-heading"><h3 class="prep-hist__h">Application brief</h3><button type="button" class="btn btn--ghost" data-wb-use-brief>Use brief</button></div><p class="wb__brief-target">' + escHtml(prepBriefTarget(brief) || 'Application brief') + '</p>' + (brief.jd ? '<p class="wb__brief-excerpt">' + escHtml(brief.jd.slice(0,240)) + '</p>' : '') : '';
+      hasExisting = !!brief.id || items.length > 0;
+      if (!setupChosen) setupView = hasExisting ? 'existing' : 'new';
+      paintSetupView();
+      if (hadFocus && !setup.hidden) (setupView === 'existing' ? existingSetup.querySelector('[data-wb-use-brief],[data-wb-hist-open]') : newSetup.querySelector('button'))?.focus();
+    }
     if (histBar) histBar.addEventListener("click", function (e) {
       var del = e.target.closest("[data-wb-hist-del]");
       if (del) { e.stopPropagation(); prepDel("wb", del.dataset.wbHistDel); if (sessId === del.dataset.wbHistDel) sessId = null; paintHist(); return; }
       var op = e.target.closest("[data-wb-hist-open]");
       if (op) { var entry = prepGet("wb", op.dataset.wbHistOpen); if (entry) wbResume(entry); }
     });
-    histBar?.addEventListener('keydown', event => { if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-wb-hist-open]')) { event.preventDefault(); event.target.click(); } });
     paintHist();
     prepCloudPull("wb", paintHist);
     if (briefEl) briefEl.addEventListener("input", function () { st.brief = briefEl.value; wbSave(); });
     if (companyEl) companyEl.addEventListener("input", function () { st.company = companyEl.value; wbSave(); });
     if (jdEl) jdEl.addEventListener("input", function () { st.jd = jdEl.value; wbSave(); });
-    function showSetup() { if (!canLeaveSession()) return; stopExercise(); saveSess(); prompt = null; sessId = null; stage.removeAttribute('data-immersive'); if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45'; setup.hidden = false; stage.hidden = true; backBtn.hidden = true; startBtn.hidden = false; if (foot) foot.hidden = false; setSessionView(false); modal.classList.remove('wb-modal--focus'); err.textContent = ""; paintHist(); }
+    function showSetup(view) {
+      if (!canLeaveSession()) return false;
+      stopExercise(); saveSess(); prompt = null; sessId = null; stage.removeAttribute('data-immersive');
+      if (!WB_MINS.some(item => item[0] === st.mins)) st.mins = '45';
+      companyEl.value = st.company || ''; jdEl.value = st.jd || ''; briefEl.value = st.brief || '';
+      for (const [attribute,key] of [['mins','mins'],['mode','mode'],['lvl','level'],['convo','convo'],['chal','challenge'],['ind','industry']]) {
+        modal.querySelectorAll('[data-wb-' + attribute + ']').forEach(button => button.classList.toggle('is-on',button.getAttribute('data-wb-' + attribute) === st[key]));
+      }
+      setupChosen = true; setupView = view === 'existing' ? 'existing' : 'new';
+      setup.hidden = false; stage.hidden = true; backBtn.hidden = true; if (foot) foot.hidden = false;
+      setSessionView(false); modal.classList.remove('wb-modal--focus'); err.textContent = ''; paintHist(); return true;
+    }
     function showStage() { setup.hidden = true; stage.hidden = false; stage.removeAttribute('data-immersive'); backBtn.hidden = false; startBtn.hidden = true; wbMinBtn.disabled = st.mode !== 'mock'; setSessionView(true); err.textContent = ""; }
     backBtn.addEventListener("click", showSetup);
     startBtn.addEventListener("click", async function () {
@@ -18855,7 +18924,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (st.mode === "coach") await wbRunCoach();
         else await wbRunMock(true);
       } catch (e) { if (!signal.aborted && !closed) { showSetup(); err.textContent = (e && e.message) || "Something went wrong - try again."; } }
-      btnIdle(startBtn, "Start");
+      btnIdle(startBtn, IC.play + " Start");
     });
     async function wbResume(s) {
       if (!s) return;
@@ -18907,8 +18976,8 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var WB_IC_CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 8l-6 4 6 4V8z"/><rect x="1" y="6" width="16" height="12" rx="2"/></svg>';
       var WB_IC_SPK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
       var WB_IC_SPK_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></svg>';
-      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic title="Tap to talk \u2014 pause to think anytime; tap again when you\u2019re done"><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
-      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk wb__spk--icon is-on" data-wb-spk title="AI narration \u2014 on (the interviewer reads its replies aloud)" aria-label="AI narration \u2014 on"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span></button>' : "";
+      var micInline = voiceOn ? '<button type="button" class="wb__mic" data-wb-mic aria-describedby="wb-speech-notice" title="Tap to talk \u2014 pause to think anytime; tap again when you\u2019re done"><span class="wb__ico">' + WB_IC_MIC + '</span><span class="wb__mic-t">Tap to talk</span></button>' : "";
+      var spkInline = (voiceOn && wbSpeech.ttsOk) ? '<button type="button" class="wb__spk wb__spk--icon is-on" data-wb-spk aria-describedby="wb-speech-notice" title="AI narration \u2014 on (the interviewer reads its replies aloud)" aria-label="AI narration \u2014 on"><span class="wb__ico" data-wb-spk-ico>' + WB_IC_SPK + '</span></button>' : "";
       var capInline = '<button type="button" class="wb__cap" data-wb-watch="screen" aria-label="Share screen" title="Share screen"><span class="wb__ico">' + WB_IC_SCREEN + '</span></button><button type="button" class="wb__cap" data-wb-watch="camera" aria-label="Camera" title="Camera"><span class="wb__ico">' + WB_IC_CAM + '</span></button>';
       var immHtml = '<div class="wb__imm" data-wb-imm-bar><button type="button" class="btn btn--ghost" data-wb-immersive title="Request screen, camera and microphone access; recording stays off">Start immersive session</button><div class="wb__immersive-actions"></div></div>';
       if (foot) foot.hidden = true;
@@ -18917,8 +18986,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       stage.innerHTML = '<div class="wb__cols"><div class="wb__main">' + immHtml + '<div data-wb-latest hidden>' + escHtml(prompt.prompt) + '</div><div class="wb__chat" data-wb-log role="log" aria-label="Conversation"></div>' +
         '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="Your response..."></textarea>' +
         (voiceOn ? '<span class="wb__voice-live" data-wb-live></span>' : "") +
-        '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div></div>' +
-        '<section class="wb__board" aria-label="Shared board" hidden><label class="wb__record"><input type="checkbox" data-wb-record> Record selected feed <small>(video only)</small></label><div class="wb__watch" data-wb-watch-bar hidden></div></section></div>' +
+        '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div>' +
+        (voiceOn ? '<div class="af__hint" id="wb-speech-notice">Browser speech may use an online service.</div>' : '') + '</div>' +
+        '<section class="wb__board" aria-label="Shared board" hidden><label class="wb__record"><input type="checkbox" data-wb-record aria-describedby="wb-record-notice"> Record selected feed <small>(video only)</small></label><div class="af__hint" id="wb-record-notice" data-wb-record-notice hidden>Recordings stay in this tab; download before leaving.</div><div class="wb__watch" data-wb-watch-bar hidden></div></section></div>' +
         '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l" data-wb-phase></span></div>' +
         wbPromptCard(prompt) +
         '<div class="wb__rail-acts"><button class="btn btn--primary" data-wb-ready>Ready, start</button><button class="btn btn--auto" data-wb-score>Wrap up &amp; score me</button><button class="btn btn--ghost" data-wb-pause>Save &amp; leave</button><button class="btn btn--ghost" data-wb-rail-back>\u2190 Change setup</button></div><details class="wb__session-tools"><summary>Session tools</summary><div class="wb__rail-acts"><button class="btn btn--ghost" data-wb-think aria-pressed="false">Thinking time</button><button class="btn btn--ghost" data-wb-recap>Move to recap</button><button class="btn btn--ghost" data-wb-hint>Ask for a hint</button></div></details><details class="wb__memory"><summary>Working assumptions &amp; open questions</summary><label>My assumptions<textarea data-wb-notes="assumptions" rows="2">' + escHtml(sessNotes.assumptions) + '</textarea></label><label>Open questions<textarea data-wb-notes="questions" rows="2">' + escHtml(sessNotes.questions) + '</textarea></label></details></aside></div>';
@@ -18943,7 +19013,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       main.insertBefore(promptDetails,stage.querySelector('.wb__chat'));
       const promptCard = rail.querySelector('.wb__prompt'), notes = rail.querySelector('.wb__memory'), sessionTools = rail.querySelector('.wb__session-tools');
       sessionActions.append(stage.querySelector('[data-wb-hint]'));
-      stage.querySelector('.wb__composer').append(stage.querySelector('.wb__record'));
+      stage.querySelector('.wb__composer').append(stage.querySelector('.wb__record'),stage.querySelector('[data-wb-record-notice]'));
       let immersive = false, immersiveRequest = 0;
       function setImmersive(on) {
         immersive = on; stage.dataset.immersive = String(on); if (!on) immersiveRequest++;
@@ -18979,6 +19049,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         }
       };
       function updateClock() { if (clockStarted !== null) timerLeft = Math.max(0, clockBudget - (Date.now() - clockStarted) / 1000); sessTimer = timerLeft; }
+      function paintInterviewer() {
+        const identity = sources.querySelector('.wb__interviewer');
+        if (!identity) return;
+        const speaking = !!window.speechSynthesis?.speaking;
+        identity.dataset.aiState = !immersive ? 'idle' : wTurnBusy ? 'working' : speaking ? 'answering' : 'idle';
+        identity.querySelector('[data-wb-interviewer-status]').textContent = wTurnBusy ? 'Replying' : speaking ? 'Speaking' : 'Interviewer';
+      }
       function paintTimer() {
         stage.dataset.phase = sessPhase;
         curTimerText = wbFmtClock(Math.ceil(timerLeft)); if (timerTEl) timerTEl.textContent = curTimerText;
@@ -18994,7 +19071,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         retryReply.disabled = !running() || wTurnBusy;
         stage.querySelector('[data-wb-hint]').disabled = !turnAvailable();
         stage.querySelectorAll('[data-wb-shownow]').forEach(button => { button.disabled = !turnAvailable(); });
-        stage.querySelectorAll('[data-wb-interviewer-status]').forEach(element => { element.textContent = wTurnBusy ? 'Replying' : window.speechSynthesis?.speaking ? 'Speaking' : 'Interviewer'; });
+        paintInterviewer();
         if (miniEl && !miniEl.hidden) { var mt = miniEl.querySelector('[data-wb-mini-t]'); if (mt) mt.textContent = curTimerText; }
         if (pipTimeEl) pipTimeEl.textContent = curTimerText;
         companionPaint?.();
@@ -19147,9 +19224,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         if (!watchBar.querySelector('.wb__feeds')) {
           watchBar.innerHTML = '<div class="wb__preview"><video class="wb__preview-video" muted autoplay playsinline aria-label="Selected preview"></video><div class="wb__preview-empty">Choose a screen or camera to share.</div></div><div class="wb__feeds"></div><details class="wb__watch-options"><summary>Sharing &amp; recording options</summary><div class="wb__watch-meta"></div></details><div class="wb__downloads"></div>';
           const identity = document.createElement('div'); identity.className = 'wb__interviewer';
-          identity.innerHTML = '<span class="wb__identity-icon" aria-hidden="true">' + IC.board + '</span><span data-wb-interviewer-status>Interviewer</span>';
+          identity.innerHTML = '<span class="wb__identity-icon" aria-hidden="true">' + aiRibbonIcon() + '</span><span data-wb-interviewer-status>Interviewer</span>';
           sources.prepend(identity);
           watchBar.append(sources);
+          const ribbon = mountAiRibbon(identity);
+          signal.addEventListener('abort', () => ribbon.dispose(), {once:true});
         }
         var order = ["screen", "camera"].filter(function (s) { return feeds[s]; });
         for (const source of ['screen','camera']) {
@@ -19177,7 +19256,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         const lastObservation = [...sessObservations].reverse().find(observation => observation.source === wFocus);
         if (lastObservation) seeHtml += '<span class="wb__watch-see">Last analysis: ' + escHtml(lastObservation.status) + '</span>';
         const options = order.map(source => '<option value="' + source + '">' + feedTag(source) + '</option>').join('');
-        watchBar.querySelector('.wb__watch-meta').innerHTML = '<div class="wb__watch-srcrow">' + seeHtml + '</div><div class="wb__source-options"><label>AI images<select data-wb-ai-source><option value="">No images</option>' + options + '</select></label><label>Recording source<select data-wb-record-source><option value="">Choose feed</option>' + options + '</select></label></div>' +
+        watchBar.querySelector('.wb__watch-meta').innerHTML = '<div class="wb__watch-srcrow">' + seeHtml + '</div><div class="af__hint" id="wb-images-notice">Shared images go to your configured AI on a turn or review.</div><div class="wb__source-options"><label>AI images<select data-wb-ai-source aria-describedby="wb-images-notice"><option value="">No images</option>' + options + '</select></label><label>Recording source<select data-wb-record-source><option value="">Choose feed</option>' + options + '</select></label></div>' +
           '<div class="wb__watch-acts">' + (wCanSee && wFocus ? '<button type="button" class="btn btn--auto" data-wb-shownow>Review board now</button><button type="button" class="wb__glance' + (wGlanceOn ? " is-on" : "") + '" data-wb-glance aria-pressed="' + wGlanceOn + '" title="Changed boards only, at least 60 seconds apart, up to 6 automatic requests per attempt">' + (wGlanceOn ? 'Auto-observe on' : 'Auto-observe off') + '</button><span class="wb__watch-see">' + autoLooks + '/6 automatic requests</span>' : "") + '<button type="button" class="btn btn--ghost" data-wb-watchstop>Stop sharing</button></div>';
         watchBar.querySelector('[data-wb-ai-source]').value = wFocus;
         watchBar.querySelector('[data-wb-ai-source]').addEventListener('change',event => setFocus(event.target.value));
@@ -19185,11 +19264,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         watchBar.querySelector('[data-wb-record-source]').addEventListener('change',event => { recordSource = event.target.value; syncRec(); paintWatch(); });
         watchBar.querySelector('.wb__downloads').innerHTML = downloads;
         stage.querySelector('[data-wb-record]').disabled = !feeds[recordSource];
+        stage.querySelector('[data-wb-record-notice]').hidden = !feeds[recordSource] && !recordings.length;
         stage.querySelector('.wb__record small').textContent = '(' + (recordSource ? feedTag(recordSource).toLowerCase() + ', ' : '') + 'video only)';
         var sn = watchBar.querySelector("[data-wb-shownow]"); if (sn) sn.addEventListener("click", function () { interviewerTurn("", "The candidate is now showing you their current whiteboard \u2014 look closely at the attached image and react specifically to what\u2019s on it right now."); });
         var gl = watchBar.querySelector("[data-wb-glance]"); if (gl) gl.addEventListener("click", function () { setGlance(!wGlanceOn); paintWatch(); });
         var wsBtn = watchBar.querySelector("[data-wb-watchstop]"); if (wsBtn) wsBtn.addEventListener("click", stopWatch);
         updateCaps();
+        paintInterviewer();
       }
       function updateCaps() { stage.querySelectorAll(".wb__cap").forEach(function (b) { b.classList.toggle("is-on", !!feeds[b.dataset.wbWatch]); b.setAttribute('aria-pressed',String(!!feeds[b.dataset.wbWatch])); }); }
       stage.querySelectorAll(".wb__cap").forEach(function (b) { b.addEventListener("click", function () { var s = b.dataset.wbWatch; if (feeds[s]) stopFeed(s); else startFeed(s); }); });

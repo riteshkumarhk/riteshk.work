@@ -2452,7 +2452,25 @@ test('Prepare Storyteller rejects malformed generations and late replies without
   } finally { await browser.close(); }
 });
 
-for (const width of [1440,390]) test("Prepare shared brief connects all five tools without replacing their flows at " + width + "px", {timeout:60000}, async () => {
+async function assertInsetFetchRow(row) {
+  const layout = await row.evaluate(element => {
+    const input = element.querySelector('input[type="url"]'), button = element.querySelector('button');
+    const field = input.getBoundingClientRect(), action = button.getBoundingClientRect(), bounds = element.getBoundingClientRect(), style = getComputedStyle(input);
+    const actionStyle = getComputedStyle(button);
+    return {
+      fullWidth:Math.abs(field.left-bounds.left)<=1 && Math.abs(field.width-bounds.width)<=1,
+      inset:action.left>field.left && action.right<field.right && action.top>field.top && action.bottom<field.bottom,
+      textReserved:field.right-parseFloat(style.paddingRight)-parseFloat(style.borderRightWidth)<=action.left-4,
+      ellipsis:style.textOverflow==='ellipsis',
+      labelFits:button.scrollWidth<=button.clientWidth+1,
+      quietAction:['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor','backgroundColor'].every(property=>['transparent','rgba(0, 0, 0, 0)'].includes(actionStyle[property])),
+      rightAligned:actionStyle.justifyContent==='flex-end'
+    };
+  });
+  assert.deepEqual(layout,{fullWidth:true,inset:true,textReserved:true,ellipsis:true,labelFits:true,quietAction:true,rightAligned:true},'Shared Fetch rows use a quiet in-field action without covering URL text');
+}
+
+for (const width of [1440,390]) test("Prepare shared brief connects tools with an explicit Whiteboard Existing view at " + width + "px", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
   try {
@@ -2477,6 +2495,7 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
     await page.getByLabel('Selected projects',{exact:true}).check();
     await page.locator('[data-prep-project="integrated-case"]').check();
     await page.locator('[data-prep-project="empty-case"]').check();
+    await assertInsetFetchRow(page.locator('[data-prep-brief] .cl__row'));
     const brief = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:brief')));
     assert.ok(brief.id);
     assert.equal(brief.includePrivate,false);
@@ -2504,7 +2523,7 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
         assert.equal(await page.locator('.adm__bar').evaluate(element=>element.inert),true);
       }
       assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
-      await modal.getByRole('button',{name:'Use brief',exact:true}).click();
+      if (tool !== 'wb') await modal.getByRole('button',{name:'Use brief',exact:true}).click();
       if (tool === 'ats' || tool === 'cl') {
         assert.equal(await page.evaluate(tool => JSON.parse(localStorage.getItem('rk:prep:draft'))[tool].state.preparationBrief.id,tool),brief.id);
         assert.equal(await modal.locator('.cl__company').inputValue(),'TargetCo / Product design lead');
@@ -2528,10 +2547,34 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
         assert.equal(saved.payload.source.brief.id,brief.id);
         assert.doesNotMatch(saved.payload.source.text,/PRIVATE_PROJECT_EVIDENCE|LOCKED_SECTION_EVIDENCE/);
       } else {
+        assert.equal(await modal.locator('[data-wb-view="existing"]').getAttribute('aria-pressed'),'true');
+        assert.equal(await modal.locator('[data-wb-brief]').isVisible(),true);
+        assert.equal(await modal.locator('[data-wb-hist]').isVisible(),false,'No empty saved-session section');
+        assert.equal(await modal.locator('[data-wb-start]').isVisible(),false);
+        await modal.locator('[data-wb-view="new"]').click();
+        assert.equal(await modal.locator('[data-wb-brief]').isVisible(),false,'The brief belongs only to Existing');
+        assert.equal(await modal.locator('.wb__company').inputValue(),'');
+        assert.equal(await modal.locator('.wb__jd').inputValue(),'');
+        assert.equal(await modal.locator('[data-wb-lvl].is-on').getAttribute('data-wb-lvl'),'staff');
+        await modal.locator('[data-wb-deeper]').click();
+        await modal.locator('.wb__own').fill('Whiteboard without a shared target');
+        await modal.locator('[data-wb-start]').click();
+        await modal.locator('.wb__draft').waitFor();
+        assert.doesNotMatch(await page.evaluate(() => window.preparationCalls.at(-1).user),/SHARED_JOB_REQUIREMENTS|TargetCo/,'A blank Whiteboard JD must not inherit the Storyteller target');
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].target.jd),'');
+        await modal.locator('[data-wb-history]').click();
+        assert.equal(await modal.locator('[data-wb-hist]').isVisible(),true);
+        assert.equal(await modal.locator('[data-wb-brief]').evaluate(element => !!(element.compareDocumentPosition(document.querySelector('[data-wb-hist]')) & Node.DOCUMENT_POSITION_FOLLOWING)),true,'Brief precedes saved sessions');
+        const callsBeforeBrief = await page.evaluate(() => window.preparationCalls.length);
+        await modal.locator('[data-wb-use-brief]').click();
+        assert.equal(await modal.locator('[data-wb-view="new"]').getAttribute('aria-pressed'),'true');
         assert.equal(await modal.locator('.wb__company').inputValue(),'TargetCo / Product design lead');
         assert.equal(await modal.locator('.wb__jd').inputValue(),'SHARED_JOB_REQUIREMENTS');
         assert.equal(await modal.locator('[data-wb-lvl].is-on').getAttribute('data-wb-lvl'),'leader');
+        assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeBrief,'Using a brief does not start a session or call AI');
+        assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:brief'))),brief,'Other tools retain their shared brief');
       }
+      for (const row of await modal.locator('.cl__row:visible').all()) await assertInsetFetchRow(row);
       if (tool === 'cl') {
         await modal.locator('[data-act="cl-generate"]').click(); await modal.locator('.cl__letter').waitFor();
         const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).cl[0]);
@@ -3323,6 +3366,144 @@ test("Prepare restored interviews and stories keep their original evidence and r
   } finally { await browser.close(); }
 });
 
+async function assertWhiteboardDesignSystem(page) {
+  await page.locator('.wb__header h2').hover();
+  await page.waitForFunction(() => !document.getAnimations().some(animation => animation.playState === 'running' && animation.effect?.getTiming().iterations !== Infinity && animation.effect?.target?.closest('.wb-modal')));
+  const differences = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const reference = document.createElement('div');
+    reference.className = 'pass pass--wide'; reference.inert = true;
+    reference.style.cssText = 'position:fixed;left:-10000px;top:0;width:880px;height:auto;animation:none';
+    reference.innerHTML = '<div class="pass__box"><div class="pass__title">Reference</div><div class="adm__hm-seg"><button>New</button><button class="is-on">Existing</button></div><button class="adm__hist-btn">Back</button><input type="text"><textarea></textarea><select><option>Screen</option></select><button class="story__opt is-on">Choice</button><button class="iprep__lvl is-on">Level</button><div class="prep-brief"><details><summary>Advanced</summary></details></div><div class="prep-workspace"><div class="prep-h"><button class="prep-h__x">Session</button><button class="prep-h__del">Delete</button></div></div><div class="pass__actions"><button class="btn btn--ghost">Close</button><button class="btn btn--auto">Start</button></div></div>';
+    reference.querySelector('.pass__box').insertAdjacentHTML('beforeend','<div class="wb__turn--you"><div class="wb__bubble">Candidate response</div></div>');
+    document.body.append(reference);
+    try {
+      const modal = document.querySelector('.wb-modal');
+      const pairs = [
+        ['.wb__header h2','.pass__title'],
+        ['[data-wb-view-switch]','.adm__hm-seg'],
+        ['[data-wb-view].is-on','.adm__hm-seg .is-on'],
+        ['[data-wb-view]:not(.is-on)','.adm__hm-seg button:not(.is-on)'],
+        ['[data-wb-exit]','.adm__hist-btn'],
+        ['[data-wb-min]','.adm__hist-btn'],
+        ['.wb__company','input'],['.wb__jd','textarea'],['.wb__own','textarea'],['.wb__draft','textarea'],
+        ['.wb__source-options select','select'],
+        ['.wb__turn--you .wb__bubble','.wb__turn--you .wb__bubble'],
+        ['[data-wb-mode].is-on','.story__opt'],['[data-wb-lvl].is-on','.iprep__lvl'],
+        ['[data-wb-deeper]','.btn--ghost'],
+        ['[data-wb-hist] .prep-h','.prep-h'],['[data-wb-hist-open]','.prep-h__x'],['[data-wb-hist-del]','.prep-h__del'],
+        ['[data-cancel]','.btn--ghost'],['[data-wb-start]','.btn--auto']
+      ];
+      if (!modal.classList.contains('wb-modal--stage')) pairs.push(['.pass__box','.pass__box']);
+      const properties = ['font-family','font-size','font-weight','line-height','color','background-color','background-image','border-top-color','border-top-style','border-radius','corner-shape','text-transform','letter-spacing'];
+      return pairs.flatMap(([selector,peer]) => {
+        const element = modal.querySelector(selector); if (!element) return [];
+        const actual = getComputedStyle(element), expected = getComputedStyle(reference.querySelector(peer));
+        return properties.filter(property => actual.getPropertyValue(property) !== expected.getPropertyValue(property)).map(property => ({selector,property,actual:actual.getPropertyValue(property),expected:expected.getPropertyValue(property)}));
+      });
+    } finally { reference.remove(); }
+  });
+  assert.deepEqual(differences,[],'Whiteboard must inherit the shared component appearance, including native squircle and capsule policies');
+}
+
+test('Prepare Whiteboard New and Existing follow availability without losing setup or sessions', {timeout:45000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors = [];
+  page.on('pageerror',error => errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    assert.equal(await page.locator('[data-wb-view-switch]').isVisible(),false,'Nothing to reuse means no switch');
+    assert.equal(await page.locator('[data-wb-new]').isVisible(),true);
+    assert.equal(await page.locator('[data-wb-existing]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-start]').isVisible(),true);
+    await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__own').fill('An exercise to save and resume');
+    await page.locator('[data-wb-start]').click();
+    await page.locator('.wb__draft').fill('Saved coaching draft');
+    assert.equal(await page.locator('[data-wb-deeper]').isVisible(),false,'Advanced setup options are not a session control');
+    assert.equal(await page.locator('[data-wb-view-switch]').isVisible(),false,'The switch is setup navigation, not an in-session mode');
+    await page.locator('.wb-modal [data-cancel]').click();
+    await page.evaluate(() => {
+      const history = JSON.parse(localStorage.getItem('rk:prep:hist'));
+      const original = history.wb[0];
+      for (let index = 0; index < 3; index++) history.wb.push({...original,id:'grid-extra-' + index,meta:{...original.meta,snippet:index === 0 ? 'Unbroken'.repeat(20) : 'A longer saved exercise title that wraps across two lines in a session tile'}});
+      localStorage.setItem('rk:prep:hist',JSON.stringify(history));
+    });
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    assert.equal(await page.locator('[data-wb-view="existing"]').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('[data-wb-brief]').isVisible(),false,'Saved sessions do not create an empty brief section');
+    assert.equal(await page.locator('[data-wb-hist-open]').count(),4);
+    assert.equal(await page.locator('[data-wb-new]').isVisible(),false);
+    const initialExistingBox = await page.locator('.wb-modal .pass__box').boundingBox();
+    await page.locator('[data-wb-view="new"]').click();
+    const initialNewBox = await page.locator('.wb-modal .pass__box').boundingBox();
+    assert.ok(Math.abs(initialExistingBox.height-initialNewBox.height)<1 && Math.abs(initialExistingBox.width-initialNewBox.width)<1,'Collapsed New and Existing keep the same dialog size');
+    await page.locator('[data-wb-view="existing"]').click();
+    const history = await page.evaluate(() => localStorage.getItem('rk:prep:hist'));
+    const calls = await page.evaluate(() => window.preparationCalls.length);
+    await page.locator('[data-wb-view="new"]').press('Enter');
+    await page.locator('.wb__company').fill('Direct company');
+    await page.locator('.wb__jd').fill('Direct job requirements');
+    await page.locator('[data-wb-jd-url]').fill('https://example.test/job');
+    await page.locator('[data-wb-mode="mock"]').click();
+    await page.locator('[data-wb-lvl="senior"]').click();
+    await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__brief').fill('Direct flavour');
+    await page.locator('.wb__own').fill('A new, unsent exercise');
+    for (const name of ['Company','Job posting URL','Job description','Flavour','Your own prompt']) assert.equal(await page.getByRole('textbox',{name,exact:true}).count(),1,'Fields have distinct accessible names');
+    for (const name of ['Exercise length','Mode','Conversation','Seniority','Challenge','Industry']) assert.equal(await page.getByRole('group',{name,exact:true}).locator('button[aria-pressed="true"]').count(),1,'Choice groups announce exactly one selection');
+    assert.equal(await page.locator('[data-wb-deeper]').evaluate(element => element.tagName === 'BUTTON' && element.parentElement.classList.contains('wb__foot')),true,'Advanced options use a shared footer button');
+    for (const width of [1024,1440,1920]) {
+      await page.setViewportSize({width,height:1000});
+      await page.evaluate(theme => { document.documentElement.dataset.theme = theme; },width === 1024 ? 'day' : 'night');
+      await page.locator('[data-wb-view="existing"]').press('Enter');
+      await assertWhiteboardDesignSystem(page);
+      const existingBox = await page.locator('.wb-modal .pass__box').boundingBox();
+      assert.equal(await page.getByRole('textbox',{name:'Company',exact:true}).count(),0,'The hidden New view exposes no form controls');
+      assert.equal(await page.locator('[data-wb-deeper]').isVisible(),false,'Saved sessions do not expose New setup options');
+      assert.equal(await page.locator('.wb__setup').evaluate(element=>element.scrollHeight<=element.clientHeight+1),true,'The hidden form does not add blank scrolling to a short saved list');
+      const title = await page.locator('.wb__header h2').boundingBox(), toggle = await page.locator('[data-wb-view-switch]').boundingBox(), header = await page.locator('.wb__header').boundingBox();
+      assert.ok(title.x + title.width <= toggle.x && toggle.x + toggle.width <= header.x + header.width,'The switch fits at the right of the header');
+      const tiles = await page.locator('[data-wb-hist] .prep-h').evaluateAll(elements=>elements.map(element=>{const rect=element.getBoundingClientRect();return {x:rect.x,y:rect.y,width:rect.width,bottom:rect.bottom};}));
+      assert.equal(tiles.length,4);
+      assert.ok(tiles.slice(0,3).every(tile=>Math.abs(tile.y-tiles[0].y)<1 && Math.abs(tile.width-tiles[0].width)<1),'Three equal tiles share the first row');
+      assert.ok(tiles[0].x + tiles[0].width <= tiles[1].x && tiles[1].x + tiles[1].width <= tiles[2].x,'Session columns do not overlap');
+      assert.ok(tiles[3].y >= tiles[0].bottom && Math.abs(tiles[3].x-tiles[0].x)<1,'The fourth session starts the next row');
+      assert.equal(await page.locator('[data-wb-hist] .prep-h__x :is(b,i)').evaluateAll(elements=>elements.every(element=>element.scrollWidth<=element.clientWidth+1)),true,'Long titles and metadata fit the tiles');
+      assert.equal(await page.locator('[data-wb-start]').isVisible(),false);
+      assert.equal(await page.locator('[data-wb-new]').isVisible(),false);
+      await page.screenshot({path:join(tmpdir(),'rk-whiteboard-existing-' + width + '.png')});
+      await page.locator('[data-wb-view="new"]').press('Enter');
+      const newBox = await page.locator('.wb-modal .pass__box').boundingBox();
+      assert.ok(Math.abs(existingBox.height-newBox.height)<1 && Math.abs(existingBox.width-newBox.width)<1,'Expanded New and Existing keep the same dialog size');
+      assert.equal(await page.locator('[data-wb-existing]').isVisible(),false);
+    }
+    for (const [selector,value] of [['.wb__company','Direct company'],['.wb__jd','Direct job requirements'],['[data-wb-jd-url]','https://example.test/job'],['.wb__brief','Direct flavour'],['.wb__own','A new, unsent exercise']]) assert.equal(await page.locator(selector).inputValue(),value);
+    assert.equal(await page.locator('[data-wb-lvl="senior"]').getAttribute('class'),'iprep__lvl is-on');
+    assert.equal(await page.locator('[data-wb-mode="mock"]').getAttribute('class'),'story__opt is-on');
+    assert.equal(await page.getByRole('button',{name:'Start',exact:true}).locator('svg').count(),1,'The play icon survives session completion and setup view changes');
+    assert.equal(await page.locator('[data-wb-deeper]').getAttribute('aria-expanded'),'true');
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')),history,'Switching never changes saved sessions');
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),calls,'Switching never calls AI');
+    await page.locator('[data-wb-view="existing"]').click();
+    for (let index = 0; index < 3; index++) await page.locator('[data-wb-hist-del="grid-extra-' + index + '"]').click();
+    await page.locator('[data-wb-hist-open]').focus();
+    assert.equal(await page.locator('[data-wb-hist-open]').evaluate(element => element.tagName), 'BUTTON');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.matches('[data-wb-hist-del]')),true,'Open and Delete are separate keyboard controls');
+    assert.equal(await page.locator('[data-wb-hist-del]').evaluate(element => getComputedStyle(element).outlineStyle),'solid');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('[data-wb-view-switch]').isVisible(),false,'Deleting the final existing item removes the switch');
+    assert.equal(await page.locator('[data-wb-new]').isVisible(),true);
+    assert.equal(await page.locator('[data-wb-start]').isVisible(),true);
+    assert.equal(await page.locator('.wb__company').inputValue(),'Direct company');
+    assert.equal(await page.evaluate(() => document.querySelector('[data-wb-new]').contains(document.activeElement)),true);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup changes", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
@@ -3331,9 +3512,11 @@ test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup
     await page.evaluate(() => localStorage.setItem('rk:prep:brief',JSON.stringify({id:'original-role',company:'OriginalCo',role:'Staff designer',jd:'ORIGINAL_WB_ROLE',level:'staff',projectMode:'selected',projectIds:['integrated-case']})));
     await page.locator('.adm__tab[data-tab="ai"]').click();
     await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
-    await page.locator('.wb-modal [data-use-prep-brief]').click();
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).preparationBrief.id),'original-role');
-    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).fixedRole),true);
+    assert.equal(await page.locator('.wb-modal .prep-brief-link').count(),0);
+    await page.locator('[data-wb-view="new"]').click();
+    await page.locator('.wb__company').fill('OriginalCo / Staff designer');
+    await page.locator('.wb__jd').fill('ORIGINAL_WB_ROLE');
+    assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:wb')).preparationBrief),null);
     await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('Original synthetic exercise');
     await page.locator('[data-wb-start]').click();
@@ -3341,6 +3524,7 @@ test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup
     await page.locator('[data-wb-critique]').click();
     await page.getByText('SAVED_COACHING_FEEDBACK',{exact:true}).waitFor();
     const coach = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(coach.target.jd,'ORIGINAL_WB_ROLE','Directly entered job details remain part of the saved session');
     await page.locator('[data-wb-newprompt]').click();
     await page.getByText('A new synthetic exercise',{exact:true}).waitFor();
     await page.locator('.wb__draft').waitFor();
@@ -3361,6 +3545,7 @@ test("Prepare Whiteboard keeps feedback, scorecards and prior targets when setup
     assert.equal(preserved.mode,'coach');
     assert.equal(preserved.critique.verdict,'SAVED_COACHING_FEEDBACK');
     await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-view="new"]').click();
     await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('A mock synthetic exercise');
     await page.locator('[data-wb-start]').click();
@@ -3403,6 +3588,8 @@ test("Prepare Whiteboard preserves sessions while stopping timers and late captu
     const stopped = await page.locator('[data-wb-timer-t]').textContent();
     await page.clock.runFor(2100);
     assert.equal(await page.locator('[data-wb-timer-t]').textContent(), stopped);
+    assert.equal(await page.locator('[data-wb-view="new"]').getAttribute('aria-pressed'),'true','Change setup opens New');
+    await page.locator('[data-wb-view="existing"]').click();
     for (const source of ['screen','camera']) {
       await page.locator('[data-wb-hist-open="saved-mock"]').click();
       await page.evaluate(source => { const method = source === 'screen' ? 'getDisplayMedia' : 'getUserMedia'; navigator.mediaDevices[method] = () => new Promise(resolve => { window.lateFeed = resolve; }); }, source);
@@ -3499,36 +3686,116 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       assert.ok(setupShell.y > studioHeader.y + studioHeader.height,'Setup leaves space below the Studio navigation');
       assert.ok(setupShell.y + setupShell.height < studioStatus.y,'Setup leaves space above Studio status');
       assert.equal(await page.locator('.wb-modal').getAttribute('aria-modal'),'true');
-      assert.equal(await page.getByRole('button',{name:'Back to Prepare',exact:true}).isVisible(),true);
+      assert.equal(await page.locator('[data-wb-exit]').isVisible(),false,'Close is the single setup exit');
+      assert.equal(await page.locator('.wb-modal [data-cancel]').isVisible(),true);
+      assert.equal(await page.locator('.wb-modal .pass__sub').count(),0,'No introductory paragraph');
+      assert.equal(await page.getByRole('button',{name:'Start',exact:true}).locator('svg').count(),1,'Start uses the shared play icon');
+      assert.equal(await page.locator('.wb-modal .pass__note').count(),0,'The informational footer note is removed');
+      assert.equal(await page.locator('.wb__foot > [data-wb-deeper]').textContent(),'Advanced options');
+      assert.equal(await page.locator('.wb__deeper details,.wb__deeper summary').count(),0,'There is no separate Advanced drawer UI');
       assert.equal(await page.locator('.wb__chrome').isVisible(),false,'Setup needs no maximise action');
+      assert.equal(await page.locator('.wb-modal .pass__err').isVisible(),false,'An empty error slot reserves no space');
+      await page.locator('.wb-modal .pass__err').evaluate(element=>{element.textContent='Validation message';});
+      assert.equal(await page.locator('.wb-modal .pass__err').isVisible(),true,'Actual validation errors remain visible');
+      await page.locator('.wb-modal .pass__err').evaluate(element=>{element.textContent='';});
+      assert.equal(await page.locator('.wb__deeper').evaluate(element=>getComputedStyle(element).borderBottomWidth),'0px','Advanced does not duplicate the footer divider');
     }
+    assert.equal(await page.locator('[data-wb-history]').isVisible(),false,'History navigation is only needed in-session');
+    assert.equal(await page.locator('[data-wb-hist]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-view-switch]').isVisible(),false,'First use opens New without a switch');
+    assert.equal(await page.locator('.wb-modal .prep-brief-link,[data-use-prep-brief]').count(),0,'There is no empty brief row on setup');
+    assert.deepEqual(await page.locator('[data-wb-lvl]').evaluateAll(buttons=>buttons.map(button=>button.dataset.wbLvl)),['senior','staff','leader','exec'],'Seniority options ascend from Senior to VP / Exec');
     assert.equal(await page.locator('[data-wb-deeper]').getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('.wb__deeper').evaluate(element => element === element.parentElement.lastElementChild),true,'Advanced is the last setup section');
+    assert.equal(await page.locator('.wb__deeper').evaluate(element => ['.wb__company','[data-wb-jd-url]','[data-wb-jd-fetch]','.wb__jd'].every(selector => element.previousElementSibling.contains(document.querySelector(selector)))),true,'The full Company and job description block precedes Advanced');
     assert.equal(await page.locator('.wb__brief').isVisible(),false);
     assert.equal(await page.locator('.wb__own').isVisible(),false);
+    const optionsWidth = (await page.locator('[data-wb-deeper]').boundingBox()).width;
     await page.locator('[data-wb-deeper]').click();
+    assert.equal(await page.getByRole('button',{name:'Hide options',exact:true}).getAttribute('aria-expanded'),'true');
+    assert.ok(Math.abs((await page.locator('[data-wb-deeper]').boundingBox()).width-optionsWidth)<1,'The options toggle width is stable when its label changes');
+    assert.equal(await page.locator('#wb-advanced-settings').isVisible(),true);
+    const hintGaps = await page.locator('.wb__setup .af__hint').evaluateAll(hints=>hints.map(hint=>hint.getBoundingClientRect().top-hint.previousElementSibling.getBoundingClientRect().bottom));
+    assert.equal(hintGaps.length,4);
+    assert.ok(hintGaps.every(gap=>Math.abs(gap-hintGaps[0])<0.25),'All setup hints use the same control-to-help spacing, including Advanced');
     await page.locator('.wb__brief').fill('Refund onboarding');
     await page.locator('.wb__own').fill('Design a clear refund status.');
     await page.locator('[data-wb-deeper]').click();
+    assert.equal(await page.getByRole('button',{name:'Advanced options',exact:true}).getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('#wb-advanced-settings').isVisible(),false);
     assert.equal(await page.locator('.wb__brief').inputValue(),'Refund onboarding');
     assert.equal(await page.locator('.wb__own').inputValue(),'Design a clear refund status.');
     assert.equal(await page.locator('.wb__own').isVisible(),false);
     if (width === 1440) {
-      for (const viewport of [{width:1024,height:768,theme:'day'},{width:1920,height:1080,theme:'night'}]) {
+      for (const viewport of [{width:1024,height:768,theme:'day'},{width:1440,height:1000,theme:'night'},{width:1920,height:1080,theme:'night'}]) {
         await page.setViewportSize({width:viewport.width,height:viewport.height});
         await page.evaluate(theme => { document.documentElement.dataset.theme = theme; },viewport.theme);
         const box = await page.locator('.wb-modal .pass__box').boundingBox();
-        const form = await page.locator('.wb__setup .ats__main').boundingBox(), history = await page.locator('[data-wb-hist]').boundingBox();
+        const form = await page.locator('.wb__setup .ats__main').boundingBox();
         const footer = await page.locator('.wb__foot').boundingBox();
+        const options = await page.locator('.wb__foot > [data-wb-deeper]').boundingBox();
+        const close = await page.locator('.wb__foot [data-cancel]').boundingBox();
+        const iconGap = await page.locator('[data-wb-start]').evaluate(button=>{
+          const label = [...button.childNodes].find(node=>node.nodeType===Node.TEXT_NODE && node.textContent.trim());
+          const range = document.createRange(); range.selectNodeContents(label);
+          return {actual:range.getBoundingClientRect().left-button.querySelector('svg').getBoundingClientRect().right,expected:parseFloat(getComputedStyle(button).columnGap)};
+        });
+        assert.ok(iconGap.expected>0 && Math.abs(iconGap.actual-iconGap.expected)<=1,'Start has an explicit gap between the play icon and label');
+        const url = page.locator('[data-wb-jd-url]'), fetch = page.locator('[data-wb-jd-fetch]');
+        const originalUrl = await url.inputValue();
+        const longUrl = 'https://example.test/jobs/' + 'long-role-'.repeat(50);
+        await url.fill(longUrl); await url.press('End'); await url.press('x');
+        assert.equal(await url.inputValue(),longUrl+'x','Clipping never truncates the editable URL value');
+        const urlBox = await url.boundingBox(), companyBox = await page.locator('.wb__company').boundingBox(), fetchBox = await fetch.boundingBox();
+        assert.ok(Math.abs(urlBox.x-companyBox.x)<=1 && Math.abs(urlBox.width-companyBox.width)<=1,'The URL field spans the same width as the company field');
+        assert.ok(fetchBox.x>urlBox.x && fetchBox.x+fetchBox.width<urlBox.x+urlBox.width && fetchBox.y>urlBox.y && fetchBox.y+fetchBox.height<urlBox.y+urlBox.height,'Fetch sits entirely inside the URL field');
+        const textBoundary = await url.evaluate(input=>{const style=getComputedStyle(input);return input.getBoundingClientRect().right-parseFloat(style.paddingRight)-parseFloat(style.borderRightWidth);});
+        assert.ok(textBoundary<=fetchBox.x-4,'URL text stops before the Fetch control');
+        assert.equal(await url.evaluate(input=>getComputedStyle(input).textOverflow),'ellipsis');
+        await assertInsetFetchRow(url.locator('..'));
+        await url.press('Tab');
+        assert.equal(await fetch.evaluate(button=>button===document.activeElement),true,'Fetch remains a separate keyboard-accessible control');
+        assert.equal(await fetch.evaluate(button=>getComputedStyle(button).outlineStyle),'solid','Fetch has a visible keyboard focus outline');
+        await fetch.hover();
+        const hoverBox = await fetch.boundingBox();
+        const hoveredUrlBox = await url.boundingBox();
+        assert.ok(Math.abs((hoverBox.y-hoveredUrlBox.y)-(fetchBox.y-urlBox.y))<0.25,'The in-field Fetch action does not lift on hover');
+        const idleLabel = await fetch.innerHTML();
+        await fetch.evaluate(button=>{button.disabled=true;button.classList.add('is-busy');button.textContent='Fetching\u2026';});
+        const busyBox = await fetch.boundingBox();
+        assert.ok(Math.abs(busyBox.width-fetchBox.width)<=1 && Math.abs(busyBox.height-fetchBox.height)<=1,'Fetching does not resize the inset button');
+        assert.equal(await fetch.evaluate(button=>button.scrollWidth<=button.clientWidth+1),true,'The busy label and spinner fit inside Fetch');
+        await fetch.evaluate((button,label)=>{button.innerHTML=label;button.disabled=false;button.classList.remove('is-busy');},idleLabel);
+        await url.fill(originalUrl);
         assert.ok(box.x > 0 && box.width <= 880 && box.y > 0 && box.y + box.height < viewport.height);
-        assert.ok(form.x + form.width <= history.x,'Saved sessions remain beside the setup fields');
+        assert.ok(form.x >= box.x && form.x + form.width <= box.x + box.width,'The New form fits inside the setup window');
+        assert.equal(await page.locator('[data-wb-existing]').isVisible(),false,'Saved sessions belong to Existing, not beside New');
         assert.ok(footer.y >= box.y && footer.y + footer.height <= box.y + box.height,'Footer actions stay inside the setup window');
+        assert.ok(options.x + options.width <= close.x,'Advanced options do not overlap the actions');
+        assert.ok(Math.abs(options.y + options.height / 2 - close.y - close.height / 2) <= 1,'Advanced options share the CTA row');
+        assert.ok(footer.height <= close.height + 26,'Advanced options add no footer height');
         assert.equal(await page.locator('.wb-modal .pass__box').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
+        const studioHeader = await page.locator('.adm__bar').boundingBox(), studioStatus = await page.locator('.adm__statusbar').boundingBox();
+        assert.ok(box.y > studioHeader.y + studioHeader.height && box.y + box.height < studioStatus.y,'The taller dialog still leaves Studio navigation and status visible');
+        if (viewport.height >= 1080) {
+          assert.equal(await page.locator('.wb__setup').evaluate(element=>element.scrollHeight<=element.clientHeight+1),true,'A tall window fits the collapsed setup without scrolling');
+          assert.equal(await page.locator('.wb__deeper').isVisible(),false,'Advanced fields stay collapsed until requested');
+          assert.equal(await page.locator('[data-wb-deeper]').isVisible(),true,'The Advanced options control stays visible in the footer');
+        }
+        await page.locator('.wb__setup').evaluate(element=>{element.scrollTop=element.scrollHeight;});
+        const formEnd = await page.locator('.wb__deeper').evaluate(element=>{const field=element.hidden ? element.previousElementSibling : element;return field.getBoundingClientRect().bottom+parseFloat(getComputedStyle(field).marginBottom);});
+        const formFooterGap = footer.y - formEnd;
+        assert.ok(formFooterGap >= -1 && formFooterGap <= 26,'Only standard form padding follows the final visible field, allowing subpixel rounding: ' + formFooterGap + 'px at ' + viewport.width + 'px');
+        await page.locator('.wb__setup').evaluate(element=>{element.scrollTop=0;});
         await page.screenshot({path:join(tmpdir(),'rk-whiteboard-compact-setup-' + viewport.width + '.png')});
       }
       await page.setViewportSize({width,height:1000});
     }
     await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-setup-' + width + '.png')});
     await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-start]').click();
+    assert.equal(await page.locator('[data-wb-exit]').isVisible(),true,'Mock retains its exit because its footer is hidden');
+    assert.equal(await page.locator('[data-wb-record-notice]').isVisible(),false,'Recording notice waits until a feed is available');
+    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).isVisible(),true,'A session needs a route back to the history list');
     if (width === 1440) {
       assert.equal(await page.getByRole('button',{name:'Start immersive session',exact:true}).isVisible(),true,'Immersive mode is an explicit option for the same interview');
       assert.equal(await page.locator('.wb__cols').evaluate(element => element.firstElementChild.classList.contains('wb__main')),true,'The conversation leads the restored layout');
@@ -3547,6 +3814,9 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     try { await page.waitForFunction(() => document.querySelector('.wb__feed-vid')?.videoWidth === 800,null,{timeout:8000}); }
     catch (error) { throw new Error(JSON.stringify({errors,state:await page.evaluate(() => ({message:document.querySelector('.wb-modal .pass__err')?.textContent,requests:window.mediaRequests,tracks:window.boardStream?.getTracks().map(track=>track.readyState),videos:[...document.querySelectorAll('video')].map(video=>({width:video.videoWidth,ready:video.readyState}))}))}),{cause:error}); }
     assert.equal(await page.locator('[data-wb-record]').isChecked(),false); assert.equal(await page.locator('.wb__watch-rec:visible').count(),0);
+    assert.equal(await page.locator('[data-wb-record-notice]').isVisible(),true);
+    assert.equal(await page.locator('[data-wb-ai-source]').getAttribute('aria-describedby'),'wb-images-notice');
+    assert.equal(await page.locator('#wb-images-notice').textContent(),'Shared images go to your configured AI on a turn or review.');
     const loadedFonts = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family.replace(/['"]/g,'')); });
     for (const family of ['Schibsted Grotesk','Hanken Grotesk','Martian Mono']) assert.ok(loadedFonts.includes(family), family + ' is actually loaded');
     assert.equal(await page.locator('.wb__feed-vid').evaluate(video=>getComputedStyle(video).objectFit),'contain');
@@ -3568,6 +3838,8 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       await page.locator('[data-wb-immersive]').click();
       await page.waitForFunction(() => document.querySelector('.wb__preview-video')?.videoWidth === 800);
       assert.equal(await page.locator('[data-wb-immersive]').textContent(),'Exit immersive session');
+      assert.equal(await page.locator('.wb__interviewer .ai-ribbon').count(),1,'Interviewer reuses the Studio AI ribbon');
+      assert.equal(await page.locator('.wb__interviewer').getAttribute('data-ai-state'),'idle');
       assert.equal(await page.evaluate(() => document.querySelector('[data-feed="screen"] video') === window.originalBoardVideo),true);
       assert.equal(await page.evaluate(() => document.querySelector('.wb__msg') === window.originalComposer),true);
       assert.equal(await page.evaluate(() => window.preparationCalls.length),before.calls,'Entering a view must not send an AI request');
@@ -3622,6 +3894,7 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     assert.equal(await page.locator('.wb__composer').isVisible(),false);
     assert.equal(await page.locator('[data-wb-phase]').textContent(),'Review');
     await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-review-' + width + '.png')});
+    if (width === 1440) await assertWhiteboardDesignSystem(page);
     assert.equal(await page.locator('.wb__stage').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
     assert.equal(await page.evaluate(() => window.boardStream.getTracks().every(track=>track.readyState==='ended')),true);
     assert.equal(await page.evaluate(() => window.mediaRequests.length),1); assert.equal(await page.evaluate(() => window.mediaRequests[0].options.audio),false);
@@ -3630,13 +3903,24 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     await page.getByRole('button',{name:'Saved sessions',exact:true}).click();
     assert.equal(await page.locator('.wb-modal').getAttribute('aria-modal'),'true');
     assert.equal(await page.locator('.wb-modal').evaluate(element=>element.classList.contains('wb-modal--stage')),false);
+    assert.equal(await page.locator('[data-wb-history]').isVisible(),false);
+    assert.equal(await page.evaluate(()=>document.activeElement.matches('[data-wb-hist-open]')),true,'Returning to history focuses a saved session, not the now-hidden header button');
     assert.equal(await page.locator('.wb__brief').inputValue(),'Refund onboarding');
     assert.equal(await page.locator('.wb__own').inputValue(),'Design a clear refund status.');
     assert.equal(await page.locator('.wb__own').isVisible(),false);
     assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeSetup);
     if (width === 1440) assert.ok((await page.locator('.wb-modal .pass__box').boundingBox()).width <= 880);
+    await page.locator('[data-wb-hist-open]').first().press('Enter');
+    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).isVisible(),true,'Resuming a saved session restores history navigation');
+    await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeSetup);
+    await page.getByRole('button',{name:'Saved sessions',exact:true}).click();
     await page.locator('.wb-modal [data-cancel]').click();
     assert.equal(await page.locator('.adm__bar').evaluate(element=>element.inert),false);
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    assert.equal(await page.locator('[data-wb-history]').isVisible(),false,'Reopening Whiteboard starts with no redundant history button');
+    assert.equal(await page.locator('[data-wb-view="existing"]').getAttribute('aria-pressed'),'true','Saved sessions make Existing the default on reopen');
+    await page.locator('.wb-modal [data-cancel]').click();
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
 });
