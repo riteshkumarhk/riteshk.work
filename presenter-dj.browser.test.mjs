@@ -1088,7 +1088,10 @@ test('video navigator previews decode actual frames and compact notes and embed 
     const pixels=await video.evaluate(video=>{const canvas=document.createElement('canvas');canvas.width=64;canvas.height=36;const context=canvas.getContext('2d');context.drawImage(video,0,0,64,36);const colors=new Set();const pixels=context.getImageData(0,0,64,36).data;for(let index=0;index<pixels.length;index+=4)colors.add(`${pixels[index]},${pixels[index+1]},${pixels[index+2]}`);return {colors:colors.size,muted:video.muted,paused:video.paused};});
     assert.ok(pixels.colors>3);assert.equal(pixels.muted,true);assert.equal(pixels.paused,true);
     for(const width of [390,320]){
+      const wasDesktop=await page.evaluate(()=>!matchMedia('(max-width:900px)').matches);
       await page.setViewportSize({width,height:844});
+      await page.waitForFunction(expected=>innerWidth===expected,width);
+      if(wasDesktop)await page.waitForFunction(()=>document.querySelector('.merge-notes-toggle')?.getAttribute('aria-expanded')==='false');
       const toggle=page.getByRole('button',{name:'Speaker notes panel',exact:true});if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
       for(const control of await page.locator('.merge-rich-toolbar button').all()){await control.waitFor({state:'visible'});await control.hover();const box=await control.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width,`notes control at ${width}`);}
       await page.getByRole('button',{name:'Media',exact:true}).click();await page.getByRole('button',{name:'Embed link',exact:true}).click();
@@ -1285,7 +1288,11 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
           await popup.screenshot({path:join(tmpdir(),`rk-dj-section-reopened-${width}.png`)});
         }
       }
+      const presenter=page.context().pages().find(candidate=>candidate!==page&&!candidate.isClosed());
+      assert.ok(presenter,'Each cycle must own a native presenter window');
+      const presenterClosed=presenter.waitForEvent('close');
       await page.evaluate(()=>{window.closedThumbnailDocument=window.documentPictureInPicture.window.document;window.documentPictureInPicture.window.close();});
+      await presenterClosed;
       await page.waitForFunction(()=>!document.querySelector('.pjp').classList.contains('pjp--popped'));
       assert.equal(await page.evaluate(()=>window.closedThumbnailDocument.querySelectorAll('.merge-present-thumbnail').length),0,'Closed presenter documents must release their React thumbnail roots');
       if(live)assert.equal(await page.evaluate(()=>window.captureStreams.every(stream=>stream.getTracks().every(track=>track.readyState==='ended'))),true);
