@@ -2495,10 +2495,18 @@ for (const width of [1440,390]) test("Prepare shared brief connects all five too
       await modal.waitFor();
       await page.waitForFunction(selector => document.querySelector(selector)?.contains(document.activeElement), ['ats','cl'].includes(tool) ? '.prep-dialog' : '.'+tool+'-modal');
       assert.equal(await modal.getAttribute('role'),'dialog');
-      assert.equal(await modal.getAttribute('aria-modal'),'true');
+      assert.equal(await modal.getAttribute('aria-modal'),tool === 'wb' ? 'false' : 'true');
       await modal.evaluate(element => { const controls = [...element.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')].filter(control=>control.getClientRects().length); controls.at(-1).focus(); });
       await page.keyboard.press('Tab');
-      assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
+      if (tool === 'wb') {
+        assert.equal(await page.locator('.adm__main').evaluate(element=>element.inert),true);
+        assert.equal(await page.locator('.adm__workbar').evaluate(element=>element.inert),true);
+        assert.equal(await page.evaluate(()=>document.activeElement.closest('.adm__main,.adm__workbar') === null),true);
+        await page.locator('.adm__tab[data-tab="ai"]').focus();
+        assert.equal(await page.locator('.adm__tab[data-tab="ai"]').evaluate(element=>element === document.activeElement),true);
+      } else {
+        assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
+      }
       await modal.getByRole('button',{name:'Use brief',exact:true}).click();
       if (tool === 'ats' || tool === 'cl') {
         assert.equal(await page.evaluate(tool => JSON.parse(localStorage.getItem('rk:prep:draft'))[tool].state.preparationBrief.id,tool),brief.id);
