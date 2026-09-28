@@ -2807,6 +2807,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         wrap(panel.querySelector('[data-act="ats-mode"]').closest('.cl__len'),'Check for');
         wrap(panel.querySelector('.cl__company'),'Company / role');
         wrap(panel.querySelector('.cl__jd'),'Job description');
+        footer.prepend(panel.querySelector('[data-act="resume-studio"]'));
       }
       wrap(panel.querySelector('.cl__row'),'Job posting URL');
       const launch = prepLaunchDialog(modal,{panels:panel.querySelector('.ats__cols'),newPanel:main,history:panel.querySelector('aside.prep-hist'),setup:main,header,footer,primary,advanced,close,workspaceControls:[originalClose]});

@@ -2397,6 +2397,7 @@ body.adm-sorting, body.adm-sorting * { cursor: grabbing !important; -webkit-user
 .prep-launch .ats__levels { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .prep-launch .pass__actions { display: flex; flex-shrink: 0; min-height: 0; margin: 0; padding: 12px 24px; border-top: 1px solid var(--line); }
 .prep-launch [data-prep-launch-options] { margin-right: auto; min-width: 11rem; }
+.prep-launch [data-act="resume-studio"] { margin-right: auto; }
 .prep-launch [data-prep-launch-primary] { gap: .4rem; }
 .prep-launch [data-prep-launch-primary] svg { width: 1lh; height: 1lh; }
 .prep-launch textarea { display: block; margin-bottom: 0; }

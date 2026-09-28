@@ -709,7 +709,7 @@ describe('Resume browser acceptance', () => {
       await legacy.put('prep/ats/' + review.id + '.json', JSON.stringify(review));
       await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
       await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
-      await page.locator('.prep-dialog [data-prep-close]').click();
+      await page.locator('.prep-dialog').getByRole('button', { name: 'Close', exact: true }).click();
       await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
       await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
       await page.locator('[data-atsv-continue]').click();

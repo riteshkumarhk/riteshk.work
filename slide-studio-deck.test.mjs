@@ -2972,7 +2972,7 @@ test("Prepare Interview long sets use one reading scroller with persistent navig
       const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
       await page.locator('.adm__tab[data-tab="ai"]').click();
       await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
-      if (width <= 800) await page.locator('[data-iprep-saved]').click();
+      assert.equal(await page.locator('[data-prep-launch-view="existing"]').getAttribute('aria-pressed'),'true');
       await page.locator('[data-iprep-hist-open="reading-set"]').click();
       const scroller = page.locator(width > 800 ? '.prep-workspace .ats__main' : '.prep-workspace .iprep__cols');
       const list = page.locator('.iprep__list');
