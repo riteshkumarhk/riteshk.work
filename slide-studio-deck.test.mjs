@@ -2354,7 +2354,7 @@ async function installPrepareReplies(page) {
         else if (system.includes('panel debriefing')) text = JSON.stringify(window.whiteboardScore || {scores:[{dim:'Problem framing',score:3,note:'A stated user need',evidence:['turn-2']}],overall:'SAVED_MOCK_SCORE',topfix:'Name the success measure',improvements:[{action:'Name a measurable outcome',evidence:['turn-2'],retry:'Explain the success measure and its limitation.'},{action:'Compare an alternative',evidence:['turn-2'],retry:'Compare two possible approaches and choose one.'}]});
         else if (system.includes('You ARE the interviewer')) {
           if (window.deferWhiteboardReply) { await new Promise(resolve => { window.releaseWhiteboardReply = resolve; }); window.whiteboardReplyReturned = true; }
-          text = system.includes('"readability"') ? JSON.stringify({reply:'The board is unreadable. Please zoom in or describe it.',readability:'unreadable'}) : 'Which user and outcome will you focus on?';
+          text = JSON.stringify({reply:system.includes('"readability"') ? 'The board is unreadable. Please zoom in or describe it.' : 'Which user and outcome will you focus on?',readability:'unreadable',action:'respond',roleAction:'keep',roleId:null,origin:null,assisted:false,memory:[],...window.whiteboardReply});
         }
         else if (system.includes('COMPLETE, personalised cover letter')) text = 'Dear Hiring Team,\n\nMy work connects user evidence with clear product decisions. I would bring that approach to your design team.\n\nThank you for considering my application.\n\nSample candidate';
         else if (system.includes('interview practice coach')) {
@@ -3709,6 +3709,239 @@ test("Prepare Whiteboard preserves sessions while stopping timers and late captu
   } finally { await browser.close(); }
 });
 
+async function whiteboardReply(page, message, reply = {}, chance = 0.1) {
+  const count = await page.locator('.wb__turn--int').count();
+  if (reply.origin === 'surprise') {
+    const turnId=await page.evaluate(()=> 'turn-' + (JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].turns.length + 1));
+    reply={opportunity:{stage:reply.roleId==='pm'?'framing':reply.roleId==='leadership'?'strategy':'design',turnId,quote:message,reason:'A new topic makes this stakeholder perspective useful.'},fallbackReply:'Let us continue the current discussion.',...reply};
+    await page.evaluate(chance=>{window.wbOriginalRandom=Math.random;Math.random=()=>chance;},chance);
+  }
+  try {
+    await page.evaluate(reply => { window.whiteboardReply = reply; },reply);
+    await page.locator('.wb__msg').fill(message);
+    await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(count => document.querySelectorAll('.wb__turn--int').length === count + 1 && document.querySelector('[data-wb-send]').textContent === 'Send',count);
+  } finally {
+    await page.evaluate(() => { window.whiteboardReply = {}; if(window.wbOriginalRandom){Math.random=window.wbOriginalRandom;delete window.wbOriginalRandom;} });
+  }
+}
+
+test('Prepare Whiteboard conversational intent controls timing and keeps grounded memory through recovery', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.clock.install(); await installPrepareReplies(page); await openIntegratedFixture(page);
+    const original = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__own').fill('Help customers track a delayed refund.'); await page.locator('[data-wb-start]').click();
+    assert.equal(await page.locator('.wb__session-tools,.wb__memory,[data-wb-think],[data-wb-recap]').count(),0);
+    await page.locator('[data-wb-ready]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    await whiteboardReply(page,'I assume a first-time customer.',{reply:'Understood as an assumption, not a confirmed fact.',memory:[{kind:'assumption',text:'First-time customer',turnId:'turn-2',quote:'I assume a first-time customer.',status:'open',replaces:null}]});
+    await whiteboardReply(page,'Actually, returning customers.',{reply:'We will use your revised assumption.',memory:[{kind:'assumption',text:'Returning customers',turnId:'turn-4',quote:'Actually, returning customers.',status:'open',replaces:'memory-1'}]});
+    await whiteboardReply(page,'Let me sit with this for a bit.',{reply:'Take your time. I will stay quiet.',action:'think'});
+    const beforeThink = await page.locator('[data-wb-timer-t]').textContent(), turns = await page.locator('.wb__turn--int').count();
+    await page.clock.fastForward(65000);
+    assert.equal(await page.locator('.wb__turn--int').count(),turns);
+    assert.notEqual(await page.locator('[data-wb-timer-t]').textContent(),beforeThink);
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Thinking time/);
+    await whiteboardReply(page,'Pause the session clock please.',{reply:'The session is paused.',action:'pause'});
+    assert.equal(await page.locator('[data-wb-phase]').textContent(),'paused');
+    const paused = await page.locator('[data-wb-timer-t]').textContent();
+    await page.clock.fastForward(45000); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),paused);
+    await page.locator('[data-wb-ready]').click();
+    await whiteboardReply(page,'I would like to pull my thoughts together.',{reply:'Go ahead; I will listen to your summary.',action:'recap'});
+    assert.equal(await page.locator('[data-wb-phase]').textContent(),'recap'); assert.equal(await page.locator('.wb__scorecard').count(),0);
+    await whiteboardReply(page,'Actually, let us explore an alternative first.',{reply:'Go ahead with the alternative.',action:'resume'});
+    assert.equal(await page.locator('[data-wb-phase]').textContent(),'working');
+    await page.evaluate(()=>{window.whiteboardReply={action:'finish'};});
+    await page.locator('.wb__msg').fill('A hypothetical ending, not a request to finish.'); await page.locator('[data-wb-send]').click();
+    await page.locator('.pass__err').filter({hasText:/conversational reply was invalid/}).waitFor();
+    assert.equal(await page.locator('.wb__scorecard').count(),0);
+    const candidateCount=await page.locator('.wb__turn--you').count();
+    await page.evaluate(()=>{window.whiteboardReply={};}); await page.locator('[data-wb-reply-retry]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-wb-reply-retry]').hidden&&!document.querySelector('[data-wb-send]').disabled);
+    assert.equal(await page.locator('.wb__turn--you').count(),candidateCount); assert.equal(await page.locator('.pass__err').textContent(),'');
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(saved.conversation.memory.length,1); assert.equal(saved.conversation.memory[0].text,'Returning customers');
+    await page.locator('[data-wb-pause]').click();
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-hist-open="'+saved.id+'"]').click();
+    assert.equal(await page.locator('[data-wb-phase]').textContent(),'paused');
+    assert.equal(await page.locator('.wb__turn--you').count(),candidateCount);
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),original);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test('Prepare Whiteboard contextual role-play has timed notices persistent exits and late reply protection', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.clock.install(); await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="mock"]').click();
+    assert.equal(await page.locator('[data-wb-surprises]').isVisible(),false);
+    await page.locator('[data-wb-deeper]').click();
+    assert.equal(await page.locator('[data-wb-surprises]').isChecked(),true);
+    assert.equal(await page.locator('[data-wb-surprises]').evaluate(el=>!!el.closest('#wb-advanced-settings')),true);
+    await page.locator('.wb__own').fill('Help customers track a delayed refund.'); await page.locator('[data-wb-start]').click();
+    assert.equal(await page.locator('.wb__stage [data-wb-surprises]').count(),0);
+    assert.equal(await page.locator('[data-wb-role][aria-pressed="true"]').count(),0);
+    assert.equal(await page.locator('[data-wb-role="leadership"]').count(),1);
+    await page.locator('[data-wb-ready]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    await whiteboardReply(page,'I would show the expected refund date.');
+    await whiteboardReply(page,'The date depends on the payment provider.',{reply:'I will play the engineer. In this simulation, providers offer date ranges; what would you ask me?',roleAction:'start',roleId:'engineer',origin:'surprise'});
+    const notice=page.locator('.wb__role-notice');
+    assert.equal(await notice.isVisible(),true);
+    assert.match(await page.locator('.wb__turn--int .wb__who').last().textContent(),/Engineer/);
+    await page.mouse.move(1,1); await page.locator('.wb__msg').focus();
+    await page.clock.fastForward(19000); assert.equal(await notice.isVisible(),true);
+    await notice.hover(); await page.clock.fastForward(30000); assert.equal(await notice.isVisible(),true);
+    await page.mouse.move(1,1); await page.locator('[data-wb-role-continue]').focus();
+    await page.clock.fastForward(30000); assert.equal(await notice.isVisible(),true);
+    await page.locator('.wb__msg').focus(); await page.clock.fastForward(1000);
+    assert.equal(await notice.isVisible(),false); assert.equal(await page.locator('[data-wb-role-end]').isVisible(),true);
+    await whiteboardReply(page,'Which provider constraints should I understand?',{reply:'For this simulation, provider timing is variable. What would you show while the date is uncertain?'});
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Engineer/);
+    await whiteboardReply(page,'Let us go back to the interviewer.',{reply:'Back to the interview. Keep the provider uncertainty as a simulation assumption.',roleAction:'end'});
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    const surprise={reply:'I will play the PM for a simulated customer discussion.',roleAction:'start',roleId:'pm',origin:'surprise'};
+    await whiteboardReply(page,'I would validate the uncertainty with customers.',surprise);
+    await page.locator('[data-wb-role-skip]').click();
+    assert.equal(await notice.isVisible(),false); assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    await whiteboardReply(page,'Let us discuss what we might learn.',surprise);
+    await page.locator('[data-wb-role-continue]').click();
+    assert.equal(await notice.isVisible(),false); assert.equal(await page.locator('[data-wb-role-end]').isVisible(),true);
+    const beforeExit=await page.evaluate(()=>window.preparationCalls.length);
+    await page.locator('[data-wb-role-end]').click();
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),beforeExit);
+    await whiteboardReply(page,'Could we practise this with a client?',{reply:'I will play your client. What should our customers understand about the refund?',roleAction:'start',roleId:'client',origin:'requested'});
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Client/);
+    await page.locator('[data-wb-role-end]').click();
+    await page.locator('[data-wb-role="pm"]').click();
+    await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/PM/);
+    await page.evaluate(()=>{window.deferWhiteboardReply=true;});
+    await page.locator('.wb__msg').fill('Which outcome matters most?'); await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(()=>typeof window.releaseWhiteboardReply==='function');
+    const before=await page.locator('.wb__turn--int').count();
+    await page.locator('[data-wb-role-end]').click();
+    await page.evaluate(()=>{window.deferWhiteboardReply=false;window.releaseWhiteboardReply();});
+    await page.waitForFunction(()=>window.whiteboardReplyReturned&&window.__rkAiSession.state().active===0);
+    assert.equal(await page.locator('.wb__turn--int').count(),before);
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    await page.locator('[data-wb-role="accessibility"]').click();
+    await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    for (const width of [1024,1440,1920]) {
+      await page.setViewportSize({width,height:1000});
+      await page.locator('[data-wb-role-end]').scrollIntoViewIfNeeded();
+      assert.ok(await page.locator('[data-wb-role-end]').evaluate(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth;}));
+      assert.equal(await page.locator('.wb__roles').evaluate(el=>el.scrollWidth>el.clientWidth),false);
+      await page.screenshot({path:join(tmpdir(),'rk-whiteboard-conversation-'+width+'.png')});
+    }
+    await page.locator('[data-wb-pause]').click();
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(saved.conversation.role.id,'accessibility'); assert.equal(saved.assisted,false);
+    assert.equal(saved.conversation.surprises,true);
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-hist-open="'+saved.id+'"]').click();
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),true);
+    const requests=await page.evaluate(()=>window.preparationCalls.length);
+    await page.locator('[data-wb-role-end]').focus(); await page.keyboard.press('Enter');
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),requests);
+    await page.locator('[data-wb-rail-back]').click();
+    assert.equal(await page.locator('[data-wb-surprises]').isChecked(),true);
+    await page.locator('[data-wb-deeper]').click();
+    await page.locator('[data-wb-surprises]').uncheck(); await page.locator('[data-wb-start]').click();
+    await page.locator('.wb__stage').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].conversation.surprises),false);
+    assert.equal(await page.evaluate(id=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb.find(entry=>entry.id===id).conversation.surprises,saved.id),true);
+    await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    await page.locator('[data-wb-role="leadership"]').click(); await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Leadership/);
+    await page.locator('[data-wb-newprompt]').click(); await page.waitForFunction(()=>document.querySelector('[data-wb-phase]').textContent==='Briefing / clock stopped');
+    const fresh=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(fresh.conversation.role,null); assert.deepEqual(fresh.conversation.memory,[]); assert.equal(fresh.conversation.surprises,false);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test('Prepare Whiteboard evolving opportunities decline safely and transition PM to engineering and leadership', {timeout:45000}, async () => {
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-lvl="exec"]').click();
+    assert.equal(await page.locator('[data-wb-surprises]').isVisible(),false);
+    await page.locator('[data-wb-deeper]').click();
+    assert.equal(await page.locator('[data-wb-surprises]').isChecked(),true);
+    await page.locator('.wb__own').fill('Design a refund experience.'); await page.locator('[data-wb-start]').click();
+    await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    await whiteboardReply(page,'I want to clarify which customer problem matters.');
+    await whiteboardReply(page,'Let us consider customer priorities.',{reply:'I will play the PM. Which outcome matters?',roleAction:'start',roleId:'pm',origin:'surprise'},0.5);
+    assert.equal(await page.locator('[data-wb-role-end]').isVisible(),false);
+    assert.equal(await page.locator('.wb__turn--int .wb__bubble').last().textContent(),'Let us continue the current discussion.');
+    assert.equal(await page.locator('.wb__role-notice').isVisible(),false);
+    await whiteboardReply(page,'Our priority is reassuring customers about timing.',{reply:'I will play the PM to explore that priority.',roleAction:'start',roleId:'pm',origin:'surprise'});
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/PM/);
+    await page.locator('[data-wb-role-continue]').click();
+    await whiteboardReply(page,'My proposed flow needs a payment status integration.',{reply:'Switching from PM to engineer: let us examine that integration.',roleAction:'start',roleId:'engineer',origin:'surprise'});
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Engineer/);
+    assert.equal(await page.locator('.wb__role-notice').isVisible(),true);
+    await page.locator('[data-wb-role-continue]').click();
+    await whiteboardReply(page,'Now consider funding and cross-team ownership.',{reply:'I will take the leadership perspective on that investment.',roleAction:'start',roleId:'leadership',origin:'surprise'});
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Leadership/);
+    const request=await page.evaluate(()=>window.preparationCalls.at(-1));
+    assert.match(request.user,/automaticRoles.*leadership/);
+    await page.locator('[data-wb-pause]').click();
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.equal(saved.conversation.opportunity.roleId,'leadership');
+    assert.equal(saved.conversation.opportunity.accepted,true);
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-hist-open="'+saved.id+'"]').click();
+    assert.match(await page.locator('[data-wb-role-label]').textContent(),/Leadership/);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].conversation.opportunity),saved.conversation.opportunity);
+    await page.locator('[data-wb-role-end]').click();
+    assert.equal(await page.locator('[data-wb-role][aria-pressed="true"]').count(),0);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
+test('Prepare Whiteboard Coach conversation preserves the original plan draft and feedback', {timeout:45000}, async () => {
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="coach"]').click(); await page.locator('[data-wb-deeper]').click();
+    await page.locator('[data-wb-surprises]').check();
+    await page.locator('.wb__own').fill('A coach-led refund exercise.'); await page.locator('[data-wb-start]').click();
+    await page.locator('.wb__draft').fill('I will first clarify the customer need and success measure.');
+    await page.locator('[data-wb-critique]').click(); await page.getByText('SAVED_COACHING_FEEDBACK',{exact:true}).waitFor();
+    const previous=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    await page.locator('[data-wb-conversation]').click();
+    assert.equal(await page.locator('.wb__msg').inputValue(),'');
+    await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    assert.match(await page.evaluate(()=>window.preparationCalls.at(-1).system),/COACH: teach and scaffold/);
+    await whiteboardReply(page,'Can I have a small hint?',{reply:'Try choosing one customer moment first.',assisted:true});
+    await page.locator('[data-wb-pause]').click();
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
+    assert.deepEqual(saved.plan,previous.plan); assert.deepEqual(saved.critique,previous.critique); assert.equal(saved.coachDraft,previous.draft);
+    assert.equal(saved.assisted,true); assert.equal(saved.conversation.started,true); assert.equal(saved.conversation.surprises,true);
+    await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-hist-open="'+saved.id+'"]').click();
+    await page.locator('.wb__coaching-notes summary').click();
+    assert.equal(await page.locator('.wb__saved-approach').textContent(),previous.draft);
+    await page.getByText('SAVED_COACHING_FEEDBACK',{exact:true}).waitFor(); assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
 test('Prepare Whiteboard clock ownership interrupted turns evidence and independent retries', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors = [];
@@ -3726,30 +3959,31 @@ test('Prepare Whiteboard clock ownership interrupted turns evidence and independ
     assert.equal(await page.locator('.wb__prompt .wb__watch').count(),0);
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 1 && !document.querySelector('[data-wb-send]').disabled);
     await page.locator('[data-wb-pause]').click();
-    const sessionId = await page.evaluate(() => { const history = JSON.parse(localStorage.getItem('rk:prep:hist')); history.wb[0].timer = 305; localStorage.setItem('rk:prep:hist',JSON.stringify(history)); return history.wb[0].id; });
+    const sessionId = await page.evaluate(() => { const history = JSON.parse(localStorage.getItem('rk:prep:hist')); history.wb[0].timer = 305; history.wb[0].notes={assumptions:'One first-time customer',questions:'Refund method unknown'}; history.wb[0].conversation.thinking=true; localStorage.setItem('rk:prep:hist',JSON.stringify(history)); return history.wb[0].id; });
     await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-hist-open="' + sessionId + '"]').click(); await page.locator('[data-wb-ready]').click();
-    await page.locator('.wb__memory summary').click(); await page.locator('[data-wb-notes="assumptions"]').fill('One first-time customer'); await page.locator('[data-wb-notes="questions"]').fill('Refund method unknown');
-    await page.locator('.wb__session-tools summary').click();
-    await page.locator('.wb__msg').fill('Keep this unsent response'); await page.locator('[data-wb-think]').click();
+    await page.locator('.wb__legacy-notes summary').click();
+    assert.match(await page.locator('.wb__legacy-notes').textContent(),/One first-time customer/);
+    await page.locator('.wb__msg').fill('Keep this unsent response');
     await page.clock.fastForward(6000); assert.equal(await page.locator('.wb__turn--int').count(),1);
     assert.equal(await page.locator('.wb__msg').inputValue(),'Keep this unsent response');
-    await page.locator('[data-wb-think]').click(); await page.clock.runFor(1100); assert.equal(await page.locator('.wb__turn--int').count(),2);
+    await whiteboardReply(page,'I am ready to continue.'); await page.clock.runFor(1100); assert.equal(await page.locator('.wb__turn--int').count(),3);
+    await page.locator('.wb__msg').fill('Keep this unsent response');
     await page.locator('[data-wb-ready]').click(); const paused = await page.locator('[data-wb-timer-t]').textContent();
     await page.clock.fastForward(60000); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),paused);
     await page.locator('[data-wb-ready]').click(); await page.evaluate(() => { window.deferWhiteboardReply = true; });
     await page.locator('[data-wb-send]').click(); await page.waitForFunction(() => typeof window.releaseWhiteboardReply === 'function');
-    assert.equal(await page.locator('.wb__turn--you').count(),1);
+    assert.equal(await page.locator('.wb__turn--you').count(),2);
     await page.locator('[data-wb-interrupt]').click(); await page.evaluate(() => { window.deferWhiteboardReply = false; window.releaseWhiteboardReply(); });
     await page.waitForFunction(() => window.whiteboardReplyReturned && window.__rkAiSession.state().active === 0);
-    assert.equal(await page.locator('.wb__turn--int').count(),2);
+    assert.equal(await page.locator('.wb__turn--int').count(),3);
     await page.locator('[data-wb-reply-retry]').click();
-    await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 3 && !document.querySelector('[data-wb-send]').disabled);
-    assert.equal(await page.locator('.wb__turn--you').count(),1);
-    await page.locator('.wb__msg').fill('I will measure whether customers understand the refund date.'); await page.locator('[data-wb-send]').click();
     await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 4 && !document.querySelector('[data-wb-send]').disabled);
+    assert.equal(await page.locator('.wb__turn--you').count(),2);
+    await page.locator('.wb__msg').fill('I will measure whether customers understand the refund date.'); await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 5 && !document.querySelector('[data-wb-send]').disabled);
     const request = await page.evaluate(() => window.preparationCalls.at(-1));
     assert.match(request.user,/remainingSeconds|first-time customer|Refund method unknown/); assert.match(request.user,/Head \/ Director/); assert.match(request.system,/Not every answer needs a challenge/);
-    await page.locator('[data-wb-recap]').click(); await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-ready]').click(); assert.equal(await page.locator('[data-wb-phase]').textContent(),'recap');
+    await whiteboardReply(page,'Let me summarise.',{reply:'Go ahead with your summary.',action:'recap'}); await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-ready]').click(); assert.equal(await page.locator('[data-wb-phase]').textContent(),'recap');
     await page.evaluate(() => { window.whiteboardScore = {scores:[{dim:'Framing',score:4,note:'Candidate named an outcome',evidence:['turn-5','invented']},{dim:'Flow',score:1,note:'No flow observed',evidence:['invented']}],overall:'Evidence review',topfix:'Compare alternatives',improvements:[{action:'State a decision',evidence:['turn-5'],retry:'Compare two approaches in five minutes.'},{action:'Name validation',evidence:['turn-5'],retry:'Choose a validation method.'}]}; });
     await page.locator('[data-wb-score]').click(); await page.getByText('Evidence review',{exact:true}).waitFor();
     const original = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]);
@@ -3816,7 +4050,7 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     assert.ok(Math.abs((await page.locator('[data-wb-deeper]').boundingBox()).width-optionsWidth)<1,'The options toggle width is stable when its label changes');
     assert.equal(await page.locator('#wb-advanced-settings').isVisible(),true);
     const hintGaps = await page.locator('.wb__setup .af__hint').evaluateAll(hints=>hints.map(hint=>hint.getBoundingClientRect().top-hint.previousElementSibling.getBoundingClientRect().bottom));
-    assert.equal(hintGaps.length,4);
+    assert.equal(hintGaps.length,5);
     assert.ok(hintGaps.every(gap=>Math.abs(gap-hintGaps[0])<0.25),'All setup hints use the same control-to-help spacing, including Advanced');
     await page.locator('.wb__brief').fill('Refund onboarding');
     await page.locator('.wb__own').fill('Design a clear refund status.');
@@ -4258,13 +4492,13 @@ test('Prepare Whiteboard vision is explicit change-aware bounded and quiet durin
     assert.match(await page.locator('[data-wb-latest]').textContent(),/unreadable/); assert.match(await page.locator('[data-wb-watch-bar]').textContent(),/Last analysis: unreadable/);
     await page.locator('[data-wb-glance]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),1);
     const changeBoard=async color=>{await page.evaluate(color=>{const drawing=window.visionCanvas.getContext('2d');drawing.fillStyle=color;drawing.fillRect(0,0,640,400);window.visionStream.getVideoTracks()[0].requestFrame?.();},color);await page.locator('.wb__feed-vid').evaluate(video=>new Promise(resolve=>video.requestVideoFrameCallback(resolve)));};
-    await page.locator('.wb__session-tools summary').click();
-    await page.locator('[data-wb-think]').click(); await changeBoard('#000'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),1);
-    await page.locator('[data-wb-think]').click(); await page.clock.fastForward(6000); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===2&&!document.querySelector('[data-wb-send]').disabled);
-    for (let index=0;index<5;index++) { await changeBoard(index%2?'#000':'#fff'); await page.clock.fastForward(65000); await page.waitForFunction(count=>document.querySelectorAll('.wb__turn--int').length===count&&!document.querySelector('[data-wb-send]').disabled,index+3); }
-    await changeBoard('#000'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),7);
+    await whiteboardReply(page,'Please give me some quiet thinking time.',{reply:'Take your time.',action:'think'});
+    await changeBoard('#000'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),2);
+    await whiteboardReply(page,'I am ready to discuss this board.');
+    for (let index=0;index<6;index++) { await changeBoard(index%2?'#000':'#fff'); await page.clock.fastForward(65000); await page.waitForFunction(count=>document.querySelectorAll('.wb__turn--int').length===count&&!document.querySelector('[data-wb-send]').disabled,index+4); }
+    await changeBoard('#fff'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),9);
     const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]); assert.equal(saved.autoLooks,6); assert.ok(saved.observations.every(observation=>observation.status==='unreadable')); assert.ok(saved.observations.every(observation=>!observation.b64&&!observation.image));
-    await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-glance]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),7);
+    await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-glance]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),9);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
 });

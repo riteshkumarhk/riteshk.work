@@ -174,3 +174,70 @@ real-device dictation/capture and authenticated remote recovery remain unverifie
 The shared browser connection prevented a visible owner walkthrough; isolated
 Playwright checks do not substitute for that acceptance. No paid AI calls or
 owner content publication were performed for this checkpoint.
+
+### Conversational Whiteboard
+
+The fullscreen mock session now uses a validated structured AI reply to apply
+conversational thinking time, clock pause, recap and renewed exploration.
+Thinking time suppresses automatic interruptions without stopping the clock;
+recap does not finish or score. The practical Pause/Resume and explicit review
+controls remain. Typed and completed speech input use the same turn handler.
+The old Session tools and editable assumptions/questions forms are removed.
+Legacy notes remain readable and available to the interviewer. Source-linked
+memory tracks assumptions, questions, decisions and clarifications separately;
+corrections require existing evidence. The transcript is retained, and the
+derived memory is bounded to 32 entries.
+
+Practise with selects a stakeholder within the current exercise, including
+Leadership; no role is selected in a new session. Allow surprise role-play is
+checked by default inside the launch dialog's collapsed Advanced options,
+not in the fullscreen workspace. New/Existing switching retains the setup choice;
+opening a saved session restores that session's preference. Coach conversation,
+new prompts and focused retries carry the chosen preference, while clearing old
+role/memory state for a new exercise. Choosing a role manually remains available
+whether surprises are enabled or not.
+
+The AI may propose a meaningful opportunity as the conversation develops; the
+host accepts each validated proposal with a fresh 50% chance, not one lottery for
+the whole session or a roll on every message. PM suits framing/priorities and
+engineering suits maturing design/feasibility. Head/Director and VP/Exec targets
+also allow automatic Leadership for strategy and organisational trade-offs; all
+other roles remain manual. Each proposal cites the latest candidate turn and
+includes an ordinary fallback reply, so a decline continues the current speaker
+without another AI call. The latest decision is saved and reused for the same
+candidate turn rather than rerolled on retry.
+
+An active surprise role can transition to another relevant automatic role, such
+as PM to engineering, with a fresh announcement and notice. A manually selected
+role cannot be automatically replaced. Surprise role-play cannot begin during
+thinking, recap, pause or automatic observations, or restart the same active role.
+The AI is instructed to wait for meaningful developments after a decline or skip;
+host evidence checks do not prove semantic relevance. Its inline notice lasts
+20 seconds of unpaused, visible interaction time, excluding hover and keyboard
+focus. Dismissal does not grant consent or end the role. Continue dismisses the
+notice; Skip and the persistent End role-play action return to the interviewer.
+End remains available while a reply is pending and in the floating companion;
+it cancels pending output and narration. Natural requests are interpreted by the
+configured AI, not a phrase-matching command list.
+
+Coach retains its game plan, draft and feedback workflow. Practise in conversation
+opens the shared session with coaching behaviour; the original plan, approach and
+feedback remain in Coaching notes and saved history. Mock responses preserve
+candidate independence. Role-labelled turns, opt-in, derived memory and coaching
+source data survive session recovery; recovered clocks remain paused. Independent
+five-minute retries start without the previous role or derived memory.
+
+Apart from that setup preference, launch-dialog behaviour, capture permissions,
+recording consent, source selection and automatic-observation budgets are
+unchanged. Malformed conversational replies
+produce an explicit retryable error without applying partial state changes.
+This release has simulated provider coverage only: this proves lifecycle and
+state handling, not natural-language interpretation or real coaching quality.
+Real-provider, physical speech/capture and owner visual acceptance remain separate.
+
+```powershell
+npm run build
+node --test whiteboard-conversation.test.mjs ui-corners.test.mjs
+# Requires the existing local preview server (default port 5510):
+node --test --test-name-pattern="Prepare Whiteboard|Prepare shared brief connects" slide-studio-deck.test.mjs
+```
