@@ -2380,7 +2380,10 @@ for (const width of [1440,390,320]) test('Prepare Storyteller retains angle draf
     const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
     await page.setViewportSize({width,height:width === 320 ? 568 : 900});
-    await page.locator('[data-story-tone="leader"]').click(); await page.locator('[data-story-audience]').selectOption('partners');
+    if (width === 1440) { const box = await page.locator('.story-modal > .pass__box').boundingBox(); assert.ok(box.width <= 880 && box.x > 0 && box.y > 0,JSON.stringify(box)); }
+    await page.locator('[data-story-tone="leader"]').click();
+    await page.getByRole('button',{name:'Advanced options',exact:true}).click();
+    await page.locator('[data-story-audience]').selectOption('partners');
     await page.screenshot({path:join(tmpdir(),'rk-story-setup-'+width+'.png')});
     await page.locator('[data-story-run]').click(); await page.locator('[data-story-tell="0"]').waitFor();
     assert.equal(await page.locator('[data-story-tell]').count(),4);
@@ -2412,15 +2415,16 @@ for (const width of [1440,390,320]) test('Prepare Storyteller retains angle draf
     assert.equal(saved.payload.tone,'leader'); assert.equal(saved.payload.audience,'partners'); assert.equal(Object.keys(saved.payload.drafts).length,2);
     assert.equal(saved.payload.drafts[0].script.opener,'MY_EDITED_OPENING'); assert.match(saved.payload.drafts[0].questions[0].answer,/MY_EDITED_ANSWER/);
     await page.locator('.story-modal [data-cancel]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
-    if (width < 900) await page.locator('.story__history > summary').click();
+    assert.equal(await page.locator('[data-prep-launch-view="existing"]').getAttribute('aria-pressed'),'true');
     await page.locator('[data-story-hist-open="'+saved.id+'"]').press('Enter'); assert.match(await page.locator('.story__open').innerText(),/MY_EDITED_OPENING/);
+    if (!await page.locator('[data-story-hist-del="'+saved.id+'"]').isVisible()) await page.locator('.story__history > summary').click();
     page.once('dialog',dialog=>dialog.accept()); await page.locator('[data-story-hist-del="'+saved.id+'"]').click();
     assert.equal(await page.locator('[data-story-hist-open="'+saved.id+'"]').count(),0);
     await page.reload(); await page.waitForFunction(() => typeof window.__rkDevStudio === 'function' && !!window.RK?.data);
     await page.evaluate(() => window.__rkDevStudio()); await page.waitForFunction(() => !!window.__RKStudio?.getDraft?.());
     await page.evaluate(() => document.querySelectorAll('.pass--lock').forEach(dialog=>dialog.remove()));
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-tool="story"][data-act="prep-open"]').click();
-    if (width < 900) await page.locator('.story__history > summary').click();
+    assert.equal(await page.locator('[data-prep-launch-view="existing"]').getAttribute('aria-pressed'),'true');
     await page.locator('[data-story-hist] details > summary').click(); await page.locator('[data-story-recover="'+saved.id+'"]').click();
     const recovered = await page.evaluate(id => JSON.parse(localStorage.getItem('rk:prep:hist')).story.find(entry=>entry.id===id),saved.id);
     assert.deepEqual(recovered.payload,saved.payload); assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),original);
@@ -2469,6 +2473,93 @@ async function assertInsetFetchRow(row) {
   });
   assert.deepEqual(layout,{fullWidth:true,inset:true,textReserved:true,ellipsis:true,labelFits:true,quietAction:true,rightAligned:true},'Shared Fetch rows use a quiet in-field action without covering URL text');
 }
+
+test('Prepare launch dialogs retain setup, share desktop geometry and use independent history actions', {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  try {
+    for (const width of [1024,1440,1920]) {
+      const page = await browser.newPage({viewport:{width,height:900},reducedMotion:width === 1440 ? 'no-preference' : 'reduce'}), errors = [];
+      page.on('pageerror',error=>errors.push(error.message));
+      await installPrepareReplies(page); await openIntegratedFixture(page);
+      await page.evaluate(() => {
+        const history = {};
+        for (const tool of ['ats','cl','iprep','story']) history[tool] = [0,1,2].map(index=>({id:tool+'-launch-'+index,tool,kind:tool === 'ats' ? 'review' : tool,at:1,title:'Saved preparation with a long title '+index,meta:{score:72,band:'Good',count:6,snippet:'Saved evidence and role-specific preparation'},payload:{questions:[],themes:[],dur:'5',tone:'staff'}}));
+        localStorage.setItem('rk:prep:hist',JSON.stringify(history));
+      });
+      const original = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      for (const tool of ['ats','cl','iprep','story']) {
+        const launcher = page.locator('[data-act="prep-open"][data-tool="'+tool+'"]'); await launcher.click();
+        const modal = page.locator('.prep-launch'), box = modal.locator('.pass__box');
+        await box.evaluate(async element => { await Promise.all(element.getAnimations().filter(animation=>Number.isFinite(animation.effect.getTiming().iterations)).map(animation=>animation.finished)); });
+        assert.equal(await modal.locator('[data-prep-launch-view="existing"]').getAttribute('aria-pressed'),'true');
+        const existing = await box.boundingBox();
+        assert.ok(existing.width <= 880 && existing.x > 0 && existing.y > 0 && existing.y + existing.height < 900,tool+' '+JSON.stringify(existing));
+        assert.equal(await box.evaluate(element=>getComputedStyle(element).borderRadius),'14px');
+        assert.equal(await modal.getByRole('button',{name:'Close',exact:true}).count(),1);
+        assert.equal(await page.locator('.adm__main').evaluate(element=>element.inert),true);
+        assert.equal(await modal.locator('[data-prep-launch-primary]').isVisible(),false);
+        const cards = modal.locator('[data-prep-launch-existing] .prep-h'); assert.equal(await cards.count(),3);
+        assert.equal(await cards.first().evaluate(element=>getComputedStyle(element).borderRadius),'6px');
+        const bounds = await Promise.all((await cards.all()).map(card=>card.boundingBox()));
+        assert.ok(bounds.every(rect=>Math.abs(rect.y-bounds[0].y)<1),tool+' history uses three columns');
+        assert.equal(await cards.locator('button.prep-h__x').count(),3);
+        assert.equal(await cards.locator('button.prep-h__del').count(),3);
+        await modal.locator('[data-prep-launch-view="new"]').click();
+        assert.deepEqual(await box.boundingBox(),existing,tool+' keeps the same New/Existing frame');
+        if (tool === 'ats') await modal.locator('[data-act="ats-mode"][data-mode="job"]').click();
+        if (tool === 'ats' || tool === 'cl') { await modal.locator('.ats__lvl[data-lvl="senior"]').click(); assert.equal(await modal.locator('.ats__lvl[data-lvl="senior"]').getAttribute('aria-pressed'),'true'); }
+        const field = modal.locator(tool === 'iprep' ? '#iprepJd' : tool === 'story' ? '.story__pick' : '.cl__company');
+        if (tool === 'story') await field.selectOption('1'); else await field.fill('PRESERVED_SETUP_'+tool);
+        const advanced = modal.locator('[data-prep-launch-options]');
+        if (tool === 'ats') assert.equal(await advanced.isVisible(),false);
+        else {
+          await advanced.click();
+          if (tool === 'iprep') await modal.locator('#iprepCount').selectOption('14');
+          else if (tool === 'story') await modal.locator('[data-story-audience]').selectOption('partners');
+          else await modal.locator('[data-act="cl-length"][data-len="short"]').click();
+        }
+        const expanded = await box.boundingBox();
+        await modal.locator('[data-prep-launch-view="existing"]').click();
+        assert.deepEqual(await box.boundingBox(),expanded,tool+' reserves expanded setup height');
+        await modal.locator('[data-prep-launch-view="new"]').click();
+        assert.equal(await field.inputValue(),tool === 'story' ? '1' : 'PRESERVED_SETUP_'+tool);
+        if (tool !== 'ats') {
+          assert.equal(await advanced.getAttribute('aria-expanded'),'true'); await advanced.click();
+          if (tool === 'iprep') assert.equal(await modal.locator('#iprepCount').inputValue(),'14');
+          if (tool === 'story') assert.equal(await modal.locator('[data-story-audience]').inputValue(),'partners');
+          if (tool === 'cl') assert.equal(await modal.locator('[data-act="cl-length"].is-on').getAttribute('data-len'),'short');
+        }
+        for (const control of await modal.locator('[data-prep-launch-header],.pass__actions').all()) {
+          const rect = await control.boundingBox(); assert.ok(rect.y >= 0 && rect.y+rect.height <= 900,tool+' reachable chrome');
+        }
+        assert.equal(await box.evaluate(element=>element.scrollWidth > element.clientWidth),false);
+        await page.screenshot({path:join(tmpdir(),'rk-prepare-launch-'+tool+'-'+width+'.png')});
+        await modal.locator('[data-prep-launch-view="existing"]').click();
+        if (tool !== 'story') {
+          for (let index=0;index<3;index++) await modal.locator('button.prep-h__del').first().press('Enter');
+          assert.equal(await modal.locator('[data-prep-launch-view="existing"]').isVisible(),false);
+          assert.equal(await modal.locator('[data-prep-launch-primary]').isVisible(),true);
+          assert.equal(await modal.evaluate(element=>element.contains(document.activeElement)),true);
+        }
+        await modal.getByRole('button',{name:'Close',exact:true}).click();
+        await page.waitForFunction(tool=>document.activeElement?.dataset.tool===tool,tool);
+        assert.equal(await page.locator('.adm__main').evaluate(element=>element.inert),false);
+      }
+      assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
+      assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),original);
+      assert.deepEqual(errors,[]); await page.close();
+    }
+    const page = await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    await installPrepareReplies(page);
+    await page.addInitScript(()=>localStorage.setItem('rk:prep:draft',JSON.stringify({cl:{letter:'LEGACY_DRAFT_WITHOUT_HISTORY',state:{company:'DraftCo'},level:'staff'}})));
+    await openIntegratedFixture(page); await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="cl"]').click();
+    await page.locator('[data-act="cl-draft-open"]').press('Enter');
+    assert.equal(await page.locator('.cl__letter').innerText(),'LEGACY_DRAFT_WITHOUT_HISTORY');
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
+    await page.close();
+  } finally { await browser.close(); }
+});
 
 for (const width of [1440,390]) test("Prepare shared brief connects tools with an explicit Whiteboard Existing view at " + width + "px", {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",headless:true});
@@ -2585,7 +2676,7 @@ for (const width of [1440,390]) test("Prepare shared brief connects tools with a
       }
       assert.equal(await modal.evaluate(element => element.querySelector('.pass__box').scrollWidth > element.querySelector('.pass__box').clientWidth),false);
       await page.screenshot({path:join(tmpdir(),'rk-prep-connected-'+tool+'-'+width+'.png')});
-      await modal.locator(['ats','cl'].includes(tool) ? '[data-prep-close]' : '[data-cancel]').click();
+      await modal.getByRole('button',{name:tool === 'iprep' ? 'Back to Prepare' : 'Close',exact:true}).click();
       await page.waitForFunction(tool => document.activeElement?.dataset.tool === tool, tool);
     }
     assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())),before);
@@ -2605,11 +2696,12 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     await page.setViewportSize({width,height:1000});
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     await page.locator('#iprepJd').fill('ORIGINAL_PRACTICE_ROLE');
-    const workspace = await page.locator('.prep-workspace .pass__box').boundingBox();
-    assert.deepEqual(workspace, {x:0,y:0,width,height:1000});
-    assert.equal(await page.getByRole('button',{name:'Back to Prepare',exact:true}).isVisible(),true);
+    assert.equal(await page.locator('.iprep-modal').evaluate(element=>element.classList.contains('prep-launch')),true);
+    assert.equal(await page.getByRole('button',{name:'Close',exact:true}).isVisible(),true);
     await page.locator('[data-iprep-run]').click();
     await page.locator('.iprep__q').first().waitFor();
+    assert.deepEqual(await page.locator('.prep-workspace .pass__box').boundingBox(),{x:0,y:0,width,height:1000});
+    assert.equal(await page.getByRole('button',{name:'Back to Prepare',exact:true}).isVisible(),true);
     assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
     await page.locator('[data-iprep-ans="0"]').click();
     await page.locator('.iprep__a strong').waitFor();
@@ -2654,7 +2746,7 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     await page.screenshot({path:join(tmpdir(),'rk-prep-practice-'+width+'.png')});
     await page.locator('.iprep-modal [data-cancel]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
-    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    if (!await page.locator('[data-iprep-hist]').isVisible()) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
     assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).getAttribute('aria-selected'),'true');
     assert.equal(await page.locator('.iprep__a').first().innerHTML(),suggested);
@@ -2675,12 +2767,12 @@ for (const width of [1440,390]) test("Prepare optional Q&A retains responses, gr
     assert.equal(saved.payload.practice.turns[1].attempts.length,0);
     assert.match(saved.payload.practice.turns[1].draft,/unfinished follow-up/);
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
-    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    if (!await page.locator('[data-iprep-hist]').isVisible()) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').click();
     await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
-    if (width <= 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    if (!await page.locator('[data-iprep-hist]').isVisible()) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-del="'+first.id+'"]').click();
-    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('.iprep-modal [data-prep-launch-close]').click();
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.length),0);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
@@ -2694,38 +2786,39 @@ test("Prepare Interview workspace fits responsive screens and keeps VP sets thro
     await installPrepareReplies(page); await openIntegratedFixture(page);
     const before = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
     await page.locator('.adm__tab[data-tab="ai"]').click();
-    for (const width of [1440,800,390,320]) {
+    for (const width of [1440,1024,1920]) {
       await page.setViewportSize({width,height:900});
       const launcher = page.locator('[data-act="prep-open"][data-tool="iprep"]');
       await launcher.click();
-      assert.deepEqual(await page.locator('.prep-workspace .pass__box').boundingBox(),{x:0,y:0,width,height:900});
+      const launchBox = await page.locator('.iprep-modal .pass__box').boundingBox();
+      assert.ok(launchBox.width <= 880 && launchBox.x > 0 && launchBox.y > 0 && launchBox.y + launchBox.height < 900,JSON.stringify(launchBox));
       assert.equal(await page.locator('[data-iprep-lvl]').count(),4);
-      for (const selector of ['.prep-workspace__bar','.iprep__foot','[data-iprep-saved]','[data-cancel]']) {
-        const bounds = await page.locator('.prep-workspace').locator(selector).boundingBox();
+      for (const selector of ['.prep-workspace__bar','.iprep__foot','[data-prep-launch-close]','[data-iprep-run]']) {
+        const bounds = await page.locator('.iprep-modal').locator(selector).boundingBox();
         assert.ok(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= width + 1 && bounds.y + bounds.height <= 901,selector);
       }
-      assert.equal(await page.locator('.prep-workspace').evaluate(root => Array.from(root.querySelectorAll('.pass__box,.ats__main,.iprep__levels,.prep-workspace__bar')).every(element => element.scrollWidth <= element.clientWidth + 1)),true);
+      assert.equal(await page.locator('.iprep-modal').evaluate(root => Array.from(root.querySelectorAll('.pass__box,.ats__main,.iprep__levels,.prep-workspace__bar')).every(element => element.scrollWidth <= element.clientWidth + 1)),true);
+      assert.equal(await page.locator('[data-iprep-saved]').isVisible(),false);
+      assert.equal(await page.locator('[data-prep-launch-view="existing"]').isVisible(),false);
+      assert.equal(await page.locator('#iprepCount').isVisible(),false);
+      await page.getByRole('button',{name:'Advanced options',exact:true}).click();
+      await page.locator('#iprepCount').selectOption('14');
+      await page.getByRole('button',{name:'Hide options',exact:true}).click();
+      assert.equal(await page.locator('#iprepCount').inputValue(),'14');
       await page.screenshot({path:join(tmpdir(),'rk-prep-workspace-setup-'+width+'.png')});
-      await page.getByRole('button',{name:'Saved sets',exact:true}).click();
-      if (width > 800) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
-      assert.equal(await page.locator('[data-iprep-hist]').isVisible(),true);
-      if (width <= 800) {
-        assert.equal(await page.locator('[data-iprep-run]').isVisible(),false);
-        await page.keyboard.press('Escape');
-        assert.equal(await page.locator('[data-iprep-hist]').isVisible(),false);
-        assert.equal(await page.getByRole('button',{name:'Saved sets',exact:true}).evaluate(element=>element===document.activeElement),true);
-      }
-      await page.getByRole('button',{name:'Back to Prepare',exact:true}).click();
+      await page.getByRole('button',{name:'Close',exact:true}).click();
       await page.waitForFunction(() => document.activeElement?.matches('[data-act="prep-open"][data-tool="iprep"]'));
     }
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     await page.locator('[data-iprep-lvl="vp"]').click();
     assert.equal(await page.locator('[data-iprep-lvl][aria-pressed="true"]').getAttribute('data-iprep-lvl'),'vp');
     await page.locator('[data-iprep-proj][value="0"]').check();
+    await page.getByRole('button',{name:'Advanced options',exact:true}).click();
     await page.locator('#iprepCount').selectOption('14');
     await page.locator('#iprepJd').fill('Executive design role: evaluate investment and risk.');
     await page.locator('[data-iprep-run]').click();
     await page.locator('.iprep__q').first().waitFor();
+    assert.deepEqual(await page.locator('.prep-workspace .pass__box').boundingBox(),{x:0,y:0,width:1920,height:900});
     const first = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep[0]);
     assert.equal(first.payload.level,'vp');
     assert.equal(first.meta.level,'VP / Executive');
@@ -2738,7 +2831,7 @@ test("Prepare Interview workspace fits responsive screens and keeps VP sets thro
     await page.locator('[data-iprep-lvl="senior"]').click();
     await page.locator('[data-iprep-run]').click();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('rk:prep:hist')).iprep.length === 2);
-    await page.getByRole('button',{name:'Saved sets',exact:true}).click();
+    if (!await page.locator('[data-iprep-hist]').isVisible()) await page.getByRole('button',{name:'Saved sets',exact:true}).click();
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.getByRole('tab',{name:'Questions',exact:true}).evaluate(element=>element===document.activeElement),true);
@@ -2751,8 +2844,12 @@ test("Prepare Interview workspace fits responsive screens and keeps VP sets thro
     await page.evaluate(() => window.__rkDevStudio());
     await page.locator('.adm__tab[data-tab="ai"]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
-    await page.getByRole('button',{name:'Saved sets',exact:true}).click();
-    await page.screenshot({path:join(tmpdir(),'rk-prep-workspace-history-320.png')});
+    assert.equal(await page.locator('[data-prep-launch-view="existing"]').getAttribute('aria-pressed'),'true');
+    const savedBox = await page.locator('.iprep-modal .pass__box').boundingBox();
+    await page.locator('[data-prep-launch-view="new"]').click();
+    assert.deepEqual(await page.locator('.iprep-modal .pass__box').boundingBox(),savedBox);
+    await page.locator('[data-prep-launch-view="existing"]').click();
+    await page.screenshot({path:join(tmpdir(),'rk-prep-workspace-history-1920.png')});
     await page.locator('[data-iprep-hist-open="'+first.id+'"]').focus();
     await page.keyboard.press('Space');
     await page.getByRole('tab',{name:'Practice Q&A',exact:true}).click();
@@ -2779,8 +2876,9 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
     await page.locator('.adm__tab[data-tab="ai"]').click();
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
     for (const useBrief of [false,true]) {
-      if (useBrief) { await page.locator('[data-iprep-new]').click(); await page.getByRole('button',{name:'Use brief',exact:true}).click(); }
-      else await page.locator('[data-iprep-proj][value="0"]').check();
+      if (useBrief) { await page.locator('[data-iprep-new]').click(); await page.locator('[data-prep-launch-view="existing"]').click(); await page.getByRole('button',{name:'Use brief',exact:true}).click(); }
+      else { await page.locator('[data-prep-launch-view="new"]').click(); await page.locator('[data-iprep-proj][value="0"]').check(); }
+      if (!await page.locator('#iprepCount').isVisible()) await page.locator('[data-prep-launch-options]').click();
       await page.locator('#iprepCount').selectOption('6');
       await page.locator('[data-iprep-run]').click();
       await page.locator('.iprep__q').first().waitFor();
@@ -2841,18 +2939,19 @@ test("Prepare Interview quality keeps complete evidence and rejects bad sets wit
       assert.equal(await page.evaluate(()=>window.preparationCalls.length),calls+1);
       assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),history);
     }
-    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('.iprep-modal [data-prep-launch-close]').click();
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),before);
     await page.evaluate(()=>{ window.__rkDevEdit('work.0.study.blocks',[{type:'text',body:'Oversized evidence. '.repeat(7000)}]); delete window.interviewReply; });
     const oversizedDraft = await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
     const calls = await page.evaluate(()=>window.preparationCalls.length);
     await page.locator('[data-act="prep-open"][data-tool="iprep"]').click();
+    await page.locator('[data-prep-launch-view="new"]').click();
     await page.locator('[data-iprep-proj][value="0"]').check();
     await page.locator('[data-iprep-run]').click();
     await page.waitForFunction(()=>document.querySelector('.iprep-modal .pass__err')?.textContent.includes('nothing was truncated or sent'));
     assert.equal(await page.evaluate(()=>window.preparationCalls.length),calls);
     assert.equal(await page.evaluate(()=>localStorage.getItem('rk:prep:hist')),history);
-    await page.locator('.iprep-modal [data-cancel]').click();
+    await page.locator('.iprep-modal [data-prep-launch-close]').click();
     assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),oversizedDraft);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
@@ -3104,6 +3203,7 @@ test('Prepare ATS retains the original before AI and preserves history on docume
     },pdf);
     const before = await page.evaluate(()=>localStorage.getItem('rk:prep:hist'));
     await page.locator('.adm__tab[data-tab="ai"]').click();await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-prep-launch-view="new"]').click();
     await page.locator('[data-act="ats-check"]').click();
     await page.waitForFunction(()=>document.querySelector('.ats__err')?.textContent.includes('Synthetic document quota'));
     assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
@@ -3133,7 +3233,7 @@ test('Prepare ATS retains the original before AI and preserves history on docume
       history.ats.push(legacy);localStorage.setItem('rk:prep:hist',JSON.stringify(history));
       window.__rkDevEdit('contact.resume','data:application/pdf;base64,'+btoa(pdf));
     },{entry,pdf});
-    await page.locator('.prep-dialog [data-prep-close]').click();
+    await page.locator('.prep-dialog [data-prep-launch-close]').click();
     await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
     await page.locator('[data-act="ats-hist-open"][data-id="legacy-site-copy"]').click();
     await page.locator('[data-atsv-recover="site"]').click();await page.locator('.atsv__page canvas').waitFor();
@@ -4245,9 +4345,9 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
         assert.equal(await project.isVisible(),true);
         const bounds = await project.boundingBox();
         assert.ok(bounds.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= width);
-        assert.equal(await page.getByRole('button',{name:'Back to case study',exact:true}).isVisible(),true);
+        assert.equal(await page.getByRole('button',{name:'Close',exact:true}).isVisible(),true);
       } else if (action === 'story') assert.match(await page.locator(selector+' .pass__title').innerText(), /Integrated project/);
-      await page.locator(selector+' [data-cancel]').click();
+      await page.locator(selector+' '+(action === 'fbrev' ? '[data-cancel]' : '[data-prep-launch-close]')).click();
       await page.locator(selector).waitFor({state:'detached'});
     }
     assert.equal(requests.length, 0, 'Opening preparation tools must not start generation');

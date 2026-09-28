@@ -2525,12 +2525,93 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     host.querySelector('button').onclick = () => {
       const current = prepareBrief(prepRead(PREP_BRIEF_KEY));
       if (!current.id) return;
-      try { apply(current); selected = clone(current); host.querySelector('span').textContent = 'Using: ' + (prepBriefTarget(current) || 'Application brief'); }
+      try { apply(current); selected = clone(current); host.querySelector('span').textContent = 'Using: ' + (prepBriefTarget(current) || 'Application brief'); modal.__prepLaunch?.show('new'); }
       catch (error) { host.querySelector('span').textContent = error.message; }
     };
     const read = () => selected;
     read.restore = value => { selected = value?.id ? prepareBrief(value) : null; const current = prepareBrief(prepRead(PREP_BRIEF_KEY)); host.querySelector('span').textContent = selected ? 'Using: ' + (prepBriefTarget(selected) || 'Application brief') : current.id ? prepBriefTarget(current) || 'Application brief' : 'No shared application brief'; };
     return read;
+  }
+  function prepLaunchDialog(modal, {panels, newPanel, history, setup, header, footer, primary, advanced = [], close, workspaceControls = [], onWorkspace}) {
+    const existing = document.createElement('div'), switcher = document.createElement('div');
+    const advancedPanel = document.createElement('div'), options = document.createElement('button'), exit = document.createElement('button');
+    const identifier = prepId(), brief = modal.querySelector('.prep-brief-link'), briefHome = document.createElement('span');
+    const covered = [...(root?.querySelectorAll('.adm__main,.adm__workbar,.adm__bar,.adm__statusbar') || [])].map(element => ({element,inert:element.inert}));
+    const controls = workspaceControls.map(element => ({element,hidden:element.hidden}));
+    let active = false, chosen = false, view = 'new';
+    panels.dataset.prepLaunchPanels = ''; newPanel.dataset.prepLaunchNew = ''; newPanel.id ||= identifier + '-new';
+    existing.dataset.prepLaunchExisting = ''; existing.id = identifier + '-existing';
+    history.before(existing); existing.append(history);
+    if (brief) { briefHome.hidden = true; brief.before(briefHome); }
+    switcher.className = 'adm__hm-seg'; switcher.setAttribute('role','group'); switcher.setAttribute('aria-label','Setup view');
+    switcher.innerHTML = '<button type="button" data-prep-launch-view="new" aria-controls="' + newPanel.id + '">New</button><button type="button" data-prep-launch-view="existing" aria-controls="' + existing.id + '">Existing</button>';
+    header.dataset.prepLaunchHeader = ''; header.append(switcher);
+    advancedPanel.id = identifier + '-advanced'; advancedPanel.dataset.prepLaunchAdvanced = ''; advancedPanel.hidden = true;
+    advanced.filter(Boolean).forEach(element => advancedPanel.append(element)); setup.append(advancedPanel);
+    options.type = exit.type = 'button'; options.className = exit.className = 'btn btn--ghost';
+    options.dataset.prepLaunchOptions = ''; options.textContent = 'Advanced options'; options.setAttribute('aria-expanded','false'); options.setAttribute('aria-controls',advancedPanel.id);
+    exit.dataset.prepLaunchClose = ''; exit.textContent = 'Close'; exit.onclick = close;
+    footer.prepend(options); primary.before(exit); primary.dataset.prepLaunchPrimary = '';
+    function available() { return !!prepareBrief(prepRead(PREP_BRIEF_KEY)).id || !!history.querySelector('.prep-h,[data-story-recover]'); }
+    function paintChoices() { newPanel.querySelectorAll('[data-story-tone],[data-story-dur],.ats__lvl').forEach(button=>button.setAttribute('aria-pressed',String(button.classList.contains('is-on')))); }
+    function paint() {
+      if (!active) return;
+      paintChoices();
+      history.querySelectorAll('.prep-h[role="button"]').forEach(card => {
+        const body = card.querySelector('.prep-h__x'); if (!body) return;
+        const open = document.createElement('button'); open.type = 'button'; open.className = body.className; open.innerHTML = body.innerHTML;
+        for (const attribute of [...card.attributes]) if (attribute.name.startsWith('data-')) { open.setAttribute(attribute.name,attribute.value); card.removeAttribute(attribute.name); }
+        body.replaceWith(open); card.removeAttribute('role'); card.removeAttribute('tabindex');
+        const remove = card.querySelector('.prep-h__del');
+        if (remove && remove.tagName !== 'BUTTON') { const button = document.createElement('button'); button.type = 'button'; for (const attribute of remove.attributes) button.setAttribute(attribute.name,attribute.value); button.innerHTML = remove.innerHTML; remove.replaceWith(button); }
+      });
+      const hasExisting = available(), hasBrief = !!prepareBrief(prepRead(PREP_BRIEF_KEY)).id;
+      const fellBack = view === 'existing' && !hasExisting;
+      if (!chosen) view = hasExisting ? 'existing' : 'new';
+      if (!hasExisting) view = 'new';
+      for (const [panel,name] of [[newPanel,'new'],[existing,'existing']]) { panel.inert = view !== name; panel.setAttribute('aria-hidden',String(panel.inert)); }
+      switcher.hidden = !hasExisting;
+      switcher.querySelectorAll('button').forEach(button => { const selected = button.dataset.prepLaunchView === view; button.classList.toggle('is-on',selected); button.setAttribute('aria-pressed',String(selected)); });
+      history.hidden = !history.querySelector('.prep-h,[data-story-recover]');
+      if (brief) brief.hidden = !hasBrief;
+      primary.hidden = view !== 'new'; options.hidden = view !== 'new' || !advancedPanel.children.length;
+      if (fellBack) newPanel.querySelector('button,input,select,textarea')?.focus();
+    }
+    function fit() {
+      if (!active) return;
+      modal.style.top = Math.max(0,root?.querySelector('.adm__bar')?.getBoundingClientRect().bottom || 0) + 'px';
+      modal.style.bottom = Math.max(0,innerHeight - (root?.querySelector('.adm__statusbar')?.getBoundingClientRect().top || innerHeight)) + 'px';
+    }
+    function show(next) {
+      const wasActive = active; active = true;
+      if (next) { chosen = true; view = next; }
+      const focusSetup = view === 'new' && existing.contains(document.activeElement);
+      modal.classList.add('prep-launch'); modal.setAttribute('aria-modal','true');
+      controls.forEach(({element}) => { element.hidden = true; }); exit.hidden = false;
+      if (brief) existing.prepend(brief);
+      covered.forEach(({element}) => { element.inert = true; });
+      paint(); fit();
+      if (!wasActive) panels.scrollTop = 0;
+      if (focusSetup) newPanel.querySelector('button,input,select,textarea')?.focus();
+    }
+    function leave() {
+      active = false; modal.classList.remove('prep-launch'); modal.style.removeProperty('top'); modal.style.removeProperty('bottom');
+      for (const panel of [newPanel,existing]) { panel.inert = false; panel.removeAttribute('aria-hidden'); }
+      if (brief) { briefHome.after(brief); brief.hidden = false; }
+      switcher.hidden = options.hidden = exit.hidden = true;
+      controls.forEach(({element,hidden}) => { element.hidden = hidden; });
+      covered.forEach(({element,inert}) => { element.inert = inert; });
+      onWorkspace?.();
+    }
+    switcher.onclick = event => { const button = event.target.closest('[data-prep-launch-view]'); if (button) { chosen = true; view = button.dataset.prepLaunchView; paint(); } };
+    newPanel.addEventListener('input',() => { if (active) chosen = true; });
+    newPanel.addEventListener('click',() => { if (active) { chosen = true; queueMicrotask(paintChoices); } });
+    options.onclick = () => { advancedPanel.hidden = !advancedPanel.hidden; options.textContent = advancedPanel.hidden ? 'Advanced options' : 'Hide options'; options.setAttribute('aria-expanded',String(!advancedPanel.hidden)); chosen = true; if (!advancedPanel.hidden) advancedPanel.scrollIntoView({block:'nearest'}); };
+    const frameObserver = new ResizeObserver(fit);
+    for (const element of [root?.querySelector('.adm__bar'),root?.querySelector('.adm__statusbar')].filter(Boolean)) frameObserver.observe(element);
+    window.addEventListener('resize',fit);
+    const controller = {show,leave,refresh:paint,get active() { return active; },get snapshot() { return {view,chosen,expanded:!advancedPanel.hidden,scroll:panels.scrollTop}; },restore(saved) { view = saved.view; chosen = saved.chosen; advancedPanel.hidden = !saved.expanded; options.textContent = saved.expanded ? 'Hide options' : 'Advanced options'; options.setAttribute('aria-expanded',String(saved.expanded)); paint(); panels.scrollTop = saved.scroll; },dispose() { frameObserver.disconnect(); window.removeEventListener('resize',fit); briefHome.remove(); covered.forEach(({element,inert}) => { element.inert = inert; }); delete modal.__prepLaunch; }};
+    modal.__prepLaunch = controller; show(); return controller;
   }
   function prepDialogLifetime(modal, label) {
     const trigger = document.activeElement;
@@ -2694,23 +2775,61 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     prepMountStorage(modal);
     const lifetime = prepDialogLifetime(modal,tool === 'ats' ? 'ATS resume check' : 'Cover letter builder');
     modal.__prepLifetime = lifetime;
+    modal.__prepRefresh = function ({result = false} = {}) {
+      const previous = modal.__prepLaunch?.snapshot;
+      modal.__prepLaunch?.leave(); modal.__prepLaunch?.dispose();
+      const body = modal.querySelector('[data-prep-body]'); body.innerHTML = render();
+      const originalClose = modal.querySelector('[data-prep-close]'); originalClose.hidden = false;
+      if (result) { originalClose.focus({preventScroll:true}); return; }
+      const panel = body.firstElementChild, main = panel.querySelector('.ats__main'), heading = panel.querySelector('.ats__head');
+      const header = document.createElement('header'), footer = document.createElement('div');
+      header.innerHTML = '<h2 class="pass__title">' + escHtml(heading.querySelector('b').textContent) + '</h2>';
+      heading.remove(); panel.prepend(header); footer.className = 'pass__actions'; panel.append(footer);
+      const primary = panel.querySelector('[data-act="' + (tool === 'ats' ? 'ats-check' : 'cl-generate') + '"]'), oldActions = primary.parentElement;
+      primary.classList.replace('btn--primary','btn--auto'); primary.innerHTML = IC.spark + ' ' + primary.textContent;
+      footer.append(primary); oldActions.remove();
+      const wrap = (element,label) => { const field = document.createElement('div'), title = document.createElement('label'); field.className = 'af'; title.className = 'af__label'; title.textContent = label; element.before(field); field.append(title,element); if (element.matches('input,textarea,select')) { element.id ||= prepId(); title.htmlFor = element.id; } return field; };
+      const levels = panel.querySelector('.ats__levels'); levels.classList.add('iprep__levels');
+      [...levels.children].sort((first,second) => ['senior','staff','leader'].indexOf(first.dataset.lvl) - ['senior','staff','leader'].indexOf(second.dataset.lvl)).forEach(button => { button.classList.add('iprep__lvl'); button.querySelector('b').classList.add('iprep__lvl-name'); button.querySelector('span').classList.add('iprep__lvl-desc'); button.setAttribute('aria-pressed',String(button.classList.contains('is-on'))); levels.append(button); });
+      wrap(levels,'Target level');
+      const advanced = [];
+      if (tool === 'cl') {
+        const length = panel.querySelector('.cl__len'), company = panel.querySelector('.cl__company'), row = company.parentElement;
+        advanced.push(wrap(length,'Letter length'));
+        row.before(company); wrap(company,'Company / role');
+        const companyField = company.closest('.af'); panel.querySelector('.cl__row').before(companyField);
+        row.before(advanced[0]); row.remove();
+        const jd = wrap(panel.querySelector('.cl__jd'),'Job description');
+        const hint = panel.querySelector('.cl__note'); hint.className = 'af__hint'; jd.append(hint);
+        panel.querySelector('[data-cl-out]').replaceChildren();
+      } else {
+        wrap(panel.querySelector('.ats__src'),'Resume source');
+        wrap(panel.querySelector('[data-act="ats-mode"]').closest('.cl__len'),'Check for');
+        wrap(panel.querySelector('.cl__company'),'Company / role');
+        wrap(panel.querySelector('.cl__jd'),'Job description');
+      }
+      wrap(panel.querySelector('.cl__row'),'Job posting URL');
+      const launch = prepLaunchDialog(modal,{panels:panel.querySelector('.ats__cols'),newPanel:main,history:panel.querySelector('aside.prep-hist'),setup:main,header,footer,primary,advanced,close,workspaceControls:[originalClose]});
+      if (previous) launch.restore(previous);
+    };
     if (tool === 'ats' || tool === 'cl') modal.__prepBrief = prepUseBrief(modal, brief => {
       lifetime.reset();
       const state = tool === 'ats' ? atsState : clState;
       state.jd = brief.jd; state.url = brief.url; state.company = prepBriefTarget(brief); state.preparationBrief = clone(brief);
       if (tool === 'ats') { atsLevel = brief.level; atsState.mode = 'job'; atsState.source = brief.resumeSource === 'site' ? 'site' : 'file'; atsSaveDraft(); }
       else { clLevel = brief.level; clSaveDraft(); }
-      modal.querySelector('[data-prep-body]').innerHTML = render();
+      modal.__prepRefresh();
     });
     modal.__prepRender = render;
+    modal.__prepRefresh();
     if (tool === 'ats') refreshAtsResumes();
-    prepCloudPull(tool, function () { var el = (root || document).querySelector(".prep-dialog [data-" + tool + "-hist]"); if (el) el.innerHTML = (tool === "ats") ? atsHistHtml() : clHistHtml(); });
+    prepCloudPull(tool, function () { var el = modal.querySelector('[data-' + tool + '-hist]'); if (el) el.innerHTML = (tool === 'ats') ? atsHistHtml() : clHistHtml(); modal.__prepLaunch?.refresh(); });
     function onEsc(e) { if (e.key === "Escape" && !document.querySelector('.atsv')) close(); }
-    function close() { document.removeEventListener("keydown", onEsc); lifetime.dispose(); modal.remove(); }
+    function close() { document.removeEventListener("keydown", onEsc); modal.__prepLaunch?.dispose(); lifetime.dispose(); modal.remove(); }
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-prep-close]")) close(); });
     document.addEventListener("keydown", onEsc);
   }
-  function prepRerenderDialog() { var m = (root || document).querySelector(".prep-dialog"); if (m && m.__prepRender) { var b = m.querySelector("[data-prep-body]"); if (b) b.innerHTML = m.__prepRender(); } }
+  function prepRerenderDialog(options) { (root || document).querySelector('.prep-dialog')?.__prepRefresh?.(options); }
 
   /* ---------- ATS résumé check (Contact tab, beside the résumé upload) ---------- */
   var _atsD0 = prepDraftGet("ats") || {};
@@ -12666,12 +12785,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     if (act === "ats-source") { atsState.source = b.dataset.source; var asp = b.closest(".ats"); if (asp) { asp.querySelectorAll('[data-act="ats-source"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var afr = asp.querySelector(".ats__filerow"); if (afr) afr.hidden = (atsState.source !== "file"); atsUpdateCheckBtn(asp); } return; }
     if (act === "ats-view") { atsOpenViewer(); return; }
     if (act === "ats-hist-open") { atsHistRestore(b.dataset.id); return; }
-    if (act === "ats-hist-del") { prepDel("ats", b.dataset.id); var _hw = b.closest("[data-ats-hist]"); if (_hw) _hw.innerHTML = atsHistHtml(); return; }
-    if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); atsSaveDraft(); return; }
-    if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); }); clSaveDraft(); return; }
+    if (act === "ats-hist-del") { const dialog = b.closest('.prep-dialog'); prepDel("ats", b.dataset.id); var _hw = b.closest("[data-ats-hist]"); if (_hw) _hw.innerHTML = atsHistHtml(); dialog?.__prepLaunch?.refresh(); return; }
+    if (act === "ats-level") { atsLevel = b.dataset.lvl; var ap = b.closest(".ats"); if (ap) ap.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); if (x.hasAttribute('aria-pressed')) x.setAttribute('aria-pressed',String(x === b)); }); atsSaveDraft(); return; }
+    if (act === "cl-level") { clLevel = b.dataset.lvl; var clp = b.closest(".cl"); if (clp) clp.querySelectorAll(".ats__lvl").forEach(function (x) { x.classList.toggle("is-on", x === b); if (x.hasAttribute('aria-pressed')) x.setAttribute('aria-pressed',String(x === b)); }); clSaveDraft(); return; }
     if (act === "cl-length") { clState.length = b.dataset.len; var clp2 = b.closest(".cl"); if (clp2) clp2.querySelectorAll(".cl__lenbtn").forEach(function (x) { x.classList.toggle("is-on", x === b); }); clSaveDraft(); return; }
     if (act === "cl-hist-open") { clHistRestore(b.dataset.id); return; }
-    if (act === "cl-hist-del") { prepDel("cl", b.dataset.id); var _clhw = b.closest("[data-cl-hist]"); if (_clhw) _clhw.innerHTML = clHistHtml(); return; }
+    if (act === 'cl-draft-open') { prepRerenderDialog({result:true}); return; }
+    if (act === "cl-hist-del") { const dialog = b.closest('.prep-dialog'); prepDel("cl", b.dataset.id); var _clhw = b.closest("[data-cl-hist]"); if (_clhw) _clhw.innerHTML = clHistHtml(); dialog?.__prepLaunch?.refresh(); return; }
     if (act === "cl-fetch") { clFetchToPanel(b.closest(".cl")); return; }
     if (act === "cl-generate") { clRun(b.closest(".cl"), false); return; }
     if (act === "cl-regen") { clRun(b.closest(".cl"), true); return; }
@@ -17911,8 +18031,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
   }
   function clHistHtml() {
     var list = prepList("cl");
-    if (!list.length) return '<div class="prep-hist__empty">Your cover letters save here automatically \u2014 come back and pick up any draft.</div>';
-    return list.map(clHistCard).join("");
+    const draft = clLast && !list.some(entry=>entry.payload?.letter === clLast) ? '<div class="prep-h prep-h--txt"><button type="button" class="prep-h__x" data-act="cl-draft-open"><b>Current draft</b><i>' + escHtml(clLast.replace(/\s+/g,' ').slice(0,90)) + '</i></button></div>' : '';
+    if (!list.length && !draft) return '<div class="prep-hist__empty">Your cover letters save here automatically \u2014 come back and pick up any draft.</div>';
+    return draft + list.map(clHistCard).join("");
   }
   async function clFetchJd(url) {
     url = String(url || "").trim();
@@ -18018,6 +18139,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       prepPut("cl", { tool: "cl", kind: "letter", title: _clTitle, meta: { snippet: _clSnip, length: clState.length }, payload: _clSnap });
       var _clh = panel.querySelector("[data-cl-hist]"); if (_clh) _clh.innerHTML = clHistHtml();
       if (out) out.innerHTML = clRenderHtml(text);
+      if (panel.closest('.prep-dialog')?.__prepLaunch?.active) prepRerenderDialog({result:true});
       status("Cover letter ready.", true);
     } catch (e) {
       if (signal?.aborted) return;
@@ -18048,7 +18170,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     document.querySelector('.prep-dialog .cl')?.closest('.prep-dialog')?.__prepLifetime.reset();
     document.querySelector('.prep-dialog .cl')?.closest('.prep-dialog')?.__prepBrief?.restore(clSource?.brief);
     prepDraftSet("cl", { ...p, state: clState, level: clLevel, letter: clLast, source:clSource });
-    prepRerenderDialog();
+    prepRerenderDialog({result:true});
   }
 
   function iprepModal(i, restore) {
@@ -18060,6 +18182,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     var questions = [];
     let sourceSnapshot = null;
     let reconnectEntry = null;
+    let launch = null;
     let practice = null, practiceView = false, practiceBusy = false, practiceTimer = 0, practiceStarted = 0, practiceRecognition = null, closed = false;
     var sessId = (restore && restore.id) || null;
     var modal = document.createElement("div");
@@ -18070,7 +18193,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       '<div class="pass__sub" hidden></div>' +
       '<div class="iprep__setup">' +
         '<div class="af"><label class="af__label">Interviewing for</label><div class="iprep__levels">' +
-          IPREP_LEVELS.concat([['vp','VP / Executive','Investment, risk &amp; accountability']]).map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" aria-pressed="' + (g.level === l[0]) + '" data-iprep-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + '</span></button>'; }).join("") +
+          IPREP_LEVELS.concat([['vp','VP / Executive','Investment, risk &amp; accountability']]).sort((first,second) => ['senior','staff','leader','vp'].indexOf(first[0]) - ['senior','staff','leader','vp'].indexOf(second[0])).map(function (l) { return '<button type="button" class="iprep__lvl' + (g.level === l[0] ? " is-on" : "") + '" aria-pressed="' + (g.level === l[0]) + '" data-iprep-lvl="' + l[0] + '"><span class="iprep__lvl-name">' + l[1] + '</span><span class="iprep__lvl-desc">' + l[2] + '</span></button>'; }).join("") +
         '</div></div>' +
         (fromAi
           ? '<div class="af"><label class="af__label">Project evidence</label><label class="chk"><input type="checkbox" data-iprep-all checked>All projects</label><div class="iprep__projs">' + aiWorks.map(function (x, idx) { return '<label class="chk"><input type="checkbox" data-iprep-proj value="' + idx + '" /> ' + escHtml(x.title || ("Project " + (idx + 1))) + "</label>"; }).join("") + "</div></div>" +
@@ -18091,7 +18214,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       '</div><aside class="prep-hist" id="iprep-saved-sets" aria-label="Saved question sets" tabindex="-1" data-iprep-hist>' + iprepHistHtml() + '</aside></div>' +
       '<div class="pass__actions iprep__foot">' +
         '<button class="btn btn--ghost" data-iprep-new hidden>' + IC.back + ' New set</button>' +
-        '<button class="btn btn--auto" data-iprep-run>Generate questions</button>' +
+        '<button class="btn btn--auto" data-iprep-run>' + IC.spark + ' Generate questions</button>' +
       '</div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -18139,11 +18262,11 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       catch (e2) { if (errEl) errEl.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
       btnIdle(iprepJdFetch, "Fetch");
     });
-    var close = function () { if (closed) return; closed = true; pausePractice(); if (practice && !reconnectEntry) persistSession(); g.jd = jdEl.value; lifetime.dispose(); window.removeEventListener('pagehide',close); window.removeEventListener('blur',blurPractice); modal.remove(); };
+    var close = function () { if (closed) return; closed = true; pausePractice(); if (practice && !reconnectEntry) persistSession(); g.jd = jdEl.value; launch?.dispose(); lifetime.dispose(); window.removeEventListener('pagehide',close); window.removeEventListener('blur',blurPractice); modal.remove(); };
     window.addEventListener('pagehide',close);
     window.addEventListener('blur',blurPractice);
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
-    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (matchMedia('(max-width: 800px)').matches && !historyHost.hidden) { e.stopPropagation(); showHistory(false); historyButton.focus(); } else close(); } });
+    modal.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!launch?.active && matchMedia('(max-width: 800px)').matches && !historyHost.hidden) { e.stopPropagation(); showHistory(false); historyButton.focus(); } else close(); } });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelectorAll("[data-iprep-lvl]").forEach(function (btn) {
       btn.addEventListener("click", function () { g.level = btn.dataset.iprepLvl; modal.querySelectorAll("[data-iprep-lvl]").forEach(function (b2) { b2.classList.toggle("is-on", b2 === btn); b2.setAttribute('aria-pressed', String(b2 === btn)); }); });
@@ -18157,7 +18280,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       };
       inp.click();
     });
-    newBtn.addEventListener("click", function () { if (reconnectEntry) { iprepRestore(reconnectEntry); return; } pausePractice(); if (practice) persistSession(); lifetime.reset(); practiceBusy = false; practiceView = false; modeBar.hidden = practiceHost.hidden = true; list.hidden = true; setup.hidden = false; newBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; projectSelection(); });
+    newBtn.addEventListener("click", function () { if (reconnectEntry) { iprepRestore(reconnectEntry); return; } pausePractice(); if (practice) persistSession(); lifetime.reset(); practiceBusy = false; practiceView = false; modeBar.hidden = practiceHost.hidden = true; list.hidden = true; setup.hidden = false; newBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; projectSelection(); launch.show('new'); });
     function paintSource() { prepSourceInfo(modal,sourceSnapshot,() => { if (reconnectEntry) return; reconnectEntry = prepGet('iprep',sessId); pausePractice(); lifetime.reset(); practiceBusy = false; practiceView = false; list.hidden = modeBar.hidden = practiceHost.hidden = true; setup.hidden = false; newBtn.hidden = false; runBtn.hidden = false; newBtn.textContent = 'Back to saved set'; runBtn.textContent = 'Reconnect sources'; err.textContent = ''; projectSelection(); }); }
     function practiceTurn() { return practice?.turns[practice.index]; }
     function practiceElapsed() { return Math.max(0,Number(practiceTurn()?.elapsed) || 0) + (practiceStarted ? (performance.now() - practiceStarted) / 1000 : 0); }
@@ -18249,6 +18372,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       finally { if (!signal.aborted && !closed) { practiceBusy = false; renderPractice(); } }
     });
     function renderQuestions() {
+      launch?.leave();
       list.innerHTML = questions.map(function (q, idx) {
         return '<div class="iprep__card" data-qi="' + idx + '">' +
           '<div class="iprep__q-top"><span class="iprep__cat">' + escHtml(q.category || "Question") + '</span><span class="iprep__n">' + (idx + 1) + "</span></div>" +
@@ -18304,7 +18428,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         paintSource();
         persistSession();
       } catch (e) { if (!signal.aborted) err.textContent = (e && e.message) || "Couldn\u2019t generate questions."; }
-      btnIdle(runBtn, "Generate questions");
+      btnIdle(runBtn, IC.spark + " Generate questions");
     });
     list.addEventListener("click", async function (e) {
       var btn = e.target.closest("[data-iprep-ans]"); if (!btn) return;
@@ -18335,14 +18459,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var saved = (localOnly ? prepPutLocal : prepPut)("iprep", { id: sessId, at:Date.now(), tool: "iprep", kind: "questions", title: sourceSnapshot?.projects.length === 1 ? sourceSnapshot.projects[0].title : "Interview questions", meta: { count: questions.length, level: iprepLevelName(g.level) }, payload: { level: g.level, jd: g.jd || "", scope: g.scope, fromAi: fromAi, questions: questions, source:sourceSnapshot, practice } });
       sessId = saved.id; paintHist();
     }
-    function paintHist() { var r = modal.querySelector("[data-iprep-hist]"); if (r) r.innerHTML = iprepHistHtml(); }
+    function paintHist() { var r = modal.querySelector("[data-iprep-hist]"); if (r) r.innerHTML = iprepHistHtml(); launch?.refresh(); }
     function iprepRestore(entry) {
       if (!entry || !entry.payload) return;
       pausePractice();
       if (practice && !reconnectEntry) persistSession();
       lifetime.reset();
       var p = entry.payload;
-      reconnectEntry = null; newBtn.innerHTML = IC.back + ' New set'; runBtn.textContent = 'Generate questions';
+      reconnectEntry = null; newBtn.innerHTML = IC.back + ' New set'; runBtn.innerHTML = IC.spark + ' Generate questions';
       practiceBusy = false; practice = null;
       if (p.practice?.version === 1 && Array.isArray(p.practice.turns) && p.practice.turns.length && p.practice.turns.every(turn => typeof turn?.question === 'string' && Array.isArray(turn.attempts))) {
         practice = clone(p.practice); practice.index = Math.max(0,Math.min(practice.turns.length - 1,Math.floor(Number(practice.index) || 0)));
@@ -18367,6 +18491,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var op = e.target.closest("[data-iprep-hist-open]");
       if (op) iprepRestore(prepGet("iprep", op.dataset.iprepHistOpen));
     });
+    launch = prepLaunchDialog(modal,{panels:modal.querySelector('.iprep__cols'),newPanel:modal.querySelector('.ats__main'),history:historyHost,setup,header:modal.querySelector('header'),footer:modal.querySelector('.iprep__foot'),primary:runBtn,advanced:[modal.querySelector('#iprepCount').closest('.af__row')],close,workspaceControls:[modal.querySelector('[data-cancel]'),historyButton],onWorkspace:() => showHistory(matchMedia('(min-width: 801px)').matches)});
     if (restore) iprepRestore(restore);
     prepCloudPull("iprep", paintHist);
   }
@@ -19715,6 +19840,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     let setSettings = null, refinement = null;
     let sourceSnapshot = null;
     let reconnectEntry = null;
+    let launch = null;
     var sessId = (restore && restore.id) || null;
     var modal = document.createElement("div");
     modal.className = "pass pass--wide story-modal";
@@ -19728,7 +19854,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
           STORY_DUR.map(function (d) { return '<button type="button" class="story__opt' + (g.dur === d[0] ? " is-on" : "") + '" data-story-dur="' + d[0] + '"><span class="story__opt-name">' + d[1] + '</span><span class="story__opt-desc">' + d[2] + "</span></button>"; }).join("") +
         "</div></div>" +
         '<div class="af"><label class="af__label">Target level</label><div class="story__opts">' +
-          STORY_TONE.map(function (t) { return '<button type="button" class="story__opt' + (g.tone === t[0] ? " is-on" : "") + '" data-story-tone="' + t[0] + '"><span class="story__opt-name">' + t[1] + '</span><span class="story__opt-desc">' + t[2] + "</span></button>"; }).join("") +
+          [...STORY_TONE].sort((first,second) => ['senior','staff','leader','vp'].indexOf(first[0]) - ['senior','staff','leader','vp'].indexOf(second[0])).map(function (t) { return '<button type="button" class="story__opt' + (g.tone === t[0] ? " is-on" : "") + '" data-story-tone="' + t[0] + '"><span class="story__opt-name">' + t[1] + '</span><span class="story__opt-desc">' + t[2] + "</span></button>"; }).join("") +
         "</div></div>" +
         '<div class="af"><label class="af__label" for="storyAudience">Audience</label><select id="storyAudience" data-story-audience>' + STORY_AUDIENCES.map(option => '<option value="' + option[0] + '"' + (g.audience === option[0] ? ' selected' : '') + '>' + option[1] + '</option>').join('') + '</select></div>' +
         '<div class="af story__role"><label class="chk"><input type="checkbox" data-story-align' + (storyJd.on ? " checked" : "") + " /> Align to a role</label>" +
@@ -19758,7 +19884,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       '<div class="pass__actions story__foot">' +
         '<button class="btn btn--ghost" data-cancel>Close</button>' +
         '<button class="btn btn--ghost" data-story-back hidden>' + IC.back + ' Change setup</button>' +
-        '<button class="btn btn--auto" data-story-run>Find story angles</button>' +
+        '<button class="btn btn--auto" data-story-run>' + IC.spark + ' Find story angles</button>' +
       "</div>" +
       '<div class="pass__note">Private preparation. Nothing is published.</div></div>';
     document.body.appendChild(modal);
@@ -19777,7 +19903,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
     var qgenBtn = modal.querySelector("[data-story-qgen]");
     var runBtn = modal.querySelector("[data-story-run]");
     var backBtn = modal.querySelector("[data-story-back]");
-    var close = function () { lifetime.dispose(); modal.remove(); };
+    var close = function () { launch?.dispose(); lifetime.dispose(); modal.remove(); };
     function currentSettings() { return setSettings || g; }
     function storyView(view) {
       taleBox.hidden = view !== 'script'; modal.querySelector('.story__qa').hidden = view !== 'questions';
@@ -19832,9 +19958,9 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       } catch (e2) { if (!signal.aborted) err.textContent = (e2 && e2.message) || "Couldn\u2019t read that link \u2014 paste the description instead."; }
       finally { btnIdle(jdFetchBtn, "Fetch"); }
     });
-    function showSetup() { setup.hidden = false; themesBox.hidden = true; l2Box.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; }
-    function showThemes() { setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; themesBox.querySelectorAll('[data-story-tell]').forEach(button => { button.textContent = drafts[button.dataset.storyTell]?.script ? 'Open saved draft' : 'Script this angle'; }); }
-    function showL2() { setup.hidden = true; themesBox.hidden = true; l2Box.hidden = false; backBtn.hidden = true; runBtn.hidden = true; err.textContent = ""; }
+    function showSetup() { setup.hidden = false; themesBox.hidden = true; l2Box.hidden = true; backBtn.hidden = true; runBtn.hidden = false; err.textContent = ""; launch?.show('new'); }
+    function showThemes() { launch?.leave(); setup.hidden = true; themesBox.hidden = false; l2Box.hidden = true; backBtn.hidden = false; runBtn.hidden = true; err.textContent = ""; themesBox.querySelectorAll('[data-story-tell]').forEach(button => { button.textContent = drafts[button.dataset.storyTell]?.script ? 'Open saved draft' : 'Script this angle'; }); }
+    function showL2() { launch?.leave(); setup.hidden = true; themesBox.hidden = true; l2Box.hidden = false; backBtn.hidden = true; runBtn.hidden = true; err.textContent = ""; }
     backBtn.addEventListener("click", function () { if (reconnectEntry) { storyRestore(reconnectEntry); return; } lifetime.reset(); showSetup(); });
     function paintSource() { prepSourceInfo(modal,sourceSnapshot,() => { if (reconnectEntry) return; reconnectEntry = prepGet('story',sessId); lifetime.reset(); showSetup(); backBtn.hidden = false; backBtn.textContent = 'Back to saved story'; runBtn.textContent = 'Reconnect sources'; }); }
     runBtn.addEventListener("click", async function () {
@@ -19862,7 +19988,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
         paintSource();
         persistSession();
       } catch (e) { if (!signal.aborted) err.textContent = (e && e.message) || "Couldn\u2019t find story angles."; }
-      btnIdle(runBtn, "Find story angles");
+      btnIdle(runBtn, IC.spark + " Find story angles");
     });
     function storeCurrent() {
       if (curTi < 0 || !taleBox.__script) return;
@@ -20019,13 +20145,13 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       var saved = prepPut("story", { id: sessId, tool: "story", kind: "story", title: sourceSnapshot?.projects[0]?.title || (w && w.title) || "Story angles", meta: { count: themes.length, dur: storyDurLabel(settings.dur) }, payload: { tone: settings.tone, audience:settings.audience, dur: settings.dur, qrole: g.qrole, themes: themes, drafts, cur: cur, source:sourceSnapshot } });
       sessId = saved.id; paintHist();
     }
-    function paintHist() { var r = modal.querySelector("[data-story-hist]"); if (r) { r.innerHTML = storyHistHtml(); const removed = prepList('story').filter(entry => entry.payload?.removedAt); if (removed.length) r.innerHTML += '<details><summary>Recently removed (' + removed.length + ')</summary>' + removed.map(entry => '<button type="button" class="btn btn--ghost" data-story-recover="' + escAttr(entry.id) + '">Restore ' + escHtml(entry.title) + '</button>').join('') + '</details>'; } paintAnswerEditors(); }
+    function paintHist() { var r = modal.querySelector("[data-story-hist]"); if (r) { r.innerHTML = storyHistHtml(); const removed = prepList('story').filter(entry => entry.payload?.removedAt); if (removed.length) r.innerHTML += '<details><summary>Recently removed (' + removed.length + ')</summary>' + removed.map(entry => '<button type="button" class="btn btn--ghost" data-story-recover="' + escAttr(entry.id) + '">Restore ' + escHtml(entry.title) + '</button>').join('') + '</details>'; } paintAnswerEditors(); launch?.refresh(); }
     function storyRestore(entry) {
       if (!entry || !entry.payload) return;
       lifetime.reset();
       var p = entry.payload;
       drafts = storyReadDrafts(p);
-      reconnectEntry = null; backBtn.innerHTML = IC.back + ' Change setup'; runBtn.textContent = 'Find story angles';
+      reconnectEntry = null; backBtn.innerHTML = IC.back + ' Change setup'; runBtn.innerHTML = IC.spark + ' Find story angles';
       curTi = -1; taleBox.__script = null; taleBox.__title = ''; questionsArr = []; qlist.innerHTML = ''; qgenBtn.textContent = 'Generate questions';
       sourceSnapshot = prepReadSource(p.source);
       linkedBrief.restore(sourceSnapshot?.brief);
@@ -20058,8 +20184,14 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       if (op) storyRestore(prepGet("story", op.dataset.storyHistOpen));
     });
     modal.querySelector('[data-story-hist]').addEventListener('keydown',event => { if (event.target.matches('[data-story-hist-open]') && ['Enter',' '].includes(event.key)) { event.preventDefault(); event.target.click(); } });
-    if (restore) storyRestore(restore); else showSetup();
+    const title = modal.querySelector('.pass__title'), header = document.createElement('header'), historyDetails = modal.querySelector('.story__history');
+    header.dataset.prepTitleWrap = ''; title.before(header); header.append(title);
     paintHist();
+    const historyOpen = historyDetails.open;
+    launch = prepLaunchDialog(modal,{panels:modal.querySelector('.story__cols'),newPanel:modal.querySelector('.ats__main'),history:modal.querySelector('aside.prep-hist'),setup,header,footer:modal.querySelector('.story__foot'),primary:runBtn,advanced:[modal.querySelector('[data-story-audience]').closest('.af')],close,workspaceControls:[modal.querySelector('[data-cancel]')],onWorkspace:() => { historyDetails.open = historyOpen; }});
+    const showLaunch = launch.show;
+    launch.show = view => { historyDetails.open = true; showLaunch(view); };
+    if (restore) storyRestore(restore); else { historyDetails.open = true; launch.refresh(); }
     prepCloudPull("story", paintHist);
   }
 
@@ -20797,7 +20929,7 @@ import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as 
       const result = await response.json();
       if (adminSession() !== session) return;
       atsResumeRows = result.documents;
-      const list = root?.querySelector('[data-ats-hist]'); if (list) list.innerHTML = atsHistHtml();
+      const list = root?.querySelector('[data-ats-hist]'); if (list) { list.innerHTML = atsHistHtml(); list.closest('.prep-dialog')?.__prepLaunch?.refresh(); }
     } catch (error) { if (adminSession() === session) status(error.message); }
   }
   function openResumeStudio(context = {}) {
