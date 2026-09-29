@@ -2653,7 +2653,8 @@ for (const width of [1440,390]) test("Prepare shared brief connects tools with a
         await modal.locator('.wb__draft').waitFor();
         assert.doesNotMatch(await page.evaluate(() => window.preparationCalls.at(-1).user),/SHARED_JOB_REQUIREMENTS|TargetCo/,'A blank Whiteboard JD must not inherit the Storyteller target');
         assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].target.jd),'');
-        await modal.locator('[data-wb-history]').click();
+        await modal.locator('[data-wb-back]').click();
+        await modal.locator('[data-wb-view="existing"]').click();
         assert.equal(await modal.locator('[data-wb-hist]').isVisible(),true);
         assert.equal(await modal.locator('[data-wb-brief]').evaluate(element => !!(element.compareDocumentPosition(document.querySelector('[data-wb-hist]')) & Node.DOCUMENT_POSITION_FOLLOWING)),true,'Brief precedes saved sessions');
         const callsBeforeBrief = await page.evaluate(() => window.preparationCalls.length);
@@ -3484,7 +3485,6 @@ async function assertWhiteboardDesignSystem(page) {
         ['[data-wb-view-switch]','.adm__hm-seg'],
         ['[data-wb-view].is-on','.adm__hm-seg .is-on'],
         ['[data-wb-view]:not(.is-on)','.adm__hm-seg button:not(.is-on)'],
-        ['[data-wb-exit]','.adm__hist-btn'],
         ['[data-wb-min]','.adm__hist-btn'],
         ['.wb__company','input'],['.wb__jd','textarea'],['.wb__own','textarea'],['.wb__draft','textarea'],
         ['.wb__source-options select','select'],
@@ -3997,12 +3997,39 @@ test('Prepare Whiteboard clock ownership interrupted turns evidence and independ
   } finally { await browser.close(); }
 });
 
+async function installWhiteboardVideoReview(page) {
+  await page.route('https://generativelanguage.googleapis.com/**',route => {
+    if (!new URL(route.request().url()).pathname.endsWith('/models')) return route.abort();
+    return route.fulfill({contentType:'application/json',body:JSON.stringify({models:[{name:'models/video-review-fixture',input_modalities:['text','image','audio','video'],output_modalities:['text'],inputTokenLimit:1000000,outputTokenLimit:16000,supportedGenerationMethods:['generateContent'],pricing:{input:1,output:3}}]})});
+  });
+  await page.evaluate(() => {
+    localStorage.setItem('rk:ai:img:provider','gemini'); localStorage.setItem('rk:ai:img:key','synthetic-video-key');
+    const original = window.fetch; window.videoReviewCalls = []; window.videoUploads = [];
+    window.fetch = async (resource,options = {}) => {
+      const url = new URL(typeof resource === 'string' ? resource : resource.url,location.href);
+      if (url.hostname !== 'generativelanguage.googleapis.com') return original(resource,options);
+      window.videoReviewCalls.push({path:url.pathname,method:options.method || 'GET'});
+      if (options.method === 'DELETE') return new Response(null,{status:200});
+      if (url.pathname.endsWith('/models')) return Response.json({models:[{name:'models/video-review-fixture',input_modalities:['text','image','audio','video'],output_modalities:['text'],inputTokenLimit:1000000,outputTokenLimit:16000,supportedGenerationMethods:['generateContent'],pricing:{input:1,output:3}}]});
+      if (url.pathname === '/upload/v1beta/files') { window.videoFileName=JSON.parse(options.body).file.name; return new Response(null,{headers:{'x-goog-upload-url':'https://generativelanguage.googleapis.com/upload-session'}}); }
+      if (url.pathname === '/upload-session') { window.videoUploads.push(options.body); if(window.videoReviewMode==='upload-error') return new Response(null,{status:503}); return Response.json({file:{name:window.videoFileName,uri:'https://generativelanguage.googleapis.com/v1beta/'+window.videoFileName,state:window.videoReviewMode==='processing'?'PROCESSING':'ACTIVE'}}); }
+      if (url.pathname.startsWith('/v1beta/files/')) return Response.json({name:window.videoFileName,uri:'https://generativelanguage.googleapis.com/v1beta/'+window.videoFileName,state:'PROCESSING'});
+      if (url.pathname.endsWith(':countTokens')) return Response.json({totalTokens:500});
+      if (url.pathname.endsWith(':generateContent')) {
+        window.videoReviewBody=JSON.parse(options.body);
+        return Response.json({candidates:[{content:{parts:[{text:JSON.stringify({scores:[{dim:'Communication',score:4,note:'Recorded explanation',evidence:['recording-evidence-1']}],overall:'SAVED_MOCK_SCORE',topfix:'Compare another option',improvements:[],recordingEvidence:[{id:'recording-evidence-1',recordingId:'recording-1',seconds:window.videoReviewMode==='bad-evidence'?999999:0,status:'audible',detail:'An explanation captured in the recording.'}]})}]}}],usageMetadata:{promptTokenCount:500,candidatesTokenCount:100}});
+      }
+      throw new Error('Unexpected synthetic video endpoint: '+url.pathname);
+    };
+  });
+}
+
 for (const width of [1440,390,320]) test('Prepare Whiteboard actual board recording and responsive views at ' + width, {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const page = await browser.newPage({viewport:{width,height:1000},reducedMotion:'reduce'}), errors = [];
   page.on('pageerror',error => errors.push(error.message));
   try {
-    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await installPrepareReplies(page); await openIntegratedFixture(page); await installWhiteboardVideoReview(page);
     await page.evaluate(() => {
       window.mediaRequests = [];
       const NativeRecorder = window.MediaRecorder;
@@ -4010,7 +4037,11 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 500;
       const context = canvas.getContext('2d'); context.fillStyle = '#ffffff'; context.fillRect(0,0,800,500); context.fillStyle = '#121212'; context.font = '32px sans-serif'; context.fillText('Actual shared canvas / fixture',40,80); context.fillStyle = '#d8a657'; context.fillRect(40,140,180,120); context.fillStyle = '#5bafa7'; context.fillRect(350,140,260,120); window.boardCanvas = canvas;
       navigator.mediaDevices.getDisplayMedia = async options => { window.mediaRequests.push({type:'screen',options}); window.boardStream = canvas.captureStream(10); window.boardFrames = setInterval(() => { context.fillStyle = '#ffffff'; context.fillRect(0,0,2,2); window.boardStream.getVideoTracks()[0].requestFrame?.(); },100); return window.boardStream; };
-      navigator.mediaDevices.getUserMedia = async () => { throw new Error('No physical device permitted'); };
+      navigator.mediaDevices.getUserMedia = async options => {
+        if (!options.audio) throw new Error('No physical camera permitted');
+        const audio = new AudioContext(), oscillator = audio.createOscillator(), destination = audio.createMediaStreamDestination();
+        oscillator.connect(destination); oscillator.start(); window.recordingAudio = audio; return destination.stream;
+      };
     });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
     if (width === 1440) {
@@ -4127,9 +4158,14 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     }
     await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-setup-' + width + '.png')});
     await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-start]').click();
-    assert.equal(await page.locator('[data-wb-exit]').isVisible(),true,'Mock retains its exit because its footer is hidden');
+    assert.equal(await page.locator('[data-wb-exit],[data-wb-history],[data-wb-max]').count(),0,'Only useful viewing controls remain in the header');
+    assert.equal(await page.locator('.wb__header [data-wb-min]').isVisible(),true);
+    assert.equal(await page.locator('.wb__header [data-wb-immersive]').isVisible(),true);
+    assert.equal(await page.locator('.wb__main [data-wb-immersive],.wb__imm').count(),0);
+    assert.equal(await page.locator('[data-wb-record]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-pause]').textContent(),'Save & leave');
     assert.equal(await page.locator('[data-wb-record-notice]').isVisible(),false,'Recording notice waits until a feed is available');
-    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).isVisible(),true,'A session needs a route back to the history list');
+    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).count(),0,'Saved sessions belong in setup');
     if (width === 1440) {
       assert.equal(await page.getByRole('button',{name:'Start immersive session',exact:true}).isVisible(),true,'Immersive mode is an explicit option for the same interview');
       assert.equal(await page.locator('.wb__cols').evaluate(element => element.firstElementChild.classList.contains('wb__main')),true,'The conversation leads the restored layout');
@@ -4147,29 +4183,35 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     await page.locator('[data-wb-watch="screen"]').click();
     try { await page.waitForFunction(() => document.querySelector('.wb__feed-vid')?.videoWidth === 800,null,{timeout:8000}); }
     catch (error) { throw new Error(JSON.stringify({errors,state:await page.evaluate(() => ({message:document.querySelector('.wb-modal .pass__err')?.textContent,requests:window.mediaRequests,tracks:window.boardStream?.getTracks().map(track=>track.readyState),videos:[...document.querySelectorAll('video')].map(video=>({width:video.videoWidth,ready:video.readyState}))}))}),{cause:error}); }
-    assert.equal(await page.locator('[data-wb-record]').isChecked(),false); assert.equal(await page.locator('.wb__watch-rec:visible').count(),0);
-    assert.equal(await page.locator('[data-wb-record-notice]').isVisible(),true);
-    assert.equal(await page.locator('[data-wb-ai-source]').getAttribute('aria-describedby'),'wb-images-notice');
-    assert.equal(await page.locator('#wb-images-notice').textContent(),'Shared images go to your configured AI on a turn or review.');
+    assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false'); assert.equal(await page.locator('.wb__watch-rec:visible').count(),0);
+    assert.equal(await page.locator('[data-wb-record]').isVisible(),false,'Sharing alone does not expose recording');
+    assert.equal(await page.locator('[data-wb-record-notice]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-ai-source],[data-wb-record-source],.wb__watch-options').count(),0);
+    assert.match(await page.locator('#wb-images-notice').textContent(),/focused feed goes to your configured AI/);
     const loadedFonts = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family.replace(/['"]/g,'')); });
     for (const family of ['Schibsted Grotesk','Hanken Grotesk','Martian Mono']) assert.ok(loadedFonts.includes(family), family + ' is actually loaded');
     assert.equal(await page.locator('.wb__feed-vid').evaluate(video=>getComputedStyle(video).objectFit),'contain');
     assert.equal(await page.evaluate(() => { const canvas=document.createElement('canvas'); canvas.width=800;canvas.height=500;canvas.getContext('2d').drawImage(document.querySelector('.wb__feed-vid'),0,0); return canvas.getContext('2d').getImageData(50,150,1,1).data[0]; }),216);
     await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-board-' + width + '.png')});
     assert.equal(await page.locator('.wb__stage').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
-    await page.locator('[data-wb-record]').check(); await page.locator('.wb__watch-rec').waitFor();
+    await page.locator('[data-wb-immersive]').click();
+    await page.waitForFunction(() => document.querySelector('.wb__preview-video')?.videoWidth === 800);
+    if(await page.locator('[data-wb-speech-cancel]').isVisible()) await page.locator('[data-wb-speech-cancel]').click();
+    assert.equal(await page.locator('.wb__header [data-wb-record]').isVisible(),true);
+    assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
+    await page.locator('[data-wb-record]').click(); await page.getByRole('button',{name:'Start recording',exact:true}).click(); await page.locator('.wb__watch-rec').waitFor();
     await page.evaluate(() => { window.boardCanvas.getContext('2d').fillRect(5,5,12,12); window.boardStream.getVideoTracks()[0].requestFrame?.(); });
     await page.waitForFunction(() => window.recordedBytes > 0);
-    await page.locator('[data-wb-record]').uncheck(); await page.locator('.wb__watch-dl').waitFor();
+    await page.locator('[data-wb-record]').click(); await page.locator('.wb__watch-dl').waitFor();
     assert.ok(await page.locator('.wb__watch-dl').evaluate(async link => (await (await fetch(link.href)).blob()).size > 0));
     assert.equal(await page.evaluate(() => window.boardStream.getVideoTracks()[0].readyState),'live');
+    await page.locator('[data-wb-spk]').click();
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 1 && !document.querySelector('[data-wb-send]').disabled);
     await page.locator('.wb__msg').fill('I will clarify the user need. '.repeat(width === 1440 ? 80 : 1)); await page.locator('[data-wb-send]').click(); await page.waitForFunction(() => document.querySelectorAll('.wb__turn--int').length === 2 && !document.querySelector('[data-wb-send]').disabled);
     if (width === 1440) {
       await page.locator('.wb__msg').fill('Keep my draft through view changes.');
       const before = await page.evaluate(() => ({session:JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],calls:window.preparationCalls.length}));
       await page.evaluate(() => { window.originalBoardVideo = document.querySelector('[data-feed="screen"] video'); window.originalComposer = document.querySelector('.wb__msg'); });
-      await page.locator('[data-wb-immersive]').click();
       await page.waitForFunction(() => document.querySelector('.wb__preview-video')?.videoWidth === 800);
       assert.equal(await page.locator('[data-wb-immersive]').textContent(),'Exit immersive session');
       assert.equal(await page.locator('.wb__interviewer .ai-ribbon').count(),1,'Interviewer reuses the Studio AI ribbon');
@@ -4177,7 +4219,7 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       assert.equal(await page.evaluate(() => document.querySelector('[data-feed="screen"] video') === window.originalBoardVideo),true);
       assert.equal(await page.evaluate(() => document.querySelector('.wb__msg') === window.originalComposer),true);
       assert.equal(await page.evaluate(() => window.preparationCalls.length),before.calls,'Entering a view must not send an AI request');
-      assert.equal(await page.locator('[data-wb-record]').isChecked(),false);
+      assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
       assert.equal(await page.locator('.wb__msg').inputValue(),before.session.draft);
       assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].id),before.session.id);
       await page.locator('.wb__immersive-prompt > summary').click();
@@ -4223,7 +4265,40 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
       await page.screenshot({path:join(tmpdir(),'rk-whiteboard-restored-short-' + width + '.png')});
       await page.setViewportSize({width,height:1000});
     }
-    await page.locator('[data-wb-score]').click(); await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
+    if (width === 1440) {
+      const transcriptCalls = await page.evaluate(()=>window.preparationCalls.length);
+      await page.evaluate(()=>localStorage.removeItem('rk:ai:img:key'));
+      await page.locator('[data-wb-score]').click();
+      await page.waitForFunction(()=>document.querySelector('.wb-modal .pass__err').textContent.includes('directly connected Gemini'));
+      assert.equal(await page.locator('.wb__watch-dl').count(),1);
+      assert.equal(await page.evaluate(()=>window.preparationCalls.length),transcriptCalls,'Unsupported providers must not silently generate a transcript-only review');
+      await page.evaluate(()=>localStorage.setItem('rk:ai:img:key','synthetic-video-key'));
+      await page.locator('[data-wb-score]').click(); await page.getByRole('button',{name:'Keep local',exact:true}).click();
+      await page.waitForFunction(()=>!document.querySelector('[data-wb-score]').disabled);
+      assert.equal(await page.evaluate(()=>window.videoUploads.length),0,'Cancelling upload sends no media');
+      for (const mode of ['upload-error','processing','bad-evidence']) {
+        await page.evaluate(mode=>{window.videoReviewMode=mode;},mode);
+        await page.locator('[data-wb-score]').click(); await page.getByRole('button',{name:'Upload to Gemini',exact:true}).click();
+        if(mode==='processing') { await page.waitForFunction(()=>document.querySelector('[data-wb-review-status]').textContent.includes('processing')); await page.locator('[data-wb-review-cancel]').click(); }
+        if(mode==='bad-evidence') await page.getByRole('button',{name:'Analyse recordings',exact:true}).click();
+        await page.waitForFunction(()=>!document.querySelector('[data-wb-score]').disabled && !!document.querySelector('.wb-modal .pass__err').textContent);
+        assert.equal(await page.locator('.wb__scorewrap').count(),0,'Failures never appear as a completed scorecard');
+        assert.equal(await page.evaluate(()=>window.videoReviewCalls.at(-1).method),'DELETE');
+        assert.equal(await page.locator('.wb__watch-dl').count(),1);
+      }
+      assert.equal(await page.evaluate(()=>window.preparationCalls.length),transcriptCalls);
+      await page.evaluate(()=>{window.videoReviewMode='';window.videoUploads=[];});
+    }
+    await page.locator('[data-wb-score]').click();
+    try { await page.getByRole('button',{name:'Upload to Gemini',exact:true}).click({timeout:8000}); }
+    catch (error) { throw new Error(JSON.stringify(await page.evaluate(()=>({message:document.querySelector('.wb-modal .pass__err')?.textContent,calls:window.videoReviewCalls}))),{cause:error}); }
+    await page.getByRole('button',{name:'Analyse recordings',exact:true}).click();
+    await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.videoUploads.length),1);
+    assert.ok(await page.evaluate(()=>window.videoUploads[0].size>0));
+    assert.ok(await page.evaluate(()=>window.videoReviewBody.contents[0].parts.some(part=>part.fileData?.mimeType==='video/webm')));
+    assert.equal(await page.getByRole('button',{name:'Play this moment',exact:true}).count(),1);
+    assert.equal(await page.evaluate(()=>window.videoReviewCalls.at(-1).method),'DELETE');
     assert.equal(await page.locator('.wb__main').evaluate(element => element.firstElementChild.classList.contains('wb__scorewrap')),true);
     assert.equal(await page.locator('.wb__composer').isVisible(),false);
     assert.equal(await page.locator('[data-wb-phase]').textContent(),'Review');
@@ -4234,21 +4309,25 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     assert.equal(await page.evaluate(() => window.mediaRequests.length),1); assert.equal(await page.evaluate(() => window.mediaRequests[0].options.audio),false);
     const callsBeforeSetup = await page.evaluate(() => window.preparationCalls.length);
     page.once('dialog',dialog=>dialog.accept());
-    await page.getByRole('button',{name:'Saved sessions',exact:true}).click();
+    await page.locator('[data-wb-rail-back]').click();
+    await page.locator('[data-wb-view="existing"]').click();
     assert.equal(await page.locator('.wb-modal').getAttribute('aria-modal'),'true');
     assert.equal(await page.locator('.wb-modal').evaluate(element=>element.classList.contains('wb-modal--stage')),false);
     assert.equal(await page.locator('[data-wb-history]').isVisible(),false);
-    assert.equal(await page.evaluate(()=>document.activeElement.matches('[data-wb-hist-open]')),true,'Returning to history focuses a saved session, not the now-hidden header button');
+    await page.locator('[data-wb-hist-open]').first().focus();
+    assert.equal(await page.evaluate(()=>document.activeElement.matches('[data-wb-hist-open]')),true,'Saved sessions remain keyboard accessible in setup');
     assert.equal(await page.locator('.wb__brief').inputValue(),'Refund onboarding');
     assert.equal(await page.locator('.wb__own').inputValue(),'Design a clear refund status.');
     assert.equal(await page.locator('.wb__own').isVisible(),false);
     assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeSetup);
     if (width === 1440) assert.ok((await page.locator('.wb-modal .pass__box').boundingBox()).width <= 880);
     await page.locator('[data-wb-hist-open]').first().press('Enter');
-    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).isVisible(),true,'Resuming a saved session restores history navigation');
+    assert.equal(await page.getByRole('button',{name:'Saved sessions',exact:true}).count(),0);
     await page.getByText('SAVED_MOCK_SCORE',{exact:true}).waitFor();
     assert.equal(await page.evaluate(() => window.preparationCalls.length),callsBeforeSetup);
-    await page.getByRole('button',{name:'Saved sessions',exact:true}).click();
+    assert.equal(await page.getByRole('button',{name:'Play this moment',exact:true}).count(),0,'Recorded media is not falsely restored from history');
+    assert.match(await page.locator('.wb__scorewrap').textContent(),/Recorded media was not saved in history/);
+    await page.locator('[data-wb-rail-back]').click();
     await page.locator('.wb-modal [data-cancel]').click();
     assert.equal(await page.locator('.adm__bar').evaluate(element=>element.inert),false);
     await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
@@ -4267,10 +4346,17 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
     await page.addInitScript(() => {
       window.SpeechRecognition = class { start() { window.recognitionStarts = (window.recognitionStarts || 0) + 1; } stop() { this.onend?.(); } abort() {} };
     });
-    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await installPrepareReplies(page);
+    await page.route('https://api.anthropic.com/**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({data:[{id:'session-model',input_modalities:['text','image'],output_modalities:['text'],max_input_tokens:100000,max_tokens:32000,pricing:{input:1,output:3}}]})}));
+    await openIntegratedFixture(page);
     await page.evaluate(() => {
       window.captureMode = 'both'; window.captureRequests = []; window.captureStreams = []; window.recorderStreams = []; window.recordingBytes = 0; window.segmentBytes = [];
       window.makeCapture = source => {
+        if (source.endsWith('mic')) {
+          const audio = new AudioContext(), oscillator = audio.createOscillator(), destination = audio.createMediaStreamDestination();
+          oscillator.connect(destination); oscillator.start(); const stream = destination.stream;
+          window.captureStreams.push({source,stream}); return stream;
+        }
         const canvas = document.createElement('canvas'); canvas.width = source === 'screen' ? 800 : 320; canvas.height = source === 'screen' ? 500 : 240;
         const drawing = canvas.getContext('2d'); drawing.fillStyle = source === 'screen' ? '#d8a657' : '#5bafa7'; drawing.fillRect(0,0,canvas.width,canvas.height);
         const stream = canvas.captureStream(10); window.captureStreams.push({source,stream,canvas});
@@ -4291,7 +4377,7 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
       };
       const NativeRecorder = window.MediaRecorder;
       window.MediaRecorder = class extends NativeRecorder {
-        constructor(stream,...rest) { super(stream,...rest); const index=window.recorderStreams.length; window.recorderStreams.push(stream); window.segmentBytes[index]=0; this.addEventListener('dataavailable',event => { window.recordingBytes += event.data.size; window.segmentBytes[index]+=event.data.size; }); }
+        constructor(stream,...rest) { super(stream,...rest); window.lastRecorder=this; const index=window.recorderStreams.length; window.recorderStreams.push(stream); window.segmentBytes[index]=0; this.addEventListener('dataavailable',event => { window.recordingBytes += event.data.size; window.segmentBytes[index]+=event.data.size; }); }
       };
     });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
@@ -4300,31 +4386,60 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
     await page.locator('.wb__msg').fill('My uninterrupted draft');
     const before = await page.evaluate(() => ({session:JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],calls:window.preparationCalls.length}));
     await page.locator('[data-wb-immersive]').click();
+    await page.locator('[data-wb-speech-allow]').click();
     await page.waitForFunction(() => document.querySelectorAll('.wb__feed-vid').length === 2 && document.querySelector('.wb__preview-video')?.videoWidth === 800);
-    await page.locator('.wb__watch-options > summary').click();
-    assert.equal(await page.locator('[data-wb-ai-source]').inputValue(),'screen');
-    assert.equal(await page.locator('[data-wb-record-source]').inputValue(),'screen');
-    assert.equal(await page.locator('[data-wb-record]').isChecked(),false);
+    assert.equal(await page.locator('.wb__watch-options,[data-wb-ai-source],[data-wb-record-source]').count(),0);
+    assert.equal(await page.locator('[data-wb-preview="screen"]').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
+    const row = await page.locator('.wb__media-row').evaluate(element => ['[data-feed="screen"]','[data-feed="camera"]','.wb__interviewer','[data-wb-timer]'].map(selector=>{const bounds=element.querySelector(selector).getBoundingClientRect();return {x:bounds.x,y:bounds.y,width:bounds.width,height:bounds.height};}));
+    assert.ok(row.every(bounds=>Math.abs(bounds.y-row[0].y)<1 && Math.abs(bounds.height-row[0].height)<1),'All four tiles share a row and height');
+    assert.ok(row.every(bounds=>Math.abs(bounds.width-row[0].width)<1),'All four tiles share the reference width');
+    assert.ok(row.slice(1).every((bounds,index)=>Math.abs(bounds.x-row[index].x-row[index].width-8)<1),'Tiles use the reference 8px spacing');
+    assert.equal(await page.getByRole('button',{name:'Stop screen sharing',exact:true}).count(),1);
+    assert.equal(await page.getByRole('button',{name:'Turn off camera',exact:true}).count(),1);
+    await page.screenshot({path:join(tmpdir(),'rk-whiteboard-unified-immersive.png')});
     await page.evaluate(() => { window.retainedVideos = [...document.querySelectorAll('.wb__feed-vid')]; });
     await page.locator('[data-wb-preview="camera"]').click();
     await page.waitForFunction(() => document.querySelector('.wb__preview-video').videoWidth === 320);
-    assert.equal(await page.locator('[data-wb-ai-source]').inputValue(),'screen');
-    assert.equal(await page.locator('[data-wb-record-source]').inputValue(),'screen');
+    assert.equal(await page.locator('[data-wb-preview="camera"]').getAttribute('aria-pressed'),'true');
+    await page.waitForFunction(()=>document.querySelector('.wb__watch-meta').textContent.includes('Camera images on each turn'));
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('.wb__feed-vid')].every((video,index) => video === window.retainedVideos[index])),true);
     assert.equal(await page.locator('.wb__preview-video').evaluate(video => { const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;const drawing=canvas.getContext('2d');drawing.drawImage(video,0,0,1,1);return drawing.getImageData(0,0,1,1).data[0]; }),91);
-    await page.locator('[data-wb-record]').check();
-    assert.equal(await page.evaluate(() => window.recorderStreams[0] === window.captureStreams.find(item=>item.source==='screen').stream),true,'Camera preview does not change the recording source');
+    await page.locator('[data-wb-record]').click(); await page.getByRole('button',{name:'Start recording',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('[data-wb-record]').getAttribute('aria-pressed')==='true');
+    assert.equal(await page.locator('[data-wb-record-label]').textContent(),'Stop recording');
+    const headerPositions = await page.locator('.wb__header').evaluate(header => {
+      const box = selector => header.querySelector(selector).getBoundingClientRect();
+      const pip=box('[data-wb-min]'), record=box('.wb__record'), immersive=box('[data-wb-immersive]');
+      return {ordered:record.right <= immersive.left && immersive.right <= pip.left};
+    });
+    assert.equal(headerPositions.ordered,true,'Header order is Record, Exit immersive, PiP');
+    assert.equal(await page.evaluate(() => window.recorderStreams[0].getAudioTracks().length),1,'Recording includes microphone audio');
+    assert.equal(await page.evaluate(() => window.recorderStreams[0].getVideoTracks().length),1);
+    await page.evaluate(async () => { const video=document.createElement('video');video.muted=true;video.srcObject=window.recorderStreams[0];document.body.append(video);await video.play();window.recordingPreview=video; });
+    const recordedPixel = async () => page.evaluate(() => {const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;const context=canvas.getContext('2d');context.drawImage(window.recordingPreview,640,360,1,1,0,0,1,1);return context.getImageData(0,0,1,1).data[0];});
+    assert.ok(Math.abs(await recordedPixel()-91)<5,'The actual recorded video starts on focused camera');
     await page.waitForFunction(() => window.recordingBytes > 0);
-    await page.locator('[data-wb-record-source]').selectOption('camera');
-    await page.waitForFunction(() => document.querySelectorAll('.wb__watch-dl').length === 1);
-    assert.equal(await page.evaluate(() => window.recorderStreams[1] === window.captureStreams.find(item=>item.source==='camera').stream),true);
-    await page.waitForFunction(() => window.segmentBytes[1] > 0);
-    await page.locator('[data-wb-ai-source]').selectOption('camera');
     await page.locator('[data-wb-preview="screen"]').click();
-    assert.equal(await page.locator('[data-wb-ai-source]').inputValue(),'camera');
-    assert.equal(await page.locator('[data-wb-record-source]').inputValue(),'camera');
+    await page.waitForFunction(() => {const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;const context=canvas.getContext('2d');context.drawImage(window.recordingPreview,640,360,1,1,0,0,1,1);return context.getImageData(0,0,1,1).data[0]>190;});
+    assert.equal(await page.evaluate(()=>window.recorderStreams.length),1,'Focus switches do not split or restart the audio/video recording');
+    await page.locator('[data-wb-record]').click();
+    await page.waitForFunction(() => document.querySelectorAll('.wb__watch-dl').length === 1);
+    await page.locator('[data-wb-record]').click(); await page.getByRole('button',{name:'Start recording',exact:true}).click();
+    await page.waitForFunction(() => window.segmentBytes[1] > 0);
+    await page.locator('[data-wb-preview="camera"]').click();
+    assert.equal(await page.locator('[data-wb-preview="camera"]').getAttribute('aria-pressed'),'true');
+    await page.evaluate(() => { const recorder=window.lastRecorder, finish=recorder.onstop; recorder.onstop=event=>{window.releaseRecordingStop=()=>finish(event);}; });
     await page.locator('[data-wb-immersive]').click();
+    await page.waitForFunction(() => typeof window.releaseRecordingStop === 'function');
+    assert.equal(await page.locator('[data-wb-record]').isVisible(),true,'Recording controls stay visible until finalisation completes');
+    assert.equal(await page.locator('[data-wb-immersive]').isDisabled(),true);
+    assert.equal(await page.locator('[data-wb-record-label]').textContent(),'Preparing recording...');
+    assert.equal(await page.locator('.wb__watch-dl').count(),1);
+    await page.evaluate(() => window.releaseRecordingStop());
     await page.waitForFunction(() => document.querySelectorAll('.wb__watch-dl').length === 2);
+    assert.equal(await page.locator('[data-wb-record]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
     assert.equal(await page.evaluate(() => window.captureStreams.every(({stream})=>stream.getTracks().every(track=>track.readyState==='ended'))),true);
     assert.equal(await page.locator('.wb__msg').inputValue(),before.session.draft);
     const recordedSizes = await page.locator('.wb__watch-dl').evaluateAll(async links => Promise.all(links.map(async link => (await (await fetch(link.href)).blob()).size)));
@@ -4332,8 +4447,14 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
     await page.evaluate(() => { window.captureMode = 'camera-only'; });
     await page.locator('[data-wb-immersive]').click();
     await page.waitForFunction(() => document.querySelector('.wb__preview-video')?.videoWidth === 320);
-    assert.equal(await page.locator('[data-wb-ai-source]').inputValue(),'','Camera-only entry does not silently send a candidate image');
-    assert.equal(await page.locator('[data-wb-record]').isChecked(),false);
+    assert.equal(await page.locator('[data-wb-preview="camera"]').getAttribute('aria-pressed'),'true','Camera-only entry focuses the camera');
+    assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
+    await page.evaluate(()=>{window.captureMode='both';});
+    await page.locator('[data-wb-watch="screen"]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-wb-preview="screen"]')?.getAttribute('aria-pressed')==='true');
+    await page.locator('[data-wb-preview="camera"]').click();
+    await page.getByRole('button',{name:'Turn off camera',exact:true}).click();
+    assert.equal(await page.locator('[data-wb-preview="screen"]').getAttribute('aria-pressed'),'true','Stopping focus falls back to the remaining feed');
     await page.locator('[data-wb-immersive]').click();
     await page.evaluate(() => { window.captureMode = 'none'; });
     await page.locator('[data-wb-immersive]').click();
@@ -4369,6 +4490,59 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
   } finally { await browser.close(); }
 });
 
+test('Prepare Whiteboard recording refuses denied microphones and releases late grants and failed recorders', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage();
+  try {
+    await openIntegratedFixture(page);
+    await page.route('**/src/js/whiteboard-media.mjs',route=>route.fulfill({contentType:'text/javascript',body:readFileSync(new URL('./src/js/whiteboard-media.mjs',import.meta.url),'utf8')}));
+    const result = await page.evaluate(async () => {
+      const {startWhiteboardRecording} = await import('/src/js/whiteboard-media.mjs');
+      const errors = [];
+      navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Microphone denied','NotAllowedError'); };
+      let denied = false;
+      try { await startWhiteboardRecording({video:()=>null,source:()=>'screen',onError:message=>errors.push(message)}); }
+      catch(error) { denied = error.name === 'NotAllowedError'; }
+      let resolvePermission;
+      navigator.mediaDevices.getUserMedia = () => new Promise(resolve=>{resolvePermission=resolve;});
+      const controller = new AbortController();
+      const pending = startWhiteboardRecording({video:()=>null,source:()=>'screen',signal:controller.signal,onError:message=>errors.push(message)});
+      controller.abort();
+      const audio = new AudioContext(), oscillator = audio.createOscillator(), destination = audio.createMediaStreamDestination();
+      oscillator.connect(destination); oscillator.start(); resolvePermission(destination.stream);
+      let cancelled = false;
+      try { await pending; } catch(error) { cancelled = error.name === 'AbortError'; }
+      const lateReleased = destination.stream.getTracks().every(track=>track.readyState==='ended');
+      const live = audio.createMediaStreamDestination(); oscillator.connect(live);
+      navigator.mediaDevices.getUserMedia = async()=>live.stream;
+      const canvas=document.createElement('canvas');canvas.width=640;canvas.height=400;canvas.getContext('2d').fillRect(0,0,640,400);
+      const feed=canvas.captureStream(10),video=document.createElement('video');video.muted=true;video.srcObject=feed;document.body.append(video);await video.play();
+      const capture=await startWhiteboardRecording({video:()=>video,source:()=>'screen',onError:message=>errors.push(message)});
+      await new Promise(resolve=>setTimeout(resolve,1200));
+      capture.recorder.dispatchEvent(new Event('error'));
+      const failed=await capture.finished;
+      const recordingTracksStopped=live.stream.getTracks().every(track=>track.readyState==='ended');
+      const sourcePreserved=feed.getTracks().every(track=>track.readyState==='live');
+      const processor=window.MediaStreamTrackProcessor;window.MediaStreamTrackProcessor=undefined;
+      const fallbackAudio=audio.createMediaStreamDestination();oscillator.connect(fallbackAudio);
+      navigator.mediaDevices.getUserMedia=async()=>fallbackAudio.stream;
+      const fallback=await startWhiteboardRecording({video:()=>video,source:()=>'screen',onError:message=>errors.push(message)});
+      await new Promise(resolve=>setTimeout(resolve,1200));
+      Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+      document.dispatchEvent(new Event('visibilitychange'));
+      const fallbackResult=await fallback.finished;
+      delete document.hidden;window.MediaStreamTrackProcessor=processor;
+      feed.getTracks().forEach(track=>track.stop());video.remove();await audio.close();
+      return {denied,cancelled,lateReleased,recordingTracksStopped,sourcePreserved,incomplete:!!failed.error,bytes:failed.blob.size,fallbackError:fallbackResult.error,fallbackBytes:fallbackResult.blob.size,errors};
+    });
+    assert.equal(result.denied,true); assert.equal(result.cancelled,true); assert.equal(result.lateReleased,true);
+    assert.equal(result.recordingTracksStopped,true); assert.equal(result.incomplete,true); assert.ok(result.bytes>0);
+    assert.equal(result.sourcePreserved,true,'Stopping recording must not stop the shared source');
+    assert.match(result.fallbackError,/cannot keep recording in the background/);assert.ok(result.fallbackBytes>0);
+    assert.match(result.errors[0],/recording failed/);
+  } finally { await browser.close(); }
+});
+
 test('Prepare Whiteboard floating companion shares draft pause and fallback without capture', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const context = await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), page = await context.newPage(), errors = [];
@@ -4393,7 +4567,10 @@ test('Prepare Whiteboard floating companion shares draft pause and fallback with
     assert.equal(await page.locator('.wb__turn--you').count(),1);
     assert.deepEqual(await companion.evaluate(() => ['--sans','--mono','--serif'].map(name=>getComputedStyle(document.documentElement).getPropertyValue(name))),await page.evaluate(() => ['--sans','--mono','--serif'].map(name=>getComputedStyle(document.querySelector('.wb-modal')).getPropertyValue(name))));
     await companion.screenshot({path:join(tmpdir(),'rk-whiteboard-companion.png')});
-    const closed = companion.waitForEvent('close'); await companion.locator('[data-companion-back]').click(); await closed;
+    const closed = companion.waitForEvent('close'); await companion.locator('[data-companion-mic]').click(); await closed;
+    assert.equal(await page.locator('.wb-modal').isVisible(),true,'First companion mic use returns to the main session for disclosure');
+    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),true);
+    await page.locator('[data-wb-speech-cancel]').click();
     await page.evaluate(() => { documentPictureInPicture.requestWindow = () => Promise.reject(new DOMException('Unavailable','NotAllowedError')); });
     await page.locator('[data-wb-min]').click(); await page.locator('.wb__mini-host').waitFor();
     await page.locator('.wb__mini-host [data-companion-ready]').click(); assert.equal(await page.locator('[data-wb-phase]').textContent(),'paused');
@@ -4409,12 +4586,21 @@ test('Prepare Whiteboard voice preparation is untimed and late recognition prese
   try {
     await page.addInitScript(() => {
       window.SpeechRecognition = class { constructor() { window.testRecognition=this; } start() { window.recognitionStarts=(window.recognitionStarts||0)+1; } stop() { if (!window.speechEndMissing) this.onend?.(); } abort() { window.recognitionAborts=(window.recognitionAborts||0)+1; } };
-      navigator.mediaDevices.getUserMedia = async () => ({getTracks:()=>[{stop(){}}]});
+      navigator.mediaDevices.getUserMedia = async () => { window.microphoneRequests=(window.microphoneRequests||0)+1; return {getTracks:()=>[{stop(){}}]}; };
       navigator.mediaDevices.getDisplayMedia = () => { throw new Error('Unexpected screen request'); };
     });
     await installPrepareReplies(page); await openIntegratedFixture(page);
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-convo="voice"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('Voice test exercise'); await page.locator('[data-wb-start]').click();
-    await page.locator('[data-wb-mic]').click(); await page.getByText('Microphone available. Session clock is stopped.',{exact:true}).waitFor();
+    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),false);
+    await page.locator('[data-wb-mic]').click();
+    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),true);
+    assert.equal(await page.evaluate(()=>window.microphoneRequests||0),0,'Explain browser transcription before requesting the microphone');
+    await page.locator('[data-wb-speech-cancel]').click();
+    assert.equal(await page.evaluate(()=>window.microphoneRequests||0),0);
+    await page.locator('[data-wb-mic]').click(); await page.locator('[data-wb-speech-allow]').click();
+    await page.getByText('Microphone available. Session clock is stopped.',{exact:true}).waitFor();
+    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),false);
+    assert.match(await page.locator('[data-wb-mic]').getAttribute('title'),/may send audio/);
     assert.equal(await page.evaluate(()=>window.recognitionStarts||0),0); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),'60:00');
     await page.locator('[data-wb-spk]').click(); await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
     await page.locator('[data-wb-mic]').click(); await page.waitForFunction(()=>window.recognitionStarts===1);
@@ -4473,7 +4659,7 @@ test('Prepare Whiteboard voice preparation is untimed and late recognition prese
   } finally { await browser.close(); }
 });
 
-test('Prepare Whiteboard vision is explicit change-aware bounded and quiet during thinking', {timeout:60000}, async () => {
+test('Prepare Whiteboard vision follows conversational turns without hidden automatic requests', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors = [];
   page.on('pageerror',error=>errors.push(error.message));
@@ -4484,21 +4670,60 @@ test('Prepare Whiteboard vision is explicit change-aware bounded and quiet durin
     await page.evaluate(() => {
       const canvas=document.createElement('canvas');canvas.width=640;canvas.height=400;const drawing=canvas.getContext('2d');drawing.fillStyle='#fff';drawing.fillRect(0,0,640,400);window.visionCanvas=canvas;
       navigator.mediaDevices.getDisplayMedia=async()=>{window.visionStream=canvas.captureStream(10);setInterval(()=>{drawing.fillRect(0,0,2,2);window.visionStream.getVideoTracks()[0].requestFrame?.();},100);return window.visionStream;};
+      navigator.mediaDevices.getUserMedia=async options=>{
+        if(options.audio)throw new Error('No physical audio in this synthetic vision test');
+        const camera=document.createElement('canvas');camera.width=320;camera.height=180;const context=camera.getContext('2d');context.fillStyle='#00ff00';context.fillRect(0,0,320,180);
+        const stream=camera.captureStream(10);setInterval(()=>{context.fillRect(0,0,2,2);stream.getVideoTracks()[0].requestFrame?.();},100);return stream;
+      };
+    });
+    const outgoingImage=()=>page.evaluate(async()=>{
+      const messages=JSON.parse(window.preparationCalls.at(-1).user);
+      const part=messages.flatMap(message=>Array.isArray(message.content)?message.content:[]).find(part=>part.type==='image');
+      if(!part)throw new Error('No actual image bytes in the outgoing provider request');
+      const image=new Image();image.src='data:'+part.source.media_type+';base64,'+part.source.data;await image.decode();
+      const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;const context=canvas.getContext('2d');context.drawImage(image,0,0,1,1);
+      return {width:image.naturalWidth,height:image.naturalHeight,pixel:[...context.getImageData(0,0,1,1).data]};
     });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('A synthetic board exercise'); await page.locator('[data-wb-start]').click();
-    await page.locator('[data-wb-watch="screen"]').click(); await page.waitForFunction(()=>document.querySelector('.wb__feed-vid')?.videoWidth===640); await page.locator('.wb__watch-options > summary').click(); await page.locator('[data-wb-shownow]').waitFor();
+    await page.locator('[data-wb-watch="screen"]').click(); await page.waitForFunction(()=>document.querySelector('.wb__feed-vid')?.videoWidth===640);
+    await page.waitForFunction(()=>document.querySelector('.wb__watch-meta')?.textContent.includes('Screen images on each turn'));
+    assert.equal(await page.locator('.wb__watch-options,[data-wb-glance],[data-wb-ai-source],[data-wb-record-source]').count(),0);
     assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    const firstImage=await outgoingImage();assert.equal(firstImage.width,640);assert.ok(firstImage.pixel[0]>250);
     assert.match(await page.locator('[data-wb-latest]').textContent(),/unreadable/); assert.match(await page.locator('[data-wb-watch-bar]').textContent(),/Last analysis: unreadable/);
-    await page.locator('[data-wb-glance]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),1);
+    await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),1);
     const changeBoard=async color=>{await page.evaluate(color=>{const drawing=window.visionCanvas.getContext('2d');drawing.fillStyle=color;drawing.fillRect(0,0,640,400);window.visionStream.getVideoTracks()[0].requestFrame?.();},color);await page.locator('.wb__feed-vid').evaluate(video=>new Promise(resolve=>video.requestVideoFrameCallback(resolve)));};
     await whiteboardReply(page,'Please give me some quiet thinking time.',{reply:'Take your time.',action:'think'});
     await changeBoard('#000'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),2);
     await whiteboardReply(page,'I am ready to discuss this board.');
-    for (let index=0;index<6;index++) { await changeBoard(index%2?'#000':'#fff'); await page.clock.fastForward(65000); await page.waitForFunction(count=>document.querySelectorAll('.wb__turn--int').length===count&&!document.querySelector('[data-wb-send]').disabled,index+4); }
-    await changeBoard('#fff'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),9);
-    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]); assert.equal(saved.autoLooks,6); assert.ok(saved.observations.every(observation=>observation.status==='unreadable')); assert.ok(saved.observations.every(observation=>!observation.b64&&!observation.image));
-    await page.locator('[data-wb-ready]').click(); await page.locator('[data-wb-glance]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),9);
+    assert.ok((await outgoingImage()).pixel[0]<5,'The request contains the changed black board, not an earlier frame');
+    await changeBoard('#fff'); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),3);
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0]); assert.equal(saved.autoLooks,0); assert.ok(saved.observations.every(observation=>observation.status==='unreadable')); assert.ok(saved.observations.every(observation=>!observation.b64&&!observation.image));
+    await page.locator('[data-wb-watch="camera"]').click();await page.waitForFunction(()=>document.querySelector('[data-feed="camera"] video')?.videoWidth===320);
+    assert.equal(await page.locator('[data-wb-preview="screen"]').getAttribute('aria-pressed'),'true','Starting a camera does not displace the screen');
+    await page.evaluate(()=>{window.deferWhiteboardReply=true;window.releaseWhiteboardReply=null;});
+    await page.locator('.wb__msg').fill('Discuss this screen snapshot.');await page.locator('[data-wb-send]').click();await page.waitForFunction(()=>!!window.releaseWhiteboardReply);
+    assert.ok((await outgoingImage()).pixel[0]>250);
+    await page.locator('[data-wb-preview="camera"]').click();
+    assert.match(await page.locator('.wb__watch-meta').textContent(),/Camera images on each turn.*Not sent yet/);
+    await page.evaluate(()=>{window.deferWhiteboardReply=false;window.releaseWhiteboardReply();});
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===4&&!document.querySelector('[data-wb-send]').disabled);
+    assert.doesNotMatch(await page.locator('.wb__watch-meta').textContent(),/Last analysis:/,'A late screen response is not attributed to the newly focused camera');
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].observations.at(-1).source),'screen');
+    await whiteboardReply(page,'Now discuss the camera.');
+    const cameraImage=await outgoingImage();assert.equal(cameraImage.width,320);assert.ok(cameraImage.pixel[0]<5&&cameraImage.pixel[1]>250);
+    await page.getByRole('button',{name:'Turn off camera',exact:true}).click();
+    await whiteboardReply(page,'Return to the remaining screen.');
+    assert.equal((await outgoingImage()).width,640);
+    await page.locator('[data-wb-ready]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),6);
+    await page.evaluate(() => {
+      const saved=JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],id='board-'+(saved.observations.length+1);
+      window.whiteboardScore={scores:[{dim:'Interaction / flow',score:5,note:'Unjustified visual rating',evidence:[id]}],overall:'Unreadable final board',topfix:'Zoom the board',improvements:[],boardReadability:'unreadable'};
+    });
+    await page.locator('[data-wb-score]').click();
+    await page.getByText('Unreadable final board',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].score.scores[0].score),null,'An unreadable final image cannot justify a numeric score');
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
 });

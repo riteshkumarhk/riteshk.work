@@ -175,6 +175,9 @@ The shared browser connection prevented a visible owner walkthrough; isolated
 Playwright checks do not substitute for that acceptance. No paid AI calls or
 owner content publication were performed for this checkpoint.
 
+The subsequent local Whiteboard changes below supersede this checkpoint's
+recording/source controls and automatic-observation behaviour.
+
 ### Conversational Whiteboard
 
 The fullscreen mock session now uses a validated structured AI reply to apply
@@ -227,9 +230,90 @@ candidate independence. Role-labelled turns, opt-in, derived memory and coaching
 source data survive session recovery; recovered clocks remain paused. Independent
 five-minute retries start without the previous role or derived memory.
 
-Apart from that setup preference, launch-dialog behaviour, capture permissions,
-recording consent, source selection and automatic-observation budgets are
-unchanged. Malformed conversational replies
+The local September 29 refinement uses this header order: Record for AI review
+(immersive only), Start/Exit immersive session, then Pop out / picture-in-picture.
+The two text actions are outlined pills. Redundant header Back, Saved sessions and
+focus/maximise controls remain removed. Save & leave is the session exit;
+Change setup retains access to the New/Existing session chooser.
+
+Below the main immersive preview is one left-aligned row: screen, camera,
+interviewer activity, timer. The tiles share height and width, with overlaid feed
+labels, an accent outline on the focused feed, and separate stop-screen-sharing
+and camera-off buttons. Source controls are keyboard accessible.
+
+There is ONE focus for preview, live AI images and recording. A newly started
+screen share takes focus; otherwise manual thumbnail selection persists. A
+camera-only session focuses the camera. Stopping the focused feed falls back to
+the remaining feed; stopping the last feed finalises recording. Starting the
+camera does not displace a shared screen. The old Sharing & recording options,
+independent source selectors, manual-look and auto-observe controls are removed.
+Live images accompany conversational turns; ask the interviewer to look in the
+conversation. There are no background auto-observation calls. Historical
+auto-observation counts remain readable in saved sessions. A quiet status reports
+source, last sent time and analysis status; this is not continuous AI watching.
+
+Recording is immersive-only, explicit and off on entry. After an explanation and
+microphone permission, a 1920x1080 canvas paced at 15fps records the focused feed (contained,
+not cropped) plus microphone audio, including speech never submitted to chat.
+Changing focus changes the canvas without restarting audio or the recorder.
+Where supported, incoming native video frames drive capture rather than background-
+throttled page timers. Source changes replace only the cloned video reader; the
+original shared feed and microphone remain active. Browsers without the frame
+processor retain foreground recording, but stop explicitly as incomplete if Studio
+becomes hidden rather than silently recording approximately one frame per second.
+1080p recording preserves 1080p board text resolution; higher-resolution shares
+are still scaled down. Live-turn JPEG snapshots remain capped at 1280px width.
+Zoom small board text before discussing it; neither path guarantees AI legibility.
+Browser speech-to-text remains separate; its Talk button does not mute recording.
+Stop recording ends audio capture but leaves sharing active. Exit finalises the
+recording before hiding controls. Microphone loss/recorder errors stop capture and
+mark any recoverable clip incomplete, not ready for a complete AI review.
+Multiple explicitly started recordings remain downloadable in this tab.
+They are NOT persisted in history or cloud storage; leaving/reloading loses media.
+
+**Complete recording review** is distinct from the live snapshot path. It currently
+requires a directly connected Google Gemini service at its official v1beta
+endpoint and a discovered model with verified audio AND video input capability.
+The existing model catalogue/ranker, configured budget, manual-model choice and
+usage accounting are reused. No model ID is hardcoded. Cloudflare/custom proxies
+and image-only providers are not supported for this upload path; configuration
+is never silently changed. No Worker deployment is part of this local change.
+
+Wrap-up finalises all recording segments, then requests explicit consent to send
+their complete audio/video bytes and conversation to the named Gemini model.
+The resumable Files API uploads each Blob, waits for ACTIVE processing state,
+counts the complete request's tokens, checks model/context/budget eligibility,
+and asks for cost confirmation before one generation attempt. Cancel or failure
+never substitutes a transcript-only scorecard. The upload/processing/review
+attempt has a 15-minute deadline and a conservative 2 GB per-file limit.
+Provider analysis may internally sample video; full-file submission is not a
+promise of exhaustive frame-by-frame understanding.
+
+Provider file deletion is requested after success, failure or cancellation with
+an independent cleanup timeout. Failures identify the file and warn that deletion
+could not be confirmed; Gemini normally expires uploads after 48 hours. Provider
+data-use terms still apply. Raw media and provider file URLs are not saved in
+Prepare history. Review evidence contains validated recording IDs and in-range
+timestamps; readable/audible evidence may support scores, uncertain evidence may
+not. Play this moment opens the retained local clip; reopened history explicitly
+states that the media was not saved. Real provider evidence quality, actual
+browser upload/CORS behaviour and physical-device capture need separately
+authorised validation; mocked API success does not establish these.
+
+Without recordings, the existing conversation/final-image review remains.
+Final-image scores now require an explicit readable result; absent or uncertain
+readability cannot justify a visual score.
+
+The permanent browser-speech hint is replaced with a first-use inline explanation
+and Enable microphone / Not now controls. Browser transcription may send audio to
+the browser's speech service; permission is explained before requesting mic access.
+Acknowledgement lasts for the open Whiteboard dialog, not as a global preference.
+The mic tooltip and accessible description retain this information. A first mic
+request from the companion returns to the main session for acknowledgement.
+
+These header/recording/disclosure refinements are included in the September 29
+release for desktop acceptance. Launch setup and the original Coach workflow remain unchanged.
+Malformed conversational replies
 produce an explicit retryable error without applying partial state changes.
 This release has simulated provider coverage only: this proves lifecycle and
 state handling, not natural-language interpretation or real coaching quality.
@@ -237,7 +321,27 @@ Real-provider, physical speech/capture and owner visual acceptance remain separa
 
 ```powershell
 npm run build
-node --test whiteboard-conversation.test.mjs ui-corners.test.mjs
+node --test whiteboard-media.test.mjs whiteboard-conversation.test.mjs ui-corners.test.mjs
 # Requires the existing local preview server (default port 5510):
 node --test --test-name-pattern="Prepare Whiteboard|Prepare shared brief connects" slide-studio-deck.test.mjs
 ```
+
+The opt-in Windows media-engine test uses isolated Edge, synthetic native video
+tracks and generated audio only: no devices, credentials or provider requests.
+It disables Playwright's default visibility overrides through `noDefaults`,
+checks real hidden-page state, then decodes the saved recording with installed
+FFmpeg/FFprobe. Assertions cover 1080p, background cadence, current visual markers,
+focus transitions, continuous audio, audio/video marker alignment and bounded
+private-memory growth. Short probes are not endurance evidence.
+
+```powershell
+$env:WB_MEDIA_VALIDATION = "1"
+$env:WB_MEDIA_HEADFUL = "1"
+$env:WB_MEDIA_SECONDS = "1800" # Real elapsed time, never a fast-forwarded clock
+node --test whiteboard-media-engine.test.mjs
+```
+
+The test prints its evidence directory (override with `WB_MEDIA_EVIDENCE`) and
+retains the synthetic clip, decoded frame and measurements. It is skipped unless
+explicitly enabled. This does not establish real-device reliability, 4K readability,
+provider understanding, crash recovery or durable media storage.
