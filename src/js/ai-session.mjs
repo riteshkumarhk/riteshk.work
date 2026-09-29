@@ -126,6 +126,14 @@ export function aiOutputPreview(text) {
 export function mountAiSession(root, session, icons, { onSettings, loadModels, selectedModel = () => null, onModel } = {}) {
   const trigger = root.querySelector("[data-ai-session-toggle]"), panel = root.querySelector("[data-ai-session-panel]");
   const document = root.ownerDocument;
+  const main = root.querySelector(".adm__main");
+  function fitPanel() {
+    const bounds = root.getBoundingClientRect(), content = main.getBoundingClientRect();
+    panel.style.top = Math.max(0, content.top - bounds.top) + "px";
+    panel.style.bottom = Math.max(0, bounds.bottom - content.bottom) + "px";
+  }
+  const frameObserver = new ResizeObserver(fitPanel);
+  frameObserver.observe(main);
   const renderedOutputs = new WeakMap();
   let scheduled = 0;
   panel.innerHTML = '<header class="adm__ai-head"><h2>AI activity</h2>' + (onSettings ? '<button type="button" class="adm__ai-close" data-ai-settings aria-label="AI settings" title="AI settings">' + icons.settings + '</button>' : '') + '<button type="button" class="adm__ai-close" data-ai-close aria-label="Close AI activity" title="Close AI activity">' + icons.close + '</button></header><div class="adm__ai-total" data-ai-total></div><div class="adm__ai-jobs" data-ai-jobs></div>';
@@ -260,11 +268,11 @@ export function mountAiSession(root, session, icons, { onSettings, loadModels, s
     if (atBottom) list.scrollTop = list.scrollHeight;
   }
   function schedule() { if (!scheduled) scheduled = requestAnimationFrame(render); }
-  trigger.onclick = () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); render(); if (!panel.hidden) { panel.querySelector("[data-ai-close]").focus(); refreshModels(); } };
+  trigger.onclick = () => { panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden)); render(); if (!panel.hidden) { fitPanel(); panel.querySelector("[data-ai-close]").focus(); refreshModels(); } };
   panel.querySelector("[data-ai-close]").onclick = () => close();
-  if (onSettings) panel.querySelector("[data-ai-settings]").onclick = () => { close(false); onSettings(); };
-  const escape = event => { if (event.key === "Escape" && !panel.hidden && ![...document.querySelectorAll('.pass,[role="dialog"][aria-modal="true"]')].some(dialog => dialog.getClientRects().length)) { event.preventDefault(); close(); } };
+  if (onSettings) panel.querySelector("[data-ai-settings]").onclick = () => { close(); onSettings(); };
+  const escape = event => { if (event.key === "Escape" && !panel.hidden && ![...document.querySelectorAll('.pass:not([aria-modal="false"]),[role="dialog"][aria-modal="true"]')].some(dialog => dialog.getClientRects().length)) { event.preventDefault(); close(); } };
   document.addEventListener("keydown", escape);
   const unsubscribe = session.subscribe(schedule); render();
-  return { close, dispose() { modelController?.abort(); unsubscribe(); cancelAnimationFrame(scheduled); document.removeEventListener("keydown", escape); } };
+  return { close, dispose() { frameObserver.disconnect(); modelController?.abort(); unsubscribe(); cancelAnimationFrame(scheduled); document.removeEventListener("keydown", escape); } };
 }

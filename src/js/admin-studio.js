@@ -41,7 +41,7 @@ import { AI_TASKS } from "./ai-model-router.mjs";
 import { parseCompositionResponse, compositionRevision, COMPOSITION_RESPONSE_SCHEMA } from "./slide-merge-ai.mjs";
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
-import { createAiTaskAgent, agentRequestOptions, prepareRequestOptions } from "./ai-task-agent.mjs";
+import { AI_AGENT_LIMITS, createAiTaskAgent, agentRequestOptions, prepareRequestOptions } from "./ai-task-agent.mjs";
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
 import { createPresenterMetadataSync } from "./presenter-metadata-sync.mjs";
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
@@ -2431,6 +2431,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   const prepPendingWrites = new Map();
   const prepCloudSaved = new Map(), prepCloudErrors = new Map();
   let prepSyncError = "", prepSyncing = false;
+  let prepPendingSince = null, prepPendingNotice = 0;
   function prepRead(key) { if (prepPendingWrites.has(key)) return clone(prepPendingWrites.get(key)); try { var o = JSON.parse(localStorage.getItem(key)); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; } }
   function prepWrite(key, o) {
     try { localStorage.setItem(key, JSON.stringify(o)); prepPendingWrites.delete(key); prepPaintStorage(); return true; }
@@ -2440,6 +2441,14 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   let prepOutbox = Object.fromEntries(Object.entries(prepRead(PREP_SYNC_KEY)).filter(([key,item]) => item && ['ats','cl','iprep','story','wb'].includes(item.tool) && typeof item.id === 'string' && item.id.length > 0 && typeof item.revision === 'string' && ['put','del'].includes(item.action) && key === item.tool + '/' + item.id).map(([key,item]) => [key,{tool:item.tool,id:item.id,action:item.action,revision:item.revision,acknowledged:item.action === 'del' && item.acknowledged === true}]));
   function prepStorageHtml(tool = "", id = "") { return '<div class="prep-storage" data-prep-storage data-prep-tool="' + escAttr(tool) + '" data-prep-id="' + escAttr(id) + '" role="status"><span></span><button class="btn btn--ghost" type="button" data-prep-retry>Retry save and sync</button></div>'; }
   function prepPaintStorage() {
+    const pending = Object.values(prepOutbox || {}).some(item => !item.acknowledged) && !!prepSess();
+    if (!pending) {
+      clearTimeout(prepPendingNotice); prepPendingNotice = 0; prepPendingSince = null;
+    } else if (prepPendingSince === null) {
+      prepPendingSince = Date.now();
+      prepPendingNotice = setTimeout(() => { prepPendingNotice = 0; prepPaintStorage(); }, 5000);
+    }
+    const showPending = pending && Date.now() - prepPendingSince >= 5000;
     document.querySelectorAll("[data-prep-storage]").forEach(host => {
       if (host.dataset.prepTool === "ats") {
         const id = host.dataset.prepId, key = "ats/" + id, entry = prepGet("ats", id), session = prepSess();
@@ -2452,9 +2461,10 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         host.querySelector("button").disabled = prepSyncing;
         return;
       }
-      const message = prepPendingWrites.size ? "Not saved on this device. Your changes are kept in this tab; free storage and retry before closing." : prepSyncError || (Object.values(prepOutbox || {}).some(item => !item.acknowledged) && prepSess() ? "Saved on this device. Cloud sync pending." : "");
+      const message = prepPendingWrites.size ? "Not saved on this device. Your changes are kept in this tab; free storage and retry before closing." : prepSyncError || (showPending ? "Saved on this device. Cloud sync pending." : "");
       host.hidden = !message;
       host.querySelector("span").textContent = message;
+      host.querySelector("button").hidden = !prepPendingWrites.size && !prepSyncError && (!showPending || prepSyncing);
       host.querySelector("button").disabled = prepSyncing;
     });
   }
@@ -11903,21 +11913,26 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   // instead of a stacked dialog. Simple ones inline (One-tap Allow / Recruiter / Backup); Passkeys /
   // Publishing / AI launch their existing proven dialogs from here.
   var SET_CATS = [["allow", IC.zap, "One-tap Allow"], ["recruiter", IC.ticket, "Recruiter mode"], ["security", IC.shield, "Security"], ["publish", IC.publish, "Publishing"], ["ai", IC.spark, "AI"], ["history", IC.history, "Version history"], ["backup", IC.save, "Backup"]];
-  var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null;
+  var setPane, setNav, setPanel, activeSetCat = "allow", setSub = null, setOpenFrame = 0;
   function openSettings() {
     if (!setPane) return;
+    setPane._returnFocus = document.activeElement;
     setPane.hidden = false;
     setSub = null;
-    requestAnimationFrame(function () { setPane.classList.add("is-open"); });
+    cancelAnimationFrame(setOpenFrame);
+    setOpenFrame = requestAnimationFrame(function () { setOpenFrame = 0; setPane.classList.add("is-open"); setPane.querySelector('[data-act="settings-close"]').focus(); });
     renderSettings();
-    var esc = function (ev) { if (ev.key === "Escape" && !document.querySelector(".pass")) { closeSettings(); } };
+    var esc = function (ev) { if (ev.key === "Escape" && ![...document.querySelectorAll('.pass:not([aria-modal="false"])')].some(dialog => dialog.getClientRects().length)) { closeSettings(); } };
     document.addEventListener("keydown", esc, true);
+    if (setPane._esc) document.removeEventListener("keydown", setPane._esc, true);
     setPane._esc = esc;
   }
   function closeSettings() {
     if (!setPane) return;
+    cancelAnimationFrame(setOpenFrame); setOpenFrame = 0;
     if (setPane._esc) { document.removeEventListener("keydown", setPane._esc, true); setPane._esc = null; }
     setPane.classList.remove("is-open");
+    if (setPane._returnFocus?.isConnected && setPane._returnFocus.getClientRects().length && !setPane._returnFocus.closest('[inert]')) setPane._returnFocus.focus();
     setTimeout(function () { if (setPane && !setPane.classList.contains("is-open")) setPane.hidden = true; }, 260);
   }
   function renderSettings() {
@@ -16715,6 +16730,40 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (!result.ok) throw new Error(result.err);
     return result.text;
   }
+  async function wbLiveTurn(cfg, system, prompt, image, opts) {
+    const task = image ? "vision" : "writing", target = aiManualModel ? { ...aiManualModel } : undefined;
+    const user = image ? [{type:"text",text:prompt},{type:"image_url",image_url:{url:"data:" + image.mime + ";base64," + image.b64}}] : prompt;
+    const job = aiSession.begin(task, "Whiteboard reply");
+    const timeout = AbortSignal.timeout(AI_AGENT_LIMITS.milliseconds);
+    const signal = AbortSignal.any([opts.signal, job.signal, timeout]);
+    try {
+      let configs = await aiRoutingConfigs(cfg, !!target);
+      if (target) {
+        configs = configs.filter(config => aiProviderScope(config) === target.scope);
+        if (!configs.length) throw new Error("The selected model's service is no longer connected. Choose another model or Auto in AI activity.");
+      }
+      signal.throwIfAborted();
+      const options = aiTaskOptions(system, user, prepareRequestOptions({ ...opts, signal, target, images:!!image, imageCount:image ? 1 : 0,
+        json:true, singleAttempt:true, maxAttempts:1,
+        onRoute:route => aiSession.route(job.id, route)
+      }));
+      const result = await aiOrchestrator.run(configs, task, options, (selected, model, route) => {
+        const usageContext = {sessionId:job.sessionId,jobId:job.id,callId:route.id};
+        return aiChatOnce(selected, model, system, user, { ...options, usageContext,
+          onUsage:(input, output) => aiSession.recordUsage(input, output, usageContext),
+          onOutput:chunk => aiSession.output(job.id, route.id, chunk)
+        });
+      });
+      signal.throwIfAborted();
+      aiSession.finish(job.id, "complete");
+      return result.text;
+    } catch (error) {
+      const cancelled = opts.signal.aborted || job.signal.aborted;
+      const failure = timeout.aborted && !cancelled ? new Error("The reply timed out. Your response is saved; retry or choose another model in AI activity.") : error;
+      aiSession.finish(job.id, cancelled ? "cancelled" : "error", cancelled ? "" : failure.message);
+      throw failure;
+    }
+  }
   async function visionModels(cfg) {
     return (await aiOrchestrator.choices(await aiRoutingConfigs(cfg), "vision", { images: true })).map(choice => choice.model.id);
   }
@@ -18821,12 +18870,14 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     header.append(viewSwitch);
     header.append(modal.querySelector('[data-wb-chrome]'));
     modal.querySelector('.pass__title').remove(); modal.querySelector('.pass__box').prepend(header);
-    document.body.appendChild(modal);
+    root.appendChild(modal);
+    aiSessionPanel?.close(false);
     prepMountStorage(modal);
     const lifetime = prepDialogLifetime(modal,'Whiteboard coach');
     const coveredStudio = [...(root?.querySelectorAll('.adm__main,.adm__workbar,.adm__bar,.adm__statusbar') || [])].map(element => ({element,inert:element.inert}));
     coveredStudio.forEach(({element}) => { element.inert = true; });
     function setSessionView(active) {
+      if (!active) aiSessionPanel?.close(false);
       modal.classList.toggle('wb-modal--stage',active);
       modal.setAttribute('aria-modal',String(!active));
       header.querySelectorAll('[data-wb-session-control]').forEach(control => { control.hidden = !active; });
@@ -18906,7 +18957,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     var watchCleanup = null, micCleanup = null, timerCleanup = null, hasSessionMedia = null;
     var miniEl = null, miniMic = null, curTimerText = "", doListen = null;
     var pipWin = null, pipTimeEl = null, pipMic = null;
-    let companionPaint = null, speechAccepted = false;
+    let companionPaint = null;
     var WB_MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 19v3"/></svg>';
     function stopExercise() {
       exercise.abort(); exercise = new AbortController();
@@ -18931,7 +18982,10 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       root.innerHTML = '<header><b>Whiteboard</b><span data-companion-phase></span><span class="wb__mini-t" data-companion-time></span><button type="button" class="adm__hist-btn" data-companion-back title="Back to session" aria-label="Back to session">' + IC.back + '</button></header><p data-companion-latest></p><div class="wb__companion-acts"><button type="button" class="btn btn--primary" data-companion-ready>Ready, start</button><button type="button" class="btn btn--ghost" data-companion-role-end hidden>End role-play</button><button type="button" class="wb__mic" data-companion-mic title="Microphone" aria-label="Microphone"><span class="wb__ico">' + WB_MIC_SVG + '</span></button><button type="button" class="btn btn--ghost" data-companion-stop hidden>Stop reply</button></div><details><summary>Response</summary><textarea rows="3" aria-label="Your response" data-companion-draft></textarea><button type="button" class="btn btn--auto" data-companion-send>Send</button></details><div role="status" data-companion-error></div>';
       root.querySelector('[data-companion-back]').addEventListener('click', restore);
       for (const name of ['ready','role-end','send','interrupt']) root.querySelector('[data-companion-' + (name === 'interrupt' ? 'stop' : name) + ']').addEventListener('click', () => stage.querySelector('[data-wb-' + name + ']')?.click());
-      root.querySelector('[data-companion-mic]').addEventListener('click', () => doListen?.());
+      const companionMic = root.querySelector('[data-companion-mic]');
+      companionMic.title = 'Microphone. Your browser may send audio to its speech service to turn it into text.';
+      companionMic.setAttribute('aria-description','Your browser may send audio to its speech service to turn it into text.');
+      companionMic.addEventListener('click', () => doListen?.());
       const input = root.querySelector('[data-companion-draft]');
       input.addEventListener('input', () => { const source = stage.querySelector('.wb__msg'); if (source) { source.value = input.value; source.dispatchEvent(new Event('input')); } });
       input.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); stage.querySelector('[data-wb-send]')?.click(); } });
@@ -19130,7 +19184,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         '<div class="wb__composer"><textarea class="wb__msg" rows="2" placeholder="Your response..."></textarea>' +
         (voiceOn ? '<span class="wb__voice-live" data-wb-live></span>' : "") +
         '<div class="wb__composer-act">' + micInline + capInline + spkInline + '<button type="button" class="btn btn--ghost" data-wb-interrupt hidden>Stop reply</button><button type="button" class="btn btn--ghost" data-wb-reply-retry hidden>Retry reply</button><button class="btn btn--auto wb__send" data-wb-send>Send</button></div>' +
-        (voiceOn ? '<div class="wb__speech-consent" data-wb-speech-consent hidden><p class="af__hint" id="wb-speech-notice">Your browser may send audio to its speech service to turn it into text.</p><button type="button" class="btn btn--ghost" data-wb-speech-allow>Enable microphone</button><button type="button" class="btn btn--ghost" data-wb-speech-cancel>Not now</button></div>' : '') + '</div>' +
+        (voiceOn ? '<span id="wb-speech-notice" hidden>Your browser may send audio to its speech service to turn it into text.</span>' : '') + '</div>' +
         '<section class="wb__board" aria-label="Shared board" hidden><div class="wb__watch" data-wb-watch-bar hidden></div><div class="af__hint" id="wb-record-notice" data-wb-record-notice hidden>Recording: focused view + microphone. Local until you approve AI upload; download before leaving.</div><p class="af__hint" data-wb-review-status role="status"></p><p class="af__hint" data-wb-review-warning role="alert"></p><button type="button" class="btn btn--ghost" data-wb-review-cancel hidden>Cancel recording review</button></section></div>' +
         '<aside class="wb__rail"><div class="wb__timer" data-wb-timer><span class="wb__timer-t" data-wb-timer-t>' + wbFmtClock(timerLeft) + '</span><span class="wb__timer-l" data-wb-phase></span></div>' +
         wbPromptCard(prompt) +
@@ -19481,16 +19535,23 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
           if (frame) { observation = {id:'board-' + (sessObservations.length + 1),source:wFocus,at:Math.max(0,totalSec - timerLeft),status:'pending'}; sessObservations.push(observation); }
           if (frame) { lastLookAt = Date.now(); paintWatch(); }
           var usr = wbMockUser(prompt, sessTurns.length ? sessTurns.map(turn => JSON.stringify(turn)).join('\n') : transcript, userMsg || "") + sessionContext() + (nudge ? "\n\n" + nudge : "");
-          var result;
-          if (frame && wModel) {
-            try { result = csgenParse(await wbVisionTurn(aiCfg('txt'), wModel, wbMockSystem(st.mins) + WB_SEE_SYS, usr, frame, {temperature:0.6,signal:turnSignal})); if (!result || !['readable','unreadable','uncertain'].includes(result.readability)) throw new Error('Missing board readability'); observation.status = result.readability; }
-            catch (e) { observation.status = turnSignal.aborted ? 'cancelled' : 'failed'; turnSignal.throwIfAborted(); err.textContent = 'Board analysis failed. This reply uses the conversation only.'; result = csgenParse(await prepareAiText(aiCfg("txt"), wbMockSystem(st.mins), usr + '\nNo board image is available for this reply. Do not imply you saw it.', { json:true,temperature:0.6,signal:turnSignal })); }
-          } else {
-            result = csgenParse(await prepareAiText(aiCfg("txt"), wbMockSystem(st.mins), usr, { json:true,temperature:0.6,signal:turnSignal }));
+          let result, outcome;
+          try {
+            await wbLiveTurn(aiCfg("txt"), wbMockSystem(st.mins) + (frame ? WB_SEE_SYS : ""), usr, frame, {
+              temperature:0.6,signal:turnSignal,
+              validate:text => {
+                result = csgenParse(text);
+                if (frame && !['readable','unreadable','uncertain'].includes(result?.readability)) throw new Error('The board reply omitted readability. Your response is saved; retry the reply.');
+                outcome = applyWhiteboardReply(result,sessConversation,{turns:sessTurns,phase:sessPhase,candidateInput:!!userMsg,automatic:!!nudge,level:st.level});
+              }
+            });
+            if (observation) observation.status = result.readability;
+          } catch (error) {
+            if (observation) observation.status = turnSignal.aborted ? 'cancelled' : 'failed';
+            throw error;
           }
           turnSignal.throwIfAborted(); if (generation !== replyGeneration || !running()) return;
           const previousRole = sessConversation.role;
-          const outcome = applyWhiteboardReply(result,sessConversation,{turns:sessTurns,phase:sessPhase,candidateInput:!!userMsg,automatic:!!nudge,level:st.level});
           sessConversation = outcome.conversation; thinking = sessConversation.thinking;
           const reply = outcome.reply;
           if (outcome.action === 'pause') { stopTimer(); sessResumePhase = sessPhase; sessPhase = 'paused'; micCleanup?.(); paintWatch(); }
@@ -19533,14 +19594,6 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         };
         var startListening = async function () {
           if (!activeExercise() || micStarting || sessPhase === 'debrief' || scoring) return;
-          if (!speechAccepted) {
-            if (pipWin) pipWin.close();
-            if (miniEl && !miniEl.hidden) hideMini();
-            modal.style.display = '';
-            stage.querySelector('[data-wb-speech-consent]').hidden = false;
-            stage.querySelector('[data-wb-speech-allow]').focus();
-            return;
-          }
           const testing = !running();
           if (wTurnBusy) interruptReply(); thinking = false;
           // Tapping while listening = "I'm done" \u2014 finalise + send. A think-pause alone never sends.
@@ -19587,13 +19640,6 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         };
         doListen = startListening;
         if (micBtn) micBtn.addEventListener("click", startListening);
-        stage.querySelector('[data-wb-speech-allow]').addEventListener('click', () => {
-          speechAccepted = true; stage.querySelector('[data-wb-speech-consent]').hidden = true;
-          micBtn.focus(); startListening();
-        });
-        stage.querySelector('[data-wb-speech-cancel]').addEventListener('click', () => {
-          stage.querySelector('[data-wb-speech-consent]').hidden = true; micBtn.focus();
-        });
         var setSpk = function (on) { speakOn = on; if (spkBtn) { spkBtn.classList.toggle("is-on", on); var si = spkBtn.querySelector("[data-wb-spk-ico]"); if (si) si.innerHTML = on ? WB_IC_SPK : WB_IC_SPK_OFF; spkBtn.title = "AI narration \u2014 " + (on ? "on (the interviewer reads its replies aloud)" : "off"); spkBtn.setAttribute("aria-label", "AI narration \u2014 " + (on ? "on" : "off")); } if (!on) wbSpeech.stop(); };
         if (spkBtn) spkBtn.addEventListener("click", function () { setSpk(!speakOn); });
         setSpk(speakOn);
@@ -19605,7 +19651,6 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
           const stopped = stopRec(); paintWatch();
           if (!await stopped || !activeExercise()) { immersiveButton.disabled = false; return; }
           setImmersive(false); micCleanup?.(); wbSpeech.stop(); stopWatch();
-          stage.querySelector('[data-wb-speech-consent]')?.setAttribute('hidden','');
           immersiveButton.disabled = false; immersiveButton.focus(); return;
         }
         const request = ++immersiveRequest; setImmersive(true);
@@ -20467,8 +20512,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         "</section>" +
         '<div class="adm__rzr" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Drag to resize the right panel" title="Drag to resize \u00b7 double-click to reset"><span class="adm__resizer-grip"></span></div>' +
         '<aside class="adm__casestage" data-casestage hidden aria-label="Section editor"></aside>' +
-        '<aside class="adm__ai-panel" id="studio-ai-activity" data-ai-session-panel aria-label="AI activity" hidden></aside>' +
       "</div>" +
+      '<aside class="adm__ai-panel" id="studio-ai-activity" data-ai-session-panel aria-label="AI activity" hidden></aside>' +
       '<footer class="adm__statusbar" aria-label="Document status">' +
         '<span class="adm__status" aria-live="polite" title="Editing local draft">Editing local draft</span>' +
         '<span class="adm__dmeter" data-draftmeter data-lvl="lo" tabindex="0" aria-label="Local draft storage"><span class="adm__dmeter-dot"></span><span class="adm__dmeter-tx" data-draftmeter-tx>Draft 0%</span></span>' +

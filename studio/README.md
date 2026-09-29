@@ -304,15 +304,39 @@ Without recordings, the existing conversation/final-image review remains.
 Final-image scores now require an explicit readable result; absent or uncertain
 readability cannot justify a visual score.
 
-The permanent browser-speech hint is replaced with a first-use inline explanation
-and Enable microphone / Not now controls. Browser transcription may send audio to
-the browser's speech service; permission is explained before requesting mic access.
-Acknowledgement lasts for the open Whiteboard dialog, not as a global preference.
-The mic tooltip and accessible description retain this information. A first mic
-request from the companion returns to the main session for acknowledgement.
+The microphone button directly requests browser permission when needed, without
+an additional Enable microphone / Not now step. Browser transcription may send
+audio to the browser's speech service; the main and companion mic tooltips and
+accessible descriptions retain that disclosure. During briefing or pause, the
+button checks permission without starting recognition or the clock. During an
+active conversation it starts listening, including from the floating companion
+without dismissing it. Recording and whole-file AI-upload consent remain separate.
 
-These header/recording/disclosure refinements are included in the September 29
-release for desktop acceptance. Launch setup and the original Coach workflow remain unchanged.
+Routine local/cloud autosaves do not flash a warning: pending cloud sync is shown
+only after five continuous seconds, without a Retry button while a healthy request
+is in flight. Local write failures and cloud errors remain immediate and retryable;
+the durable outbox and ATS cloud-confirmation rules are unchanged.
+
+AI activity remains accessible from the footer above the active Whiteboard, while
+the underlying editor stays inert. Close/Escape restore focus; AI settings can open
+and close without losing the session or draft. Modal confirmations remain above
+these Studio panels.
+
+Each live text or focused-image turn uses one routed generation request, not the
+general planning/draft/review coordinator. It retains model catalogue/manual
+selection, context checks, Prepare's model-output/selection-cost policy, full
+conversation context, usage, streamed activity and cancellation. The existing
+eight-minute outer deadline is retained, not a responsiveness target; no new
+answer-token or reasoning cap is imposed. There is no automatic evaluation,
+provider retry or text-only fallback after failed vision. Errors preserve the
+candidate response and offer an explicit Retry reply. Structured conversation and
+image-readability validation run before applying session changes. Detailed
+wrap-up and full-recording review keep their existing separate paths. One-request
+synthetic checks prove removal of coordinator overhead, not real-provider latency.
+
+The header/recording experience and subsequent interaction fixes above are ready
+for desktop acceptance; synthetic validation does not establish owner acceptance.
+Launch setup and the original Coach workflow remain unchanged.
 Malformed conversational replies
 produce an explicit retryable error without applying partial state changes.
 This release has simulated provider coverage only: this proves lifecycle and

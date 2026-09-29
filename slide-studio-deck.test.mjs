@@ -2339,7 +2339,7 @@ async function installPrepareReplies(page) {
         window.preparationPlanningCalls.push({maxTokens:request.max_tokens,effort:request.output_config?.effort,job:input.job,review:!!input.candidate});
         text = JSON.stringify({decision:input.candidate ? {action:'finish',summary:'Validated fixture result'} : {action:'draft',modelRef:input.draftModels[0],task:'writing',effort:window.interviewEffortCeilingTest ? 'high' : undefined,instruction:'',inputs:[],summary:'Use the selected evidence'}});
       } else {
-        window.preparationCalls.push({system,user:JSON.stringify(request.messages),maxTokens:request.max_tokens,effort:request.output_config?.effort});
+        window.preparationCalls.push({system,user:JSON.stringify(request.messages),model:request.model,maxTokens:request.max_tokens,effort:request.output_config?.effort});
         if (system.includes('{"questions":[{"q":string,"category":string,"why":string}]}') && /Generate exactly \d+ questions/.test(JSON.stringify(request.messages))) {
           if (window.interviewOutputLimit) return Response.json({content:[],stop_reason:'max_tokens',usage:{input_tokens:10,output_tokens:request.max_tokens,output_tokens_details:{thinking_tokens:request.max_tokens}}});
           const count = Number(JSON.stringify(request.messages).match(/Generate exactly (\d+) questions/)?.[1] || 10);
@@ -2353,6 +2353,7 @@ async function installPrepareReplies(page) {
         else if (system.includes('candidate has drafted')) text = JSON.stringify({verdict:'SAVED_COACHING_FEEDBACK',strong:['A clear user'],gaps:['Name the outcome']});
         else if (system.includes('panel debriefing')) text = JSON.stringify(window.whiteboardScore || {scores:[{dim:'Problem framing',score:3,note:'A stated user need',evidence:['turn-2']}],overall:'SAVED_MOCK_SCORE',topfix:'Name the success measure',improvements:[{action:'Name a measurable outcome',evidence:['turn-2'],retry:'Explain the success measure and its limitation.'},{action:'Compare an alternative',evidence:['turn-2'],retry:'Compare two possible approaches and choose one.'}]});
         else if (system.includes('You ARE the interviewer')) {
+          if (window.whiteboardHttpFailure) return Response.json({error:{type:'invalid_request_error',message:'Unsupported temperature'}},{status:400});
           if (window.deferWhiteboardReply) { await new Promise(resolve => { window.releaseWhiteboardReply = resolve; }); window.whiteboardReplyReturned = true; }
           text = JSON.stringify({reply:system.includes('"readability"') ? 'The board is unreadable. Please zoom in or describe it.' : 'Which user and outcome will you focus on?',readability:'unreadable',action:'respond',roleAction:'keep',roleId:null,origin:null,assisted:false,memory:[],...window.whiteboardReply});
         }
@@ -3008,6 +3009,37 @@ test("Prepare Interview long sets use one reading scroller with persistent navig
       await page.close();
     }
   } finally { await browser.close(); }
+});
+
+test("Prepare storage status stays quiet during quick sync and reports sustained pending or failures", () => {
+  const source = readFileSync(new URL('./src/js/admin-studio.js',import.meta.url),'utf8');
+  const start = source.indexOf('  function prepPaintStorage() {'), end = source.indexOf('  function prepMountStorage(',start);
+  const makeHost = (dataset = {}) => {
+    const span = {textContent:''}, button = {hidden:false,disabled:false};
+    return {dataset,hidden:true,span,button,querySelector:selector => selector === 'span' ? span : button};
+  };
+  const host = makeHost(), ats = makeHost({prepTool:'ats',prepId:'resume'}), entry = {id:'resume'};
+  let now = 1000, timer = null;
+  const env = {document:{querySelectorAll:()=>[host,ats]},Date:{now:()=>now},prepPendingSince:null,prepPendingNotice:0,
+    setTimeout:callback => { timer=callback; return 1; },clearTimeout:()=>{timer=null;},
+    prepOutbox:{'wb/session':{acknowledged:false}},prepPendingWrites:new Map(),prepSyncError:'',prepSyncing:true,prepSess:()=> 'owner',
+    prepGet:()=>entry,prepCloudSaved:new Map(),prepCloudErrors:new Map(),PREP_HIST_KEY:'history'};
+  const paint = runInNewContext(source.slice(start,end)+';prepPaintStorage',env);
+  paint(); assert.equal(host.hidden,true); assert.equal(host.button.hidden,true);
+  assert.equal(ats.hidden,false); assert.match(ats.span.textContent,/Cloud copy not confirmed/);
+  now += 4999; paint(); assert.equal(host.hidden,true);
+  env.prepSyncError='Immediate cloud failure'; paint(); assert.equal(host.hidden,false); assert.equal(host.span.textContent,env.prepSyncError);
+  env.prepSyncError=''; paint(); assert.equal(host.hidden,true);
+  env.prepOutbox={}; paint(); assert.equal(timer,null); assert.equal(env.prepPendingSince,null);
+  now += 1; env.prepOutbox={'wb/session':{acknowledged:false}}; paint();
+  now += 5000; timer(); assert.equal(host.hidden,false); assert.match(host.span.textContent,/Cloud sync pending/); assert.equal(host.button.hidden,true);
+  env.prepSyncError='Cloud sync failed. Retry save and sync.'; env.prepSyncing=false; paint();
+  assert.equal(host.span.textContent,env.prepSyncError); assert.equal(host.button.hidden,false); assert.equal(host.button.disabled,false);
+  env.prepOutbox={}; env.prepSyncError=''; paint(); assert.equal(host.hidden,true);
+  env.prepPendingWrites.set('history',entry); paint();
+  assert.match(host.span.textContent,/Not saved on this device/); assert.equal(host.hidden,false); assert.equal(host.button.hidden,false);
+  env.prepPendingWrites.clear(); env.prepCloudSaved.set('ats/resume',{session:'owner',signature:JSON.stringify(entry)}); paint();
+  assert.equal(ats.span.textContent,'Saved to Cloudflare.'); assert.equal(ats.button.hidden,true);
 });
 
 test("Prepare storage failures keep generated results in memory until retry succeeds", {timeout:30000}, async () => {
@@ -4196,7 +4228,7 @@ for (const width of [1440,390,320]) test('Prepare Whiteboard actual board record
     assert.equal(await page.locator('.wb__stage').evaluate(element=>element.scrollWidth <= element.clientWidth),true);
     await page.locator('[data-wb-immersive]').click();
     await page.waitForFunction(() => document.querySelector('.wb__preview-video')?.videoWidth === 800);
-    if(await page.locator('[data-wb-speech-cancel]').isVisible()) await page.locator('[data-wb-speech-cancel]').click();
+    assert.equal(await page.locator('[data-wb-speech-cancel]').count(),0);
     assert.equal(await page.locator('.wb__header [data-wb-record]').isVisible(),true);
     assert.equal(await page.locator('[data-wb-record]').getAttribute('aria-pressed'),'false');
     await page.locator('[data-wb-record]').click(); await page.getByRole('button',{name:'Start recording',exact:true}).click(); await page.locator('.wb__watch-rec').waitFor();
@@ -4386,7 +4418,7 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
     await page.locator('.wb__msg').fill('My uninterrupted draft');
     const before = await page.evaluate(() => ({session:JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],calls:window.preparationCalls.length}));
     await page.locator('[data-wb-immersive]').click();
-    await page.locator('[data-wb-speech-allow]').click();
+    assert.equal(await page.locator('[data-wb-speech-allow]').count(),0);
     await page.waitForFunction(() => document.querySelectorAll('.wb__feed-vid').length === 2 && document.querySelector('.wb__preview-video')?.videoWidth === 800);
     assert.equal(await page.locator('.wb__watch-options,[data-wb-ai-source],[data-wb-record-source]').count(),0);
     assert.equal(await page.locator('[data-wb-preview="screen"]').getAttribute('aria-pressed'),'true');
@@ -4405,7 +4437,11 @@ test('Prepare Whiteboard immersive sources permissions and navigation preserve t
     await page.waitForFunction(()=>document.querySelector('.wb__watch-meta').textContent.includes('Camera images on each turn'));
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('.wb__feed-vid')].every((video,index) => video === window.retainedVideos[index])),true);
     assert.equal(await page.locator('.wb__preview-video').evaluate(video => { const canvas=document.createElement('canvas');canvas.width=1;canvas.height=1;const drawing=canvas.getContext('2d');drawing.drawImage(video,0,0,1,1);return drawing.getImageData(0,0,1,1).data[0]; }),91);
+    await page.locator('[data-ai-session-toggle]').click();
+    await page.locator('[data-ai-session-panel]').waitFor();
+    await page.screenshot({path:join(tmpdir(),'rk-whiteboard-immersive-ai-activity.png')});
     await page.locator('[data-wb-record]').click(); await page.getByRole('button',{name:'Start recording',exact:true}).click();
+    await page.locator('[data-ai-close]').click();
     await page.waitForFunction(()=>document.querySelector('[data-wb-record]').getAttribute('aria-pressed')==='true');
     assert.equal(await page.locator('[data-wb-record-label]').textContent(),'Stop recording');
     const headerPositions = await page.locator('.wb__header').evaluate(header => {
@@ -4543,13 +4579,82 @@ test('Prepare Whiteboard recording refuses denied microphones and releases late 
   } finally { await browser.close(); }
 });
 
+test('Prepare Whiteboard activity stays interactive and live replies use one selected request', {timeout:60000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__own').fill('A synthetic single-request interview'); await page.locator('[data-wb-start]').click(); await page.locator('[data-wb-ready]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[1,0]);
+    await page.locator('.wb__msg').fill('A draft that must survive the activity panel');
+    const toggle=page.locator('[data-ai-session-toggle]'), panel=page.locator('[data-ai-session-panel]');
+    await toggle.click(); await page.waitForFunction(()=>document.querySelector('[data-ai-model]')?.options.length>1);
+    assert.equal(await panel.evaluate(element=>!!element.closest('[inert]')),false);
+    assert.equal(await panel.locator('[data-ai-close]').evaluate(element=>{const rect=element.getBoundingClientRect();return element.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));}),true);
+    assert.equal(await page.locator('.adm__main').evaluate(element=>element.inert),true);
+    const selected=await panel.locator('[data-ai-model]').selectOption({index:1});
+    const model=JSON.parse(selected[0])[2];
+    await page.screenshot({path:join(tmpdir(),'rk-whiteboard-ai-activity.png')});
+    await panel.locator('[data-ai-close]').press('Escape'); assert.equal(await panel.isVisible(),false);
+    assert.equal(await toggle.evaluate(element=>element===document.activeElement),true);
+    await toggle.click(); await panel.locator('[data-ai-settings]').click();
+    const settings=page.locator('.adm__settings');
+    await settings.locator('[data-act="settings-close"]').click(); await settings.waitFor({state:'hidden'});
+    await toggle.click(); await panel.locator('[data-ai-settings]').click();
+    await page.keyboard.press('Escape'); await settings.waitFor({state:'hidden'});
+    assert.equal(await page.locator('.wb__msg').inputValue(),'A draft that must survive the activity panel');
+    assert.equal(await page.locator('[data-wb-phase]').textContent(),'working');
+    await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===2&&!document.querySelector('[data-wb-send]').disabled);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[2,0]);
+    const request=await page.evaluate(()=>window.preparationCalls.at(-1));
+    assert.equal(request.model,model); assert.match(request.user,/A draft that must survive/); assert.match(request.user,/Which user and outcome/);
+    await page.evaluate(()=>{window.whiteboardReply={action:'invalid'};});
+    await page.locator('.wb__msg').fill('Retain the candidate response after invalid output'); await page.locator('[data-wb-send]').click();
+    await page.locator('[data-wb-reply-retry]').waitFor();
+    assert.match(await page.locator('.wb-modal .pass__err').textContent(),/reply was invalid/);
+    assert.equal(await page.locator('.wb__turn--int').count(),2);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[3,0]);
+    await toggle.click(); assert.match(await panel.locator('[data-ai-error]').last().textContent(),/reply was invalid/);
+    assert.match(await panel.locator('[data-ai-total]').textContent(),/30.*15/);
+    await panel.locator('[data-ai-close]').click();
+    await page.evaluate(()=>{window.whiteboardReply={};}); await page.locator('[data-wb-reply-retry]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===3&&!document.querySelector('[data-wb-send]').disabled);
+    assert.equal(await page.locator('.wb__turn--you').count(),2,'Retry must not duplicate the candidate response');
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[4,0]);
+    await page.evaluate(()=>{window.deferWhiteboardReply=true;window.releaseWhiteboardReply=null;});
+    await page.locator('.wb__msg').fill('Cancel this response from AI activity'); await page.locator('[data-wb-send]').click();
+    await page.waitForFunction(()=>!!window.releaseWhiteboardReply);
+    await toggle.click(); await panel.getByRole('button',{name:'Stop AI request',exact:true}).click();
+    await page.evaluate(()=>{window.deferWhiteboardReply=false;window.releaseWhiteboardReply();});
+    await page.waitForFunction(()=>!document.querySelector('[data-wb-send]').disabled);
+    assert.equal(await page.locator('.wb__turn--int').count(),3,'A late cancelled response cannot enter the conversation');
+    assert.equal(await panel.locator('[data-job-id]').last().getAttribute('data-status'),'cancelled');
+    await panel.locator('[data-ai-close]').click();
+    await page.evaluate(()=>{window.whiteboardHttpFailure=true;});
+    await page.locator('[data-wb-reply-retry]').click(); await page.locator('[data-wb-reply-retry]').waitFor();
+    assert.match(await page.locator('.wb-modal .pass__err').textContent(),/Unsupported temperature/);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[6,0],'An unsupported parameter must not trigger an implicit provider retry');
+    assert.equal(await page.locator('.wb__turn--you').count(),3);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 test('Prepare Whiteboard floating companion shares draft pause and fallback without capture', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const context = await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), page = await context.newPage(), errors = [];
   context.on('page',candidate=>candidate.on('pageerror',error=>errors.push(error.message)));
   try {
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getDisplayMedia = () => { throw new Error('Unexpected capture'); };
+      navigator.mediaDevices.getUserMedia = async options => { if (!options.audio) throw new Error('Unexpected camera'); window.companionMicRequests=(window.companionMicRequests||0)+1; return {getTracks:()=>[{stop(){}}]}; };
+      window.SpeechRecognition = class { start() { window.companionRecognitionStarts=(window.companionRecognitionStarts||0)+1; } abort() {} };
+    });
     await installPrepareReplies(page); await openIntegratedFixture(page);
-    await page.evaluate(() => { navigator.mediaDevices.getDisplayMedia = navigator.mediaDevices.getUserMedia = () => { throw new Error('Unexpected capture'); }; });
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click();
     await page.locator('[data-wb-deeper]').click();
     await page.locator('.wb__own').fill('A synthetic companion exercise'); await page.locator('[data-wb-start]').click(); await page.locator('[data-wb-ready]').click();
@@ -4567,10 +4672,12 @@ test('Prepare Whiteboard floating companion shares draft pause and fallback with
     assert.equal(await page.locator('.wb__turn--you').count(),1);
     assert.deepEqual(await companion.evaluate(() => ['--sans','--mono','--serif'].map(name=>getComputedStyle(document.documentElement).getPropertyValue(name))),await page.evaluate(() => ['--sans','--mono','--serif'].map(name=>getComputedStyle(document.querySelector('.wb-modal')).getPropertyValue(name))));
     await companion.screenshot({path:join(tmpdir(),'rk-whiteboard-companion.png')});
-    const closed = companion.waitForEvent('close'); await companion.locator('[data-companion-mic]').click(); await closed;
-    assert.equal(await page.locator('.wb-modal').isVisible(),true,'First companion mic use returns to the main session for disclosure');
-    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),true);
-    await page.locator('[data-wb-speech-cancel]').click();
+    await companion.locator('[data-companion-mic]').click();
+    await page.waitForFunction(()=>window.companionRecognitionStarts===1);
+    assert.equal(await page.evaluate(()=>window.companionMicRequests),1);
+    assert.equal(companion.isClosed(),false,'Microphone activation must not dismiss the companion');
+    assert.equal(await page.locator('[data-wb-speech-consent]').count(),0);
+    const closed = companion.waitForEvent('close'); await companion.locator('[data-companion-back]').click(); await closed;
     await page.evaluate(() => { documentPictureInPicture.requestWindow = () => Promise.reject(new DOMException('Unavailable','NotAllowedError')); });
     await page.locator('[data-wb-min]').click(); await page.locator('.wb__mini-host').waitFor();
     await page.locator('.wb__mini-host [data-companion-ready]').click(); assert.equal(await page.locator('[data-wb-phase]').textContent(),'paused');
@@ -4591,15 +4698,11 @@ test('Prepare Whiteboard voice preparation is untimed and late recognition prese
     });
     await installPrepareReplies(page); await openIntegratedFixture(page);
     await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click(); await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-convo="voice"]').click(); await page.locator('[data-wb-deeper]').click(); await page.locator('.wb__own').fill('Voice test exercise'); await page.locator('[data-wb-start]').click();
-    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),false);
+    assert.equal(await page.locator('[data-wb-speech-consent],[data-wb-speech-allow],[data-wb-speech-cancel]').count(),0);
     await page.locator('[data-wb-mic]').click();
-    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),true);
-    assert.equal(await page.evaluate(()=>window.microphoneRequests||0),0,'Explain browser transcription before requesting the microphone');
-    await page.locator('[data-wb-speech-cancel]').click();
-    assert.equal(await page.evaluate(()=>window.microphoneRequests||0),0);
-    await page.locator('[data-wb-mic]').click(); await page.locator('[data-wb-speech-allow]').click();
     await page.getByText('Microphone available. Session clock is stopped.',{exact:true}).waitFor();
-    assert.equal(await page.locator('[data-wb-speech-consent]').isVisible(),false);
+    assert.equal(await page.evaluate(()=>window.microphoneRequests),1,'The first click directly requests browser permission');
+    assert.match(await page.locator('#wb-speech-notice').textContent(),/may send audio/);
     assert.match(await page.locator('[data-wb-mic]').getAttribute('title'),/may send audio/);
     assert.equal(await page.evaluate(()=>window.recognitionStarts||0),0); assert.equal(await page.locator('[data-wb-timer-t]').textContent(),'60:00');
     await page.locator('[data-wb-spk]').click(); await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
@@ -4690,6 +4793,7 @@ test('Prepare Whiteboard vision follows conversational turns without hidden auto
     assert.equal(await page.locator('.wb__watch-options,[data-wb-glance],[data-wb-ai-source],[data-wb-record-source]').count(),0);
     assert.equal(await page.evaluate(()=>window.preparationCalls.length),0);
     await page.locator('[data-wb-ready]').click(); await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[1,0]);
     const firstImage=await outgoingImage();assert.equal(firstImage.width,640);assert.ok(firstImage.pixel[0]>250);
     assert.match(await page.locator('[data-wb-latest]').textContent(),/unreadable/); assert.match(await page.locator('[data-wb-watch-bar]').textContent(),/Last analysis: unreadable/);
     await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),1);
@@ -4716,6 +4820,12 @@ test('Prepare Whiteboard vision follows conversational turns without hidden auto
     await page.getByRole('button',{name:'Turn off camera',exact:true}).click();
     await whiteboardReply(page,'Return to the remaining screen.');
     assert.equal((await outgoingImage()).width,640);
+    await page.evaluate(()=>{window.whiteboardReply={readability:'invalid'};});
+    await page.locator('.wb__msg').fill('Do not silently replace a failed visual reply with text.'); await page.locator('[data-wb-send]').click();
+    await page.locator('[data-wb-reply-retry]').waitFor();
+    assert.match(await page.locator('.wb-modal .pass__err').textContent(),/omitted readability/);
+    assert.deepEqual(await page.evaluate(()=>[window.preparationCalls.length,window.preparationPlanningCalls.length]),[7,0],'Failed vision must not trigger another paid text/coordinator call');
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0].observations.at(-1).status),'failed');
     await page.locator('[data-wb-ready]').click(); await page.clock.fastForward(65000); assert.equal(await page.locator('.wb__turn--int').count(),6);
     await page.evaluate(() => {
       const saved=JSON.parse(localStorage.getItem('rk:prep:hist')).wb[0],id='board-'+(saved.observations.length+1);
