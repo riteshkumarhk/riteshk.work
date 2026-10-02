@@ -45,6 +45,7 @@ import { AI_AGENT_LIMITS, createAiTaskAgent, agentRequestOptions, prepareRequest
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
 import { createPresenterMetadataSync } from "./presenter-metadata-sync.mjs";
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
+import { readAiAppearance, saveAiAppearance } from "./ai-appearance.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
 import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResumeSource } from "./prepare-resume.mjs";
@@ -12097,6 +12098,18 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function settingsMount(modal, opts) {
     if (!opts || !opts.mount || !modal) return false;
     modal.classList.add("pass--inpanel");
+    const box = modal.querySelector(".pass__box");
+    const actions = box.querySelector(":scope > .pass__actions");
+    if (actions) {
+      const content = document.createElement("div"), footer = document.createElement("div");
+      content.className = "adm__set-content"; footer.className = "adm__set-footer";
+      for (const child of [...box.childNodes]) {
+        if (child === actions) continue;
+        (child.nodeType === 1 && child.classList.contains("pass__err") ? footer : content).append(child);
+      }
+      footer.append(actions);
+      box.append(content, footer);
+    }
     opts.mount.innerHTML = "";
     opts.mount.appendChild(modal);
     return true;
@@ -16210,14 +16223,17 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     modal.innerHTML =
       '<div class="pass__box"><div class="pass__title">AI settings</div>' +
       '<div class="pass__sub">Connect a provider for the Prepare tools \u2014 ATS check, cover letters, interview prep and imagery. Keys are stored only in this browser and never written to your published site.</div>' +
-      '<div class="aiset__body" style="max-height:58vh;overflow:auto;margin:.2rem 0 .4rem"></div>' +
+      '<div class="aiset__body"></div>' +
       '<div class="pass__err"></div>' +
       '<div class="pass__actions"><button class="btn btn--ghost" data-clear>Remove keys</button><button class="btn btn--ghost" data-cancel>Close</button><button class="btn btn--primary" data-go>Save</button></div>' +
       '<div class="pass__note">Keys never touch your published site; they\u2019re sent only to the provider you pick. Some providers block browser calls (CORS) \u2014 OpenAI &amp; Gemini work directly, or route through your private proxy.</div></div>';
     document.body.appendChild(modal);
     settingsMount(modal, opts);
     var bodyEl = modal.querySelector(".aiset__body");
+    var appearanceDraft = readAiAppearance(window);
+    var appearancePreview = null;
     function paint() {
+      appearancePreview?.dispose();
       var same = aiSameKey();
       var mode = aiMode();
       var html = aiModeToggle(mode) +
@@ -16226,7 +16242,15 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
                    : (aiBlock("txt", "Content generation", "text") + aiBlock("img", "Image generation", "imagery"));
       if (mode === "cf") html += aiCfExtras();
       html += '<section data-ai-routing></section>';
-      bodyEl.innerHTML = html;
+      var appearanceHtml = '<section class="aiblk aiset__appearance" aria-label="AI appearance"><h3>Appearance</h3>' +
+        '<p class="af__hint">Choose the style for larger AI visuals, such as Interviewer. Status bars and buttons always use 2D Infinity in thought. Saved in this browser.</p>' +
+        '<div class="aiset__appearance-row"><div class="aiset__appearance-preview" data-ai-appearance-preview data-ai-state="idle">' + aiRibbonIcon({size:64}) + '</div><div>' +
+        '<label class="af"><span class="af__label">Large AI visuals</span><select data-ai-appearance-style><option value="2d"' + (appearanceDraft.style === "2d" ? " selected" : "") + '>2D - Infinity in thought</option><option value="3d"' + (appearanceDraft.style === "3d" ? " selected" : "") + '>3D - Sculpted gold</option></select></label>' +
+        '<label class="chk"><input type="checkbox" data-ai-appearance-orb' + (appearanceDraft.orb ? " checked" : "") + '> Liquid glass orb</label></div></div></section>';
+      bodyEl.innerHTML = appearanceHtml + html;
+      appearancePreview = mountAiRibbon(bodyEl.querySelector('[data-ai-appearance-preview]'), {large:true,appearance:() => appearanceDraft,onError:message => { modal.querySelector('.pass__err').textContent=message; }});
+      bodyEl.querySelector('[data-ai-appearance-style]').addEventListener('change',function (event) { appearanceDraft={...appearanceDraft,style:event.target.value}; appearancePreview.syncAppearance(); });
+      bodyEl.querySelector('[data-ai-appearance-orb]').addEventListener('change',function (event) { appearanceDraft={...appearanceDraft,orb:event.target.checked}; appearancePreview.syncAppearance(); });
       aiWireRouting(bodyEl);
       bodyEl.querySelectorAll("[data-aiscope]").forEach(function (sel) {
         sel.addEventListener("change", function () { aiPersistVisible(modal); aiSetProvider(sel.getAttribute("data-aiscope"), sel.value); paint(); });
@@ -16242,7 +16266,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     }
     if (aiMode() === "cf") aiCfRefresh(paint);
     paint();
-    var close = function () { if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
+    var close = function () { appearancePreview?.dispose(); if (opts && opts.onClose) opts.onClose(); else modal.remove(); };
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     modal.querySelector("[data-cancel]").addEventListener("click", close);
     modal.querySelector("[data-clear]").addEventListener("click", function () {
@@ -16251,6 +16275,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       paint(); status("Keys removed.");
     });
     modal.querySelector("[data-go]").addEventListener("click", function () {
+      try { saveAiAppearance(window,appearanceDraft); }
+      catch (error) { modal.querySelector('.pass__err').textContent='Could not save AI appearance: ' + error.message; return; }
       aiPersistVisible(modal);
       if (aiMode() === "cf") {
         aiCfSaveInputs(bodyEl, function (err) { if (activeTab === "ai") renderBody(); if (err) status(err); else status("Saved - your AI keys live encrypted on Cloudflare and roam to every device.", true); aiCfRefresh(paint); });
@@ -19474,10 +19500,10 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         if (!watchBar.querySelector('.wb__feeds')) {
           watchBar.innerHTML = '<div class="wb__preview"><video class="wb__preview-video" muted autoplay playsinline aria-label="Selected preview"></video><div class="wb__preview-empty">Choose a screen or camera to share.</div></div><div class="wb__media-row"><div class="wb__feeds"></div></div><div class="wb__watch-meta" role="status"></div><div class="wb__downloads"></div>';
           const identity = document.createElement('div'); identity.className = 'wb__interviewer';
-          identity.innerHTML = '<span class="wb__identity-icon" aria-hidden="true">' + aiRibbonIcon() + '</span><span data-wb-interviewer-status>Interviewer</span>';
+          identity.innerHTML = '<span class="wb__identity-icon" aria-hidden="true">' + aiRibbonIcon({size:32}) + '</span><span data-wb-interviewer-status>Interviewer</span>';
           sources.prepend(identity);
           watchBar.querySelector('.wb__media-row').append(sources);
-          const ribbon = mountAiRibbon(identity);
+          const ribbon = mountAiRibbon(identity, {large:true,onError:message => status(message)});
           signal.addEventListener('abort', () => ribbon.dispose(), {once:true});
         }
         for (const source of ['screen','camera']) {

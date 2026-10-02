@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
-import { AI_REST_PATH, aiRibbonIcon, createMotion, liquidPoint, ribbonPath } from './src/js/ai-ribbon.mjs';
+import { build } from 'esbuild';
+import { AI_REST_PATH, HYBRID_REST_PATH, aiRibbonIcon, createMotion, liquidPoint, ribbonPath } from './src/js/ai-ribbon.mjs';
 
 test('ribbon preserves the approved rest, varying counts, asynchronous depths and bounded continuity', () => {
   const radius = point => Math.hypot(point.horizontal - 12, point.vertical - 12);
@@ -39,7 +40,8 @@ test('ribbon preserves the approved rest, varying counts, asynchronous depths an
 });
 
 test('counter lifecycle keeps static actions still and stops on rest, hide, reduced motion and disposal', async () => {
-  const source = await readFile(new URL('./src/js/ai-ribbon.mjs', import.meta.url), 'utf8');
+  const bundle = await build({entryPoints:['src/js/ai-ribbon.mjs'],bundle:true,write:false,format:'iife',globalName:'AiRibbonTest'});
+  const source = bundle.outputFiles[0].text;
   const css = await readFile(new URL('./css/admin.css', import.meta.url), 'utf8');
   const browser = await chromium.launch({executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true});
   try {
@@ -59,7 +61,7 @@ test('counter lifecycle keeps static actions still and stops on rest, hide, redu
         }
       };
     });
-    await page.addScriptTag({type: 'module', content: source + '\nwindow.mountRibbon = mountAiRibbon; window.ribbon = mountAiRibbon(document.querySelector(".adm__ai-counter"));'});
+    await page.addScriptTag({content: source + '\nwindow.mountRibbon = AiRibbonTest.mountAiRibbon; window.ribbon = window.mountRibbon(document.querySelector(".adm__ai-counter"));'});
     await page.waitForFunction(() => !!window.ribbon);
     const result = await page.evaluate(async () => {
       const counter = document.querySelector('.adm__ai-counter'), path = counter.querySelector('path'), group = counter.querySelector('g');
@@ -83,17 +85,17 @@ test('counter lifecycle keeps static actions still and stops on rest, hide, redu
       counter.dataset.aiState = 'answering'; await Promise.resolve(); await window.advance(60);
       return {resting, moving, rotated, staticAction, idleFrames, hiddenFrames, settled, restTurn, settledFrames, disposedFrames: window.pending.size, unchangedAfterDispose: disposedPath === path.getAttribute('d')};
     });
-    assert.equal(result.resting, AI_REST_PATH);
-    assert.equal(result.staticAction, AI_REST_PATH);
-    assert.notEqual(result.moving, AI_REST_PATH);
+    assert.equal(result.resting, HYBRID_REST_PATH);
+    assert.equal(result.staticAction, HYBRID_REST_PATH);
+    assert.notEqual(result.moving, HYBRID_REST_PATH);
     assert.notEqual(result.rotated, 'rotate(0.0000 12 12)');
-    assert.equal(result.settled, AI_REST_PATH);
+    assert.equal(result.settled, HYBRID_REST_PATH);
     assert.equal(result.restTurn, 'rotate(0.0000 12 12)');
     for (const key of ['idleFrames', 'hiddenFrames', 'settledFrames', 'disposedFrames']) assert.equal(result[key], 0, key);
     assert.ok(result.unchangedAfterDispose);
     await page.emulateMedia({reducedMotion: 'reduce'});
     await page.evaluate(async () => { window.ribbon = window.mountRibbon(document.querySelector('.adm__ai-counter')); await window.advance(3); });
-    assert.equal(await page.locator('.adm__ai-counter path').getAttribute('d'), AI_REST_PATH);
+    assert.equal(await page.locator('.adm__ai-counter [data-ai-line]').getAttribute('d'), HYBRID_REST_PATH);
     assert.equal(await page.evaluate(() => window.pending.size), 0);
   } finally { await browser.close(); }
 });

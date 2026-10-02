@@ -4579,6 +4579,143 @@ test('Prepare Whiteboard recording refuses denied microphones and releases late 
   } finally { await browser.close(); }
 });
 
+test('Settings forms share bottom-pinned actions and one full-height content scroller', {timeout:90000}, async () => {
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true,args:['--enable-unsafe-swiftshader']});
+  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await openIntegratedFixture(page);
+    await page.locator('[data-opensettings]').click();
+    for (const [category,action] of [['ai','open-ai'],['publish','open-publish'],['security','open-adminkey'],['security','open-passkeys'],['allow','allow-edit']]) {
+      await page.locator(`[data-act="settings-cat"][data-cat="${category}"]`).click();
+      await page.locator(`.adm__settings [data-act="${action}"]`).click();
+      await page.locator('.adm__set-footer').waitFor();
+      for (const [width,height] of [[1440,1000],[2560,1334],[1440,650],[390,844]]) {
+        await page.setViewportSize({width,height});
+        await page.locator('.adm__set-content').evaluate(element=>{element.scrollTop=0;});
+        const measure=()=>page.evaluate(()=>{
+          const sheet=document.querySelector('.adm__set-sheet'), panel=document.querySelector('.adm__set-panel');
+          const content=document.querySelector('.adm__set-content'), footer=document.querySelector('.adm__set-footer'), actions=footer.querySelector('.pass__actions');
+          return {sheet:sheet.getBoundingClientRect().toJSON(),content:content.getBoundingClientRect().toJSON(),footer:footer.getBoundingClientRect().toJSON(),actions:actions.getBoundingClientRect().toJSON(),panelOverflow:panel.scrollHeight-panel.clientHeight,horizontalOverflow:panel.scrollWidth-panel.clientWidth};
+        });
+        const before=await measure(), label=JSON.stringify({action,width,height,before});
+        assert.ok(Math.abs(before.sheet.bottom-before.actions.bottom-24)<1,label);
+        assert.ok(Math.abs(before.content.bottom-before.footer.top)<1,label);
+        assert.ok(before.content.height>200,label);
+        assert.ok(before.panelOverflow<=1&&before.horizontalOverflow<=1,label);
+        await page.locator('.adm__set-content').evaluate(element=>{element.scrollTop=element.scrollHeight;});
+        const after=await measure();
+        assert.ok(Math.abs(after.actions.y-before.actions.y)<1,'Scrolling must not move the actions: '+label);
+        if (action==='open-ai') {
+          assert.equal(await page.locator('.aiset__body').evaluate(element=>getComputedStyle(element).maxHeight),'none');
+          await page.locator('.adm__set-content').evaluate(element=>{element.scrollTop=0;});
+          const spacing=await page.locator('.aiset__appearance').evaluate(element=>({
+            padding:parseFloat(getComputedStyle(element).paddingLeft),
+            gap:element.querySelector('.aiset__appearance-row').getBoundingClientRect().top-element.querySelector('.af__hint').getBoundingClientRect().bottom
+          }));
+          assert.equal(spacing.padding,24); assert.ok(spacing.gap>=23.9);
+          if (width===2560||width===390) await page.screenshot({path:join(tmpdir(),'rk-settings-layout-'+width+'.png')});
+        }
+      }
+      if (action==='open-adminkey') {
+        await page.locator('.adm__set-footer [data-go]').click();
+        assert.match(await page.locator('.adm__set-footer .pass__err').textContent(),/at least 4/);
+        assert.equal(await page.locator('.adm__set-footer .pass__err').isVisible(),true);
+      }
+      await page.setViewportSize({width:1440,height:1000});
+      await page.locator('[data-act="set-back"]').click();
+      assert.equal(await page.locator('.adm__set-footer').count(),0);
+    }
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();}
+});
+
+test('AI appearance saves locally and updates Interviewer without changing compact icons or session drafts', {timeout:90000}, async () => {
+  const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true,args:['--enable-unsafe-swiftshader']});
+  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  try {
+    await page.addInitScript(()=>{
+      navigator.mediaDevices.getUserMedia=()=>{ throw new Error('Physical media is forbidden in this fixture'); };
+      navigator.mediaDevices.getDisplayMedia=async()=>{
+        const canvas=document.createElement('canvas'); canvas.width=800; canvas.height=500;
+        const context=canvas.getContext('2d'); context.fillStyle='#d8a657'; context.fillRect(0,0,800,500);
+        window.appearanceBoard=canvas;
+        return canvas.captureStream(1);
+      };
+    });
+    await installPrepareReplies(page); await openIntegratedFixture(page);
+    const original=await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft()));
+    const openAppearance=async()=>{
+      await page.locator('[data-opensettings]').click();
+      await page.locator('[data-act="settings-cat"][data-cat="ai"]').click();
+      await page.getByRole('button',{name:'Open AI settings',exact:true}).click();
+    };
+    await openAppearance();
+    const settings=page.locator('.adm__settings');
+    assert.equal(await page.locator('[data-ai-appearance-style]').inputValue(),'2d');
+    assert.equal(await page.locator('[data-ai-appearance-orb]').isChecked(),false);
+    await page.locator('[data-ai-appearance-style]').selectOption('3d');
+    await page.locator('[data-ai-appearance-orb]').check();
+    await page.waitForFunction(()=>document.querySelector('[data-ai-appearance-preview]')?.dataset.aiOrb==='true');
+    await page.locator('.pass--inpanel [data-cancel]').click();
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:ai:appearance')),null,'Close must discard the appearance draft');
+    await page.getByRole('button',{name:'Open AI settings',exact:true}).click();
+    assert.equal(await page.locator('[data-ai-appearance-style]').inputValue(),'2d');
+    await page.locator('[data-ai-appearance-style]').selectOption('3d');
+    await page.locator('[data-ai-appearance-orb]').check();
+    await page.waitForFunction(()=>document.querySelector('[data-ai-appearance-preview]')?.dataset.aiRenderer==='gpu');
+    await page.locator('.adm__set-content').evaluate(element=>{element.scrollTop=0;});
+    await page.screenshot({path:join(tmpdir(),'rk-ai-appearance-desktop.png')});
+    await page.setViewportSize({width:390,height:844});
+    await page.locator('.adm__set-content').evaluate(element=>{element.scrollTop=0;});
+    assert.equal(await page.locator('[data-ai-appearance-style]').isVisible(),true);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await page.screenshot({path:join(tmpdir(),'rk-ai-appearance-mobile.png')});
+    await page.setViewportSize({width:1440,height:1000});
+    await page.locator('.pass--inpanel [data-go]').click();
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:ai:appearance'))),{style:'3d',orb:true});
+    assert.equal(await page.evaluate(()=>JSON.stringify(window.__RKStudio.getDraft())),original);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('rk:ai:txt:key')),'synthetic-session-key');
+    await settings.locator('[data-act="settings-close"]').click();
+    await page.locator('.adm__tab[data-tab="ai"]').click(); await page.locator('[data-act="prep-open"][data-tool="wb"]').click();
+    await page.locator('[data-wb-mode="mock"]').click(); await page.locator('[data-wb-deeper]').click();
+    await page.locator('.wb__own').fill('Synthetic appearance interview');
+    await page.locator('[data-wb-start]').click(); await page.locator('[data-wb-ready]').click();
+    await page.waitForFunction(()=>document.querySelectorAll('.wb__turn--int').length===1&&!document.querySelector('[data-wb-send]').disabled);
+    await page.locator('[data-wb-immersive]').click();
+    try { await page.waitForFunction(()=>document.querySelector('.wb__interviewer')?.dataset.aiRenderer==='gpu',null,{timeout:8000}); }
+    catch (error) {
+      throw new Error(JSON.stringify(await page.evaluate(()=>({
+        interviewers:[...document.querySelectorAll('.wb__interviewer')].map(element=>({data:{...element.dataset},rect:element.getBoundingClientRect().toJSON(),canvases:element.querySelectorAll('canvas').length})),
+        message:document.querySelector('.wb-modal .pass__err')?.textContent
+      }))),{cause:error});
+    }
+    const interviewer=page.locator('.wb__interviewer');
+    assert.equal(await interviewer.getAttribute('data-ai-style'),'3d'); assert.equal(await interviewer.getAttribute('data-ai-orb'),'true');
+    await page.locator('.wb__msg').fill('Preserve this appearance review draft');
+    await page.screenshot({path:join(tmpdir(),'rk-ai-appearance-interviewer.png')});
+    await page.locator('[data-ai-session-toggle]').click(); await page.locator('[data-ai-settings]').click();
+    await page.getByRole('button',{name:'Open AI settings',exact:true}).click();
+    assert.equal(await page.locator('[data-ai-appearance-style]').inputValue(),'3d');
+    assert.equal(await page.locator('[data-ai-appearance-orb]').isChecked(),true);
+    await page.locator('[data-ai-appearance-style]').selectOption('2d'); await page.locator('[data-ai-appearance-orb]').uncheck();
+    await page.locator('.pass--inpanel [data-go]').click();
+    await settings.locator('[data-act="settings-close"]').click();
+    await page.waitForFunction(()=>document.querySelector('.wb__interviewer')?.dataset.aiStyle==='2d');
+    assert.equal(await interviewer.getAttribute('data-ai-orb'),'false');
+    assert.equal(await page.locator('.wb__msg').inputValue(),'Preserve this appearance review draft');
+    assert.equal(await page.locator('[data-ai-session-toggle]').getAttribute('data-ai-style'),'2d');
+    assert.equal(await page.locator('[data-ai-session-toggle]').getAttribute('data-ai-orb'),'false');
+    assert.equal(await page.evaluate(()=>window.preparationCalls.length),1,'Appearance changes must not trigger model requests');
+    await page.locator('[data-ai-session-toggle]').click(); await page.locator('[data-ai-settings]').click();
+    await page.getByRole('button',{name:'Open AI settings',exact:true}).click();
+    await page.locator('.pass--inpanel [data-clear]').click();
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:ai:appearance'))),{style:'2d',orb:false},'Removing provider keys must retain appearance');
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
 test('Prepare Whiteboard activity stays interactive and live replies use one selected request', {timeout:60000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}), errors=[];

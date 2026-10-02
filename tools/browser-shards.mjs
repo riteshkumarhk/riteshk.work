@@ -10,6 +10,7 @@ export const browserShards = {
   recovery: [{ files: [
     'admin-session.browser.test.mjs',
     'ai-ribbon.test.mjs',
+    'ai-appearance.browser.test.mjs',
     'project-recovery.browser.test.mjs', 'slide-presenter-readonly.browser.test.mjs',
     'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs',
     'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs',
