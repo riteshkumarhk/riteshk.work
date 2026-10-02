@@ -1488,7 +1488,24 @@ describe('Resume browser acceptance', () => {
       assert.match(resumeFields(preview.store.get(original.id).document.model).find(field => field.id === 'onboarding').value, /^Redesigned onboarding/);
       await page.getByRole('button', { name: 'Version history', exact: true }).click();
       await page.locator('.rws-version-list button').last().click();
-      await page.getByRole('button', { name: 'Restore v1', exact: true }).click(); await saved(page);
+      let restoreRequested, releaseRestore;
+      const requested = new Promise(resolve => { restoreRequested = resolve; });
+      const restoreGate = new Promise(resolve => { releaseRestore = resolve; });
+      const previousVersion = preview.store.get(original.id).version;
+      await page.route('**/__resume/api/resumes/' + original.id + '/restore', async route => {
+        restoreRequested(); await restoreGate; await route.continue();
+      });
+      const historyDialog = page.getByRole('dialog', { name: 'Version history', exact: true });
+      try {
+        await page.getByRole('button', { name: 'Restore v1', exact: true }).click();
+        await requested;
+        await saved(page);
+        assert.equal(await historyDialog.isVisible(), true);
+        assert.notDeepEqual(preview.store.get(original.id).document.model, original.model, 'The existing Saved badge does not mean the restore request has completed');
+      } finally { releaseRestore(); }
+      await historyDialog.waitFor({ state: 'hidden' });
+      await saved(page);
+      assert.equal(preview.store.get(original.id).version, previousVersion + 1);
       assert.deepEqual(preview.store.get(original.id).document.model, original.model);
       await page.getByRole('button', { name: 'Duplicate for another role', exact: true }).click();
       await page.getByLabel('Resume name').fill('Another role'); await page.getByRole('button', { name: 'Create', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' }); await saved(page);
