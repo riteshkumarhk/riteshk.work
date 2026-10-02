@@ -6,6 +6,7 @@ import { journeyRows } from "./journey-core.mjs";
   const previewFrame = new URLSearchParams(location.search).has("preview") && window.parent !== window;
   let currentData, rows = [], activeKey = null, mediaIndex = 0, editorPreview = false, caseReturn = null;
   let background = null, openingKey = null;
+  let detailLayout = "right", sheetExpanded = false, sheetGesture = null;
   let peekRow = null, peekTrigger = null, peekResize = null;
   const seenKey = 'rk:journey:seen-cases:v1';
   let seenCases = readSeenCases();
@@ -17,6 +18,7 @@ import { journeyRows } from "./journey-core.mjs";
   const media = story => (story.entry.images || []).filter(image => image?.src && mediaUrl(image.src));
   const video = image => image.kind === "video" || /^data:video\//i.test(image.src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(image.src);
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const galleryChevron = direction => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="' + (direction < 0 ? 'M15 18l-6-6 6-6' : 'M9 18l6-6-6-6') + '"/></svg>';
   const ringPreference = matchMedia('(prefers-reduced-motion: reduce)');
   let ringFrame = 0, ringLast = 0, ringVisible = false;
   const ringStates = new WeakMap();
@@ -247,14 +249,15 @@ import { journeyRows } from "./journey-core.mjs";
     background = null; openingKey = null; caseReturn = null;
     activeKey = null;
     mediaIndex = 0;
+    detailLayout = "right"; sheetExpanded = false; sheetGesture = null;
     if (saved) window.scrollTo(saved.x, saved.y);
     if (focus) { trigger?.focus({ preventScroll: true }); closePeek(); }
     syncRingMotion();
   }
 
-  function expand(key, focus = true, startMediaIndex = 0) {
+  function expand(key, focus = true) {
     closePeek();
-    if (key !== activeKey) mediaIndex = startMediaIndex;
+    if (key !== activeKey) mediaIndex = 0;
     removeDetail();
     activeKey = key;
     syncRingMotion();
@@ -273,18 +276,44 @@ import { journeyRows } from "./journey-core.mjs";
     panel.innerHTML = '<div class="jrn__top"><nav class="jrn-timeline" aria-label="Journey chapters">' + allStories().map(item =>
       '<button type="button" class="jrn-timeline__item" data-jchapter="' + esc(item.key) + '" aria-label="Open story: ' + esc(item.entry.title || item.chapter.name || "Chapter") + '"' + (item.key === key ? ' aria-current="step"' : '') + '><span class="jrn-tile__period">' + esc(item.entry.period || item.chapter.name) + '</span><span class="jrn-timeline__title">' + esc(item.entry.title || item.chapter.name || "Chapter") + '</span></button>').join('') +
       '</nav><button type="button" class="jrn-control" data-jclose title="Close chapter" aria-label="Close chapter">&#215;</button></div>' +
-      '<div class="jrn-gallery"></div><div class="jrn__scroll"><div class="jrn-gallery__controls"></div><div class="jrn-detail__body"><header class="jrn-detail__head"><div>' +
-      (story.entry.period ? '<span class="jrn-tile__period">' + esc(story.entry.period) + '</span>' : '') +
+      '<div class="jrn__workspace"><div class="jrn__visual"><div class="jrn-gallery"></div><div class="jrn-gallery__controls"></div></div>' +
+      '<aside class="jrn-detail__body" aria-label="Story details"><button type="button" class="jrn-sheet-toggle" data-jsheet aria-controls="journey-detail-copy"><span></span></button>' +
+      '<div class="jrn-detail__navigation"><div class="jrn-gallery__bar"></div><button type="button" class="jrn-control jrn-layout-toggle" data-jlayout><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/></svg></button></div>' +
+      '<header class="jrn-detail__head"><div>' +
       '<h4 id="journey-detail-title" tabindex="-1">' + md(story.entry.title || story.chapter.name || "Chapter") + '</h4></div></header>' +
-      '<div class="jrn-detail__copy">' + prose(story.entry.body) +
-      (work ? '<button type="button" class="jrn-case jrn-tile__case" data-jwork="' + esc(work.id) + '">' + caseContent(work, 'View case study') + '</button>' : '') +
-      '</div></div></div>';
+      '<div class="jrn__scroll" id="journey-detail-copy"><div class="jrn-detail__copy">' + prose(story.entry.body) + '</div>' +
+      (work ? '<div class="jrn-detail__case"><span>Case study available</span><button type="button" class="jrn-case jrn-tile__case" data-jwork="' + esc(work.id) + '" aria-label="View case study: ' + esc(work.title || 'Case study') + '">' + caseContent(work, esc(work.title || 'View case study')) + '</button></div>' : '') +
+      '</div></aside></div>';
     document.body.append(panel);
     lockBackground(true);
     renderMedia();
-    panel.querySelector('[aria-current="step"]')?.scrollIntoView({ block: "nearest", inline: "center" });
+    syncDetailLayout();
     if (focus) {
       panel.querySelector("h4").focus({ preventScroll: true });
+    }
+  }
+
+  function syncDetailLayout() {
+    const panel = document.getElementById("journey-detail");
+    if (!panel) return;
+    panel.dataset.layout = detailLayout;
+    panel.classList.toggle("is-sheet-expanded", sheetExpanded || panel.classList.contains("jrn-detail--text"));
+    const next = detailLayout === "right" ? "left" : detailLayout === "left" ? "minimized" : "right";
+    const toggle = panel.querySelector("[data-jlayout]");
+    toggle.title = next === "minimized" ? "Minimise story details" : "Move story details to the " + next;
+    toggle.setAttribute("aria-label", toggle.title);
+    const expanded = panel.classList.contains("is-sheet-expanded");
+    const sheet = panel.querySelector("[data-jsheet]");
+    sheet.setAttribute("aria-expanded", String(expanded));
+    sheet.setAttribute("aria-label", expanded ? "Collapse story details" : "Expand story details");
+    revealSelection();
+  }
+
+  function revealSelection() {
+    const panel = document.getElementById("journey-detail");
+    if (!panel || panel.hidden) return;
+    for (const selector of ['.jrn-timeline [aria-current]', '.jrn-gallery__thumbs [aria-pressed="true"]']) {
+      panel.querySelector(selector)?.scrollIntoView({ block: "nearest", inline: "center", behavior: "instant" });
     }
   }
 
@@ -295,20 +324,28 @@ import { journeyRows } from "./journey-core.mjs";
     const images = media(story);
     const stories = allStories(), storyIndex = stories.findIndex(item => item.key === activeKey);
     const controls = document.querySelector('#journey-detail .jrn-gallery__controls');
-    controls.hidden = images.length < 2 && stories.length < 2;
+    controls.hidden = images.length < 2;
     mediaIndex = Math.max(0, Math.min(mediaIndex, images.length - 1));
-    const previousLabel = mediaIndex > 0 ? 'Previous image' : 'Previous story';
-    const nextLabel = mediaIndex < images.length - 1 ? 'Next image' : 'Next story';
-    controls.innerHTML = '<div class="jrn-gallery__bar"><button class="jrn-control" type="button" data-jstep="-1" aria-label="' + previousLabel + '" title="' + previousLabel + '"' + (mediaIndex === 0 && storyIndex === 0 ? ' disabled' : '') + '>&#8592;</button><span aria-live="polite"' + (!images.length ? ' aria-label="Story ' + (storyIndex + 1) + ' of ' + stories.length + '"' : '') + '>' + (images.length ? (mediaIndex + 1) + ' / ' + images.length : (storyIndex + 1) + ' / ' + stories.length) + '</span><button class="jrn-control" type="button" data-jstep="1" aria-label="' + nextLabel + '" title="' + nextLabel + '"' + (mediaIndex >= images.length - 1 && storyIndex === stories.length - 1 ? ' disabled' : '') + '>&#8594;</button></div>' +
-      (images.length > 1 ? '<div class="jrn-gallery__thumbs">' + images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div>' : '');
+    const previousDisabled = mediaIndex === 0 ? ' disabled' : '';
+    const nextDisabled = mediaIndex >= images.length - 1 ? ' disabled' : '';
+    document.querySelector('#journey-detail .jrn-gallery__bar').innerHTML = '<button class="jrn-control" type="button" data-jstep="-1" aria-label="Previous career block" title="Previous career block"' + (storyIndex === 0 ? ' disabled' : '') + '>' + galleryChevron(-1) + '</button><span aria-live="polite">' + esc(story.entry.period || story.chapter.name || 'Career block') + '</span><button class="jrn-control" type="button" data-jstep="1" aria-label="Next career block" title="Next career block"' + (storyIndex === stories.length - 1 ? ' disabled' : '') + '>' + galleryChevron(1) + '</button>';
+    controls.innerHTML = images.length > 1 ? '<button class="jrn-control" type="button" data-jadvance="-1" aria-label="Previous gallery item"' + previousDisabled + '>' + galleryChevron(-1) + '</button><div class="jrn-gallery__thumbs">' + images.map((item, index) => '<button type="button" data-jmedia="' + index + '" aria-label="Media ' + (index + 1) + '" aria-pressed="' + (index === mediaIndex) + '">' + thumb(item) + '</button>').join('') + '</div><button class="jrn-control" type="button" data-jadvance="1" aria-label="Next gallery item"' + nextDisabled + '>' + galleryChevron(1) + '</button>' : '';
+    if (images.length > 1) controls.insertAdjacentHTML('beforeend', '<span class="jrn-gallery__position" role="status">Media ' + (mediaIndex + 1) + ' of ' + images.length + '</span>');
+    controls.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "center", behavior: "instant" });
     gallery.hidden = !images.length;
     gallery.closest(".jrn-detail").classList.toggle("jrn-detail--text", !images.length);
     if (!images.length) { gallery.innerHTML = ''; return; }
     const image = images[mediaIndex], source = esc(mediaUrl(image.src));
-    gallery.innerHTML = '<figure class="jrn-gallery__figure"><div class="jrn-gallery__stage">' +
+    const neighbours = images.map((item, index) => ({ item, offset: index - mediaIndex })).filter(item => item.offset && Math.abs(item.offset) <= 3);
+    gallery.innerHTML = '<figure class="jrn-gallery__figure"><div class="jrn-gallery__stack">' +
+      neighbours.map(({ item, offset }) => '<button type="button" class="jrn-gallery__neighbour" data-jmedia="' + (mediaIndex + Math.sign(offset)) + '" aria-label="' + (offset < 0 ? 'Previous gallery card' : 'Next gallery card') + '" style="--jrn-offset:' + offset + ';--jrn-depth:' + Math.abs(offset) + '">' + thumb(item) + '</button>').join('') +
+      '<div class="jrn-gallery__stage">' +
       (video(image) ? '<video src="' + source + '" controls playsinline preload="metadata"></video>' :
         '<button type="button" data-jzoom aria-label="Enlarge image" title="Enlarge image"><img src="' + source + '" alt="' + esc(image.caption || story.entry.title || '') + '" /></button>') +
-      '</div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>';
+      '</div></div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>';
+    gallery.querySelectorAll('.jrn-gallery__stage [data-jzoom] img, .jrn-gallery__neighbour > img').forEach(element => {
+      element.closest('.jrn-gallery__stage, .jrn-gallery__neighbour').style.setProperty('--jrn-image-fill', 'url(' + JSON.stringify(element.src) + ')');
+    });
   }
 
   function open(options = {}) {
@@ -343,29 +380,35 @@ import { journeyRows } from "./journey-core.mjs";
     if (target.hasAttribute("data-jstory")) { target.dataset.jstory === activeKey ? close() : expand(target.dataset.jstory); return; }
     if (target.hasAttribute("data-jchapter")) { expand(target.dataset.jchapter); return; }
     if (target.hasAttribute("data-jclose")) { close(); return; }
+    if (target.hasAttribute("data-jlayout")) {
+      detailLayout = detailLayout === "right" ? "left" : detailLayout === "left" ? "minimized" : "right";
+      syncDetailLayout(); return;
+    }
+    if (target.hasAttribute("data-jsheet")) { sheetExpanded = !sheetExpanded; syncDetailLayout(); return; }
     if (target.hasAttribute("data-jretry")) { renderMedia(); document.querySelector('.jrn-gallery__stage button, .jrn-gallery__stage video')?.focus({ preventScroll: true }); return; }
-    if (target.hasAttribute('data-jstep')) {
-      const direction = Number(target.dataset.jstep), images = media(activeStory());
-      const nextIndex = mediaIndex + direction;
-      if (nextIndex >= 0 && nextIndex < images.length) {
-        mediaIndex = nextIndex;
-        renderMedia();
-      } else {
+    if (target.hasAttribute('data-jstep') || target.hasAttribute('data-jadvance')) {
+      const control = target.hasAttribute('data-jadvance') ? 'data-jadvance' : 'data-jstep';
+      const direction = Number(target.getAttribute(control));
+      if (control === 'data-jstep') {
         const stories = allStories(), index = stories.findIndex(story => story.key === activeKey);
         const nextStory = stories[index + direction];
         if (!nextStory) return;
-        expand(nextStory.key, true, direction < 0 ? Math.max(0, media(nextStory).length - 1) : 0);
+        expand(nextStory.key);
+      } else {
+        const nextIndex = mediaIndex + direction;
+        if (nextIndex < 0 || nextIndex >= media(activeStory()).length) return;
+        mediaIndex = nextIndex;
+        renderMedia();
       }
       const panel = document.getElementById('journey-detail');
-      (panel.querySelector('[data-jstep="' + direction + '"]:not(:disabled)') || panel.querySelector('h4'))?.focus({ preventScroll: true });
+      (panel.querySelector('[' + control + '="' + direction + '"]:not(:disabled)') || panel.querySelector('h4'))?.focus({ preventScroll: true });
       return;
     }
     if (target.hasAttribute("data-jmedia")) {
-      const label = target.getAttribute("aria-label");
       mediaIndex = Number(target.dataset.jmedia);
       renderMedia();
       const controls = document.querySelector(".jrn-gallery__controls");
-      ([...controls.querySelectorAll("button")].find(button => button.getAttribute("aria-label") === label && !button.disabled) || controls.querySelector('[aria-pressed="true"]'))?.focus({ preventScroll: true });
+      controls.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
       return;
     }
     if (target.hasAttribute("data-jzoom")) {
@@ -385,6 +428,24 @@ import { journeyRows } from "./journey-core.mjs";
   function init() {
     window.RK = Object.assign(window.RK || {}, { openJourney: open, closeJourney: () => { editorPreview = false; close(false); render(window.RK?.data); }, renderJourney: render, journeyHasContent: () => allStories().length > 0 });
     document.addEventListener("click", onClick);
+    document.addEventListener("pointerdown", event => {
+      const handle = event.target.closest?.("[data-jsheet]");
+      if (handle && event.isPrimary) {
+        sheetGesture = { id: event.pointerId, y: event.clientY };
+        handle.setPointerCapture(event.pointerId);
+      }
+    });
+    document.addEventListener("pointerup", event => {
+      if (!sheetGesture || sheetGesture.id !== event.pointerId) return;
+      const delta = event.clientY - sheetGesture.y;
+      sheetGesture = null;
+      if (Math.abs(delta) < 24) return;
+      sheetExpanded = delta < 0;
+      syncDetailLayout();
+      // The drag must not also activate the handle's click toggle.
+      document.querySelector("[data-jsheet]")?.addEventListener("click", event => event.stopPropagation(), { once: true });
+    });
+    document.addEventListener("pointercancel", () => { sheetGesture = null; });
     document.addEventListener("pointerover", event => {
       const tile = event.target.closest?.(".jrn-tile");
       if (event.pointerType === "mouse" && matchMedia("(hover: hover) and (pointer: fine)").matches && !tile?.contains(event.relatedTarget)) peek(tile);
@@ -400,7 +461,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (peekRow?.contains(event.target) && !peekRow.contains(event.relatedTarget) && !peekRow.querySelector('.jrn-stories__preview').matches(':hover')) closePeek();
     });
     document.addEventListener('scroll', positionPeek, true);
-    window.addEventListener("resize", () => closePeek());
+    window.addEventListener("resize", () => { closePeek(); revealSelection(); });
     document.addEventListener("error", event => {
       if (event.target.matches?.('.jrn-tile__case-image, .tl__logo')) { event.target.remove(); return; }
       const stage = event.target.closest?.(".jrn-gallery__stage");
@@ -442,7 +503,7 @@ import { journeyRows } from "./journey-core.mjs";
       const returnKey = caseReturn.key, returnPosition = { left: caseReturn.x, top: caseReturn.y, behavior: 'instant' };
       caseReturn = null;
       const panel = document.getElementById("journey-detail");
-      if (panel) { panel.hidden = false; lockBackground(true); panel.querySelector('[data-jwork]')?.focus({ preventScroll: true }); }
+      if (panel) { panel.hidden = false; lockBackground(true); revealSelection(); panel.querySelector('[data-jwork]')?.focus({ preventScroll: true }); }
       else if (returnKey) { triggerFor(returnKey)?.focus({ preventScroll: true }); closePeek(); requestAnimationFrame(() => window.scrollTo(returnPosition)); }
     });
     window.addEventListener('storage', event => {
