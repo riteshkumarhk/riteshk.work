@@ -18,6 +18,7 @@ import { normalizeSectionReference } from "./src/js/slide-merge-section-componen
 import { publicDeckPayload, setDeckVisibility } from "./src/js/slide-merge-visibility.mjs";
 import { Miniflare } from "miniflare";
 import { presenterMetadataRoute } from "./worker/presenter-metadata.mjs";
+import { HYBRID_REST_PATH } from "./src/js/ai-ribbon-motion.mjs";
 
 test("AI activity presents structured drafts without raw-code flicker and preserves details and cancellation", { timeout: 90000 }, async () => {
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
@@ -5397,32 +5398,25 @@ for (const width of [1440, 390]) test("integrated project tabs and draft visitor
 });
 
 test("AI session drawer streams across tabs, survives refresh and resets on explicit exit", { timeout: 90000 }, async () => {
-  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true, args:['--enable-unsafe-swiftshader'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion:"no-preference" }), page = await context.newPage();
   const assertIdleSparkle = async () => {
-    await page.waitForFunction(() => {
+    await page.waitForFunction(expected => {
       const path = document.querySelector('.adm__ai-spark path'), turn = document.querySelector('.adm__ai-spark g');
-      const values = path.getAttribute('d').match(/-?\d+(?:\.\d+)?/g).map(Number);
-      return Math.abs(Math.hypot(values[72] - 12, values[73] - 12) - 3.5) < .001 && (!turn.getAttribute('transform') || turn.getAttribute('transform') === 'rotate(0.0000 12 12)');
-    });
+      return path.getAttribute('d') === expected && (!turn.getAttribute('transform') || turn.getAttribute('transform') === 'rotate(0.0000 12 12)');
+    },HYBRID_REST_PATH);
     const rest = await page.locator('.adm__ai-spark svg').evaluate(svg => {
       const paths = [...svg.querySelectorAll('path')], style = getComputedStyle(paths[0]);
-      const length = paths[0].getTotalLength(), points = Array.from({length:384},(_,index) => paths[0].getPointAtLength(length * index / 384));
-      const radii = points.map(point => Math.hypot(point.x - 12,point.y - 12)), topPetal = points.filter(point => point.y < 7);
-      const petalWidth = Math.max(...topPetal.map(point => point.x)) - Math.min(...topPetal.map(point => point.x));
-      const crossing = points.findIndex((point,index) => index > 0 && points[index - 1].x < 12 && point.x >= 12);
-      const beforeCrossing = points[crossing - 1], afterCrossing = points[crossing];
-      const neck = beforeCrossing.y + (afterCrossing.y - beforeCrossing.y) * (12 - beforeCrossing.x) / (afterCrossing.x - beforeCrossing.x);
-      const petalAspect = petalWidth / (neck - Math.min(...topPetal.map(point => point.y)));
-      const folds = radii.filter((radius,index) => radius > radii[(index + 383) % 384] && radius > radii[(index + 1) % 384]).length;
-      return {outline:style.d,folds,petalWidth,petalAspect,visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none').length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,transform:style.transform,rotation:getComputedStyle(svg.querySelector('.adm__ai-ribbon-turn')).transform,animations:svg.getAnimations({subtree:true}).length};
+      const bounds=paths[0].getBBox();
+      return {outline:style.d,width:bounds.width,height:bounds.height,visible:svg.getClientRects().length>0,visiblePaths:paths.filter(path => getComputedStyle(path).display !== 'none' && Number(getComputedStyle(path).opacity)>0).length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,transform:style.transform,rotation:getComputedStyle(svg.querySelector('.adm__ai-ribbon-turn')).transform,animations:svg.getAnimations({subtree:true}).length};
     });
+    assert.equal(rest.visible,true);
     assert.equal(rest.visiblePaths, 1);
-    assert.equal(rest.folds,4);
+    assert.ok(Math.abs(rest.width-16.4)<.001 && Math.abs(rest.height-8.2)<.001,'Rest is the approved horizontal infinity');
     assert.equal((rest.outline.match(/M/g) || []).length,1);
     assert.equal(rest.fill,'none');
     assert.notEqual(rest.stroke,'none');
-    assert.equal(rest.strokeWidth,'1.5px');
+    assert.equal(rest.strokeWidth,'1.7px');
     assert.equal(rest.transform, 'none');
     assert.ok(['none','matrix(1, 0, 0, 1, 0, 0)'].includes(rest.rotation));
     assert.equal(rest.animations, 0);
@@ -5446,7 +5440,7 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
           const duration = fade.effect.getTiming().duration;
           fade.pause();
           const colors = [0,.25,.5,.75,1].map(progress => { fade.currentTime = progress * duration; return getComputedStyle(path).stroke; });
-          results.push({expanded,phase,duration,colors,neutral,opacity:getComputedStyle(path).opacity,easing:getComputedStyle(icon).transitionTimingFunction});
+          results.push({expanded,phase,duration,colors,neutral,opacity:getComputedStyle(icon).opacity,easing:getComputedStyle(icon).transitionTimingFunction});
           fade.finish();
           await frame();
         }
@@ -5468,14 +5462,26 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
       assert.equal(pair[0].colors.at(-1),pair[1].colors[0],'Fade-out must start at the same gold reached by fade-in');
     }
   };
+  const waitForTrail = thought => page.waitForFunction(expected => {
+    const canvas=document.querySelector('.adm__ai-spark canvas');
+    if (!canvas || canvas.hidden) return false;
+    const gl=canvas.getContext('webgl2'), program=gl?.getParameter(gl.CURRENT_PROGRAM);
+    return !!program && gl.getUniform(program,gl.getUniformLocation(program,'uThought'))===expected;
+  },thought);
   const sampleMorph = () => page.locator('.adm__ai-spark svg').evaluate(async svg => {
     const path = svg.querySelector('path'), turn = svg.querySelector('.adm__ai-ribbon-turn'), frames = [];
     for (let index = 0; index < 6; index++) {
       await new Promise(resolve => { const until = performance.now() + 200; const next = now => now >= until ? resolve() : requestAnimationFrame(next); requestAnimationFrame(next); });
-      const box = svg.getBoundingClientRect(), counter = svg.closest('button').getBoundingClientRect(), style = getComputedStyle(path);
-      const matrix = path.getScreenCTM(), length = path.getTotalLength(), stroke = style.stroke === 'none' ? 0 : parseFloat(style.strokeWidth) * Math.hypot(matrix.a, matrix.b) / 2;
-      const points = Array.from({length:193}, (_, index) => path.getPointAtLength(length * index / 192).matrixTransform(matrix));
-      frames.push({outline:style.d,length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,opacity:style.opacity,transform:style.transform,rotation:turn.getAttribute('transform'),visiblePaths:[...svg.querySelectorAll('path')].filter(element => getComputedStyle(element).display !== 'none').length,icon:[box.width,box.height],counter:[counter.width,counter.height],contained:points.every(point => point.x - stroke >= box.left && point.x + stroke <= box.right && point.y - stroke >= box.top && point.y + stroke <= box.bottom)});
+      const canvas=svg.parentElement.querySelector('canvas'), box=canvas.getBoundingClientRect(), counter=svg.closest('button').getBoundingClientRect(), style=getComputedStyle(path);
+      const length=path.getTotalLength(), stroke=parseFloat(style.strokeWidth)*box.width/48;
+      const angle=Number(turn.getAttribute('transform').match(/rotate\(([-\d.]+)/)[1])*Math.PI/180;
+      const points=Array.from({length:193},(_,index)=>{
+        const point=path.getPointAtLength(length*index/192),x=point.x-12,y=point.y-12;
+        return {x:box.left+(12+x*Math.cos(angle)-y*Math.sin(angle))*box.width/24,y:box.top+(12+x*Math.sin(angle)+y*Math.cos(angle))*box.height/24};
+      });
+      const gl=canvas.getContext('webgl2'), program=gl.getParameter(gl.CURRENT_PROGRAM);
+      const uniform=name=>gl.getUniform(program,gl.getUniformLocation(program,name));
+      frames.push({outline:style.d,length,fill:style.fill,stroke:style.stroke,strokeWidth:style.strokeWidth,opacity:style.opacity,transform:style.transform,rotation:turn.getAttribute('transform'),thought:uniform('uThought'),span:uniform('uSpan'),blending:gl.isEnabled(gl.BLEND),renderer:svg.closest('button').dataset.aiRenderer,visibleSurfaces:[...svg.parentElement.querySelectorAll('svg,canvas')].filter(element=>element.getClientRects().length>0).length,icon:[box.width,box.height],counter:[counter.width,counter.height],contained:points.every(point=>point.x-stroke>=box.left&&point.x+stroke<=box.right&&point.y-stroke>=box.top&&point.y+stroke<=box.bottom)});
     }
     return {frames};
   });
@@ -5509,7 +5515,7 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     const assertStaticAiIcons = async () => {
       const icons = await page.locator('.ai-ribbon').evaluateAll(icons => icons.filter(icon => !icon.closest('[data-ai-session-toggle]')).map(icon => ({path: getComputedStyle(icon.querySelector('path')).d, stroke: getComputedStyle(icon.querySelector('path')).strokeWidth, animations: icon.getAnimations({subtree:true}).length})));
       assert.ok(icons.length > 0, 'Studio AI actions use the shared rest mark');
-      for (const icon of icons) { assert.equal(icon.path, idleOutline); assert.equal(icon.stroke, '1.5px'); assert.equal(icon.animations, 0); }
+      for (const icon of icons) { assert.equal(icon.path, idleOutline); assert.equal(icon.stroke, '1.7px'); assert.equal(icon.animations, 0); }
     };
     await assertStaticAiIcons();
     await page.locator('[data-ai-session-toggle]').click();
@@ -5517,10 +5523,11 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await page.waitForFunction(() => !!window.__sessionStream);
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'working');
     await page.waitForFunction(() => document.querySelector('[data-ai-session-count]').textContent === '135 tokens');
+    await waitForTrail(1);
     const workingMorph = await sampleMorph();
     await assertStaticAiIcons();
     assert.equal(new Set(workingMorph.frames.map(frame => frame.outline)).size, 6);
-    assert.ok(workingMorph.frames.every(frame => frame.visiblePaths === 1 && frame.stroke !== 'none' && frame.fill === 'none' && frame.strokeWidth === '1.5px' && frame.opacity === '1'),'Use one unfilled ribbon with constant stroke and opacity');
+    assert.ok(workingMorph.frames.every(frame => frame.visibleSurfaces===1 && frame.renderer==='gpu' && !frame.blending && frame.stroke!=='none' && frame.fill==='none' && frame.strokeWidth==='1.7px' && frame.thought===1 && Math.abs(frame.span-.55)<1e-6),'Thinking uses one depth-resolved hybrid surface with the approved55%tail');
     assert.ok(workingMorph.frames.every(frame => frame.transform === 'none' && frame.rotation === 'rotate(0.0000 12 12)'),'Thinking morphs without spinning');
     assert.ok(new Set(workingMorph.frames.map(frame => frame.length.toFixed(2))).size > 3, 'The path geometry must change, not only its scale or opacity');
     assert.ok(workingMorph.frames.every(frame => frame.contained));
@@ -5542,7 +5549,9 @@ test("AI session drawer streams across tabs, survives refresh and resets on expl
     await page.evaluate(() => { window.__ribbonPath = document.querySelector('.adm__ai-spark path'); window.__sessionStream.answer(); });
     await page.waitForFunction(() => document.querySelector('[data-ai-session-toggle]').dataset.aiState === 'answering');
     assert.equal(await page.evaluate(() => document.querySelector('.adm__ai-spark path') === window.__ribbonPath),true,'Streaming retains the same ribbon element');
+    await waitForTrail(0);
     const answeringMorph = await sampleMorph();
+    assert.ok(answeringMorph.frames.every(frame=>frame.thought===0&&frame.span===1&&frame.opacity==='1'&&frame.visibleSurfaces===1),'Answering becomes one solid complete ribbon');
     assert.ok(new Set(answeringMorph.frames.map(frame => frame.rotation)).size > 3);
     assert.ok(answeringMorph.frames.every(frame => frame.transform === 'none' && frame.contained));
     assert.equal(new Set(answeringMorph.frames.map(frame => frame.outline)).size, 6);
