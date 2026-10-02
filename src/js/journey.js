@@ -7,6 +7,7 @@ import { journeyRows } from "./journey-core.mjs";
   let currentData, rows = [], activeKey = null, mediaIndex = 0, editorPreview = false, caseReturn = null;
   let background = null, openingKey = null;
   let detailLayout = "right", sheetExpanded = false, sheetGesture = null;
+  let mediaAnimations = [], mediaOutgoing = null;
   let peekRow = null, peekTrigger = null, peekResize = null;
   const seenKey = 'rk:journey:seen-cases:v1';
   let seenCases = readSeenCases();
@@ -223,6 +224,7 @@ import { journeyRows } from "./journey-core.mjs";
   }
 
   function removeDetail() {
+    stopMediaMotion();
     const panel = document.getElementById("journey-detail");
     panel?.querySelectorAll("video").forEach(element => element.pause());
     panel?.remove();
@@ -294,6 +296,7 @@ import { journeyRows } from "./journey-core.mjs";
   }
 
   function syncDetailLayout() {
+    stopMediaMotion();
     const panel = document.getElementById("journey-detail");
     if (!panel) return;
     panel.dataset.layout = detailLayout;
@@ -317,9 +320,66 @@ import { journeyRows } from "./journey-core.mjs";
     }
   }
 
-  function renderMedia() {
+  function stopMediaMotion() {
+    mediaAnimations.forEach(animation => animation.cancel());
+    mediaAnimations = [];
+    mediaOutgoing?.remove();
+    mediaOutgoing = null;
+  }
+
+  function animateMedia(gallery, previous) {
+    if (!previous.length) return;
+    const cards = [...gallery.querySelectorAll('[data-jindex]')].filter(card => card.getBoundingClientRect().width);
+    const front = cards.find(card => card.classList.contains('jrn-gallery__stage'));
+    const oldFront = previous.find(card => card.front);
+    const direction = Math.sign(Number(front.dataset.jindex) - Number(oldFront?.index));
+    const run = (node, frames) => {
+      const animation = node.animate(frames, { duration: 420, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+      mediaAnimations.push(animation);
+      animation.onfinish = () => {
+        animation.cancel();
+        mediaAnimations = mediaAnimations.filter(item => item !== animation);
+        if (node === mediaOutgoing) { node.remove(); mediaOutgoing = null; }
+      };
+    };
+    for (const card of cards) {
+      const box = card.getBoundingClientRect(), style = getComputedStyle(card);
+      const old = previous.find(item => item.index === card.dataset.jindex);
+      const transform = style.transform === 'none' ? '' : style.transform;
+      const dx = old ? old.box.x + old.box.width / 2 - box.x - box.width / 2 : direction * Math.min(box.width * .15, 64);
+      const dy = old ? old.box.y + old.box.height / 2 - box.y - box.height / 2 : 0;
+      const sx = old ? old.box.width / box.width : .96, sy = old ? old.box.height / box.height : .96;
+      run(card, [
+        { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy}) ${transform}`, filter: old?.filter || style.filter, opacity: old?.opacity || 0 },
+        { transform: style.transform, filter: style.filter, opacity: 1 }
+      ]);
+    }
+    // Keep an image-only outgoing card for mobile and jumps beyond the visible stack.
+    if (oldFront?.node.querySelector('img') && !cards.some(card => card.dataset.jindex === oldFront.index)) {
+      const outgoing = oldFront.node;
+      outgoing.className = 'jrn-gallery__outgoing';
+      outgoing.removeAttribute('data-jindex');
+      outgoing.inert = true;
+      outgoing.setAttribute('aria-hidden', 'true');
+      outgoing.querySelectorAll('button').forEach(button => { button.disabled = true; });
+      gallery.querySelector('.jrn-gallery__stack').append(outgoing);
+      mediaOutgoing = outgoing;
+      run(outgoing, [
+        { transform: oldFront.transform, translate: oldFront.translate, filter: oldFront.filter, opacity: oldFront.opacity },
+        { transform: `translateX(${-direction * 64}px) scale(.96)`, translate: 'none', filter: 'none', opacity: 0 }
+      ]);
+    }
+  }
+
+  function renderMedia(animate = false) {
     const story = activeStory(), gallery = document.querySelector("#journey-detail .jrn-gallery");
     if (!story || !gallery) return;
+    const previous = animate && !reduced() ? [...gallery.querySelectorAll('[data-jindex]')].map(node => ({
+      node, index: node.dataset.jindex, front: node.classList.contains('jrn-gallery__stage'),
+      box: node.getBoundingClientRect(), filter: getComputedStyle(node).filter, opacity: getComputedStyle(node).opacity,
+      transform: getComputedStyle(node).transform, translate: getComputedStyle(node).translate
+    })).filter(card => card.box.width) : [];
+    stopMediaMotion();
     gallery.querySelectorAll("video").forEach(element => element.pause());
     const images = media(story);
     const stories = allStories(), storyIndex = stories.findIndex(item => item.key === activeKey);
@@ -338,14 +398,16 @@ import { journeyRows } from "./journey-core.mjs";
     const image = images[mediaIndex], source = esc(mediaUrl(image.src));
     const neighbours = images.map((item, index) => ({ item, offset: index - mediaIndex })).filter(item => item.offset && Math.abs(item.offset) <= 3);
     gallery.innerHTML = '<figure class="jrn-gallery__figure"><div class="jrn-gallery__stack">' +
-      neighbours.map(({ item, offset }) => '<button type="button" class="jrn-gallery__neighbour" data-jmedia="' + (mediaIndex + Math.sign(offset)) + '" aria-label="' + (offset < 0 ? 'Previous gallery card' : 'Next gallery card') + '" style="--jrn-offset:' + offset + ';--jrn-depth:' + Math.abs(offset) + '">' + thumb(item) + '</button>').join('') +
-      '<div class="jrn-gallery__stage">' +
+      neighbours.map(({ item, offset }) => '<button type="button" class="jrn-gallery__neighbour" data-jindex="' + (mediaIndex + offset) + '" data-jmedia="' + (mediaIndex + Math.sign(offset)) + '" aria-label="' + (offset < 0 ? 'Previous gallery card' : 'Next gallery card') + '" style="--jrn-offset:' + offset + ';--jrn-depth:' + Math.abs(offset) + '">' + (!video(item) ? '<span class="jrn-gallery__fill" aria-hidden="true"></span>' : '') + thumb(item) + '</button>').join('') +
+      '<div class="jrn-gallery__stage" data-jindex="' + mediaIndex + '">' +
       (video(image) ? '<video src="' + source + '" controls playsinline preload="metadata"></video>' :
-        '<button type="button" data-jzoom aria-label="Enlarge image" title="Enlarge image"><img src="' + source + '" alt="' + esc(image.caption || story.entry.title || '') + '" /></button>') +
+        '<span class="jrn-gallery__fill" aria-hidden="true"></span><button type="button" data-jzoom aria-label="Enlarge image" title="Enlarge image"><img src="' + source + '" alt="' + esc(image.caption || story.entry.title || '') + '" /></button>') +
       '</div></div><figcaption class="jrn-gallery__caption">' + esc(image.caption || '') + '</figcaption></figure>';
     gallery.querySelectorAll('.jrn-gallery__stage [data-jzoom] img, .jrn-gallery__neighbour > img').forEach(element => {
-      element.closest('.jrn-gallery__stage, .jrn-gallery__neighbour').style.setProperty('--jrn-image-fill', 'url(' + JSON.stringify(element.src) + ')');
+      // CSS custom properties reject large draft data URLs; a direct background has no such limit.
+      element.closest('.jrn-gallery__stage, .jrn-gallery__neighbour').querySelector('.jrn-gallery__fill').style.backgroundImage = 'url(' + JSON.stringify(element.src) + ')';
     });
+    animateMedia(gallery, previous);
   }
 
   function open(options = {}) {
@@ -398,25 +460,28 @@ import { journeyRows } from "./journey-core.mjs";
         const nextIndex = mediaIndex + direction;
         if (nextIndex < 0 || nextIndex >= media(activeStory()).length) return;
         mediaIndex = nextIndex;
-        renderMedia();
+        renderMedia(true);
       }
       const panel = document.getElementById('journey-detail');
       (panel.querySelector('[' + control + '="' + direction + '"]:not(:disabled)') || panel.querySelector('h4'))?.focus({ preventScroll: true });
       return;
     }
     if (target.hasAttribute("data-jmedia")) {
+      const changed = mediaIndex !== Number(target.dataset.jmedia);
       mediaIndex = Number(target.dataset.jmedia);
-      renderMedia();
+      renderMedia(changed);
       const controls = document.querySelector(".jrn-gallery__controls");
       controls.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
       return;
     }
     if (target.hasAttribute("data-jzoom")) {
+      stopMediaMotion();
       const images = media(activeStory()), current = images[mediaIndex], stills = images.filter(image => !video(image));
       window.RK?.openLbx?.(stills.map(image => ({ src: mediaUrl(image.src), cap: image.caption || '' })), stills.indexOf(current));
       return;
     }
     if (target.hasAttribute("data-jwork")) {
+      stopMediaMotion();
       caseReturn = { path: location.pathname + location.search + location.hash, title: document.title };
       document.querySelectorAll('#journey-detail video').forEach(element => element.pause());
       document.getElementById("journey-detail").hidden = true;
@@ -461,11 +526,12 @@ import { journeyRows } from "./journey-core.mjs";
       if (peekRow?.contains(event.target) && !peekRow.contains(event.relatedTarget) && !peekRow.querySelector('.jrn-stories__preview').matches(':hover')) closePeek();
     });
     document.addEventListener('scroll', positionPeek, true);
-    window.addEventListener("resize", () => { closePeek(); revealSelection(); });
+    window.addEventListener("resize", () => { stopMediaMotion(); closePeek(); revealSelection(); });
     document.addEventListener("error", event => {
       if (event.target.matches?.('.jrn-tile__case-image, .tl__logo')) { event.target.remove(); return; }
       const stage = event.target.closest?.(".jrn-gallery__stage");
       if (!stage || !activeStory()) return;
+      stopMediaMotion();
       const image = media(activeStory())[mediaIndex];
       stage.innerHTML = '<div class="jrn-gallery__error" role="status"><p>Media unavailable</p><button type="button" class="jrn-case" data-jretry>Retry</button>' +
         (image ? '<a class="jrn-case" href="' + esc(mediaUrl(image.src)) + '" target="_blank" rel="noopener noreferrer">Open original <span aria-hidden="true">&#8599;</span></a>' : '') + '</div>';
@@ -511,8 +577,8 @@ import { journeyRows } from "./journey-core.mjs";
       seenCases = readSeenCases();
       refreshSeenCases();
     });
-    document.addEventListener('visibilitychange', syncRingMotion);
-    ringPreference.addEventListener('change', syncRingMotion);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopMediaMotion(); syncRingMotion(); });
+    ringPreference.addEventListener('change', () => { stopMediaMotion(); syncRingMotion(); });
     if (timeline()) new IntersectionObserver(entries => {
       ringVisible = entries.some(entry => entry.isIntersecting);
       syncRingMotion();

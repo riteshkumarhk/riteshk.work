@@ -1241,6 +1241,130 @@ async function journeyFixture(page) {
   return published;
 }
 
+test('Journey gallery reacts to hover and animates directional changes with safe interruption and reduced motion', {skip:!baseURL,timeout:60000}, async () => {
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'no-preference'});
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const published=await journeyFixture(page),entry=published.journey.chapters[0].entries[0];
+    entry.images=Array.from({length:8},(_,index)=>({...entry.images[index%3],caption:'Motion image '+(index+1)}));
+    await page.goto(baseURL+'/?view=about');
+    await page.getByRole('button',{name:'Edge onboarding',exact:true}).click();
+    await page.getByRole('button',{name:'Media 4',exact:true}).click();
+    const settled=()=>page.waitForFunction(()=>!document.querySelector('.jrn-gallery__outgoing') && !document.querySelector('.jrn-gallery').getAnimations({subtree:true}).some(a=>a.effect.getTiming().duration===420));
+    await settled();
+    await page.locator('.jrn-gallery__stage').hover();
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__stage')).translate==='0px -5px');
+    assert.notEqual(await page.locator('.jrn-gallery__stage').evaluate(e=>getComputedStyle(e).boxShadow),'none');
+    const rear=page.locator('.jrn-gallery__neighbour[data-jindex="4"]');
+    const rearBox=await rear.boundingBox();
+    await rear.hover({position:{x:rearBox.width-6,y:rearBox.height/2}});
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='0px -8px');
+    assert.equal(await rear.evaluate(e=>getComputedStyle(e).filter),'brightness(0.58)');
+    await page.mouse.move(0,0);
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='none');
+    await rear.focus();
+    await page.keyboard.press('Tab');
+    await rear.focus();
+    await page.waitForFunction(()=>document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]').matches(':focus-visible'));
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='0px -8px');
+    await page.locator('[data-jadvance="1"]').focus();
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='none');
+    const movement=await page.evaluate(()=>{
+      const old=document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]').getBoundingClientRect();
+      document.querySelector('[data-jadvance="1"]').click();
+      const animations=document.querySelector('.jrn-gallery').getAnimations({subtree:true}).filter(a=>a.effect.getTiming().duration===420);
+      animations.forEach(a=>{a.pause();a.currentTime=0;});
+      const stage=document.querySelector('.jrn-gallery__stage'),start=stage.getBoundingClientRect();
+      const animation=stage.getAnimations().find(a=>a.effect.getTiming().duration===420);
+      const frames=animation.effect.getKeyframes();
+      animations.forEach(a=>{a.currentTime=180;});
+      return {old:old.toJSON(),start:start.toJSON(),mid:stage.getBoundingClientRect().toJSON(),frames,count:animations.length};
+    });
+    assert.ok(movement.count>=6);
+    assert.ok(Math.abs(movement.old.x-movement.start.x)<1 && Math.abs(movement.old.width-movement.start.width)<1,JSON.stringify(movement));
+    assert.notEqual(movement.start.width,movement.mid.width);
+    assert.notEqual(movement.frames[0].filter,movement.frames[1].filter);
+    const reverse=await page.evaluate(()=>{
+      const old=document.querySelector('.jrn-gallery__neighbour[data-jindex="3"]').getBoundingClientRect();
+      document.querySelector('[data-jadvance="-1"]').click();
+      const animations=document.querySelector('.jrn-gallery').getAnimations({subtree:true}).filter(a=>a.effect.getTiming().duration===420);
+      animations.forEach(a=>{a.pause();a.currentTime=0;});
+      const start=document.querySelector('.jrn-gallery__stage').getBoundingClientRect();
+      animations.forEach(a=>a.play());
+      return {old:old.toJSON(),start:start.toJSON()};
+    });
+    assert.ok(Math.abs(reverse.old.x-reverse.start.x)<1 && Math.abs(reverse.old.width-reverse.start.width)<1,JSON.stringify(reverse));
+    await settled();
+    assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Motion image 4');
+    await page.evaluate(()=>{for(const index of [7,0,6,2])document.querySelector('.jrn-gallery__thumbs [data-jmedia="'+index+'"]').click();});
+    await settled();
+    assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Motion image 3');
+    assert.equal(await page.locator('.jrn-gallery__outgoing').count(),0);
+    await page.setViewportSize({width:390,height:844});
+    await page.getByRole('button',{name:'Media 4',exact:true}).click();
+    const ghost=await page.locator('.jrn-gallery__outgoing').evaluate(e=>({inert:e.inert,hidden:e.getAttribute('aria-hidden'),buttons:[...e.querySelectorAll('button')].every(b=>b.disabled)}));
+    assert.deepEqual(ghost,{inert:true,hidden:'true',buttons:true});
+    await settled();
+    await page.getByRole('button',{name:'Media 5',exact:true}).click();
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await settled();
+    await page.getByRole('button',{name:'Media 6',exact:true}).click();
+    assert.equal(await page.locator('.jrn-gallery').evaluate(e=>e.getAnimations({subtree:true}).some(a=>a.effect.getTiming().duration===420)),false);
+    await page.setViewportSize({width:1440,height:900});
+    await page.locator('.jrn-gallery__stage').hover();
+    assert.equal(await page.locator('.jrn-gallery__stage').evaluate(e=>getComputedStyle(e).translate),'none');
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.getByRole('button',{name:'Media 7',exact:true}).click();
+    await page.locator('[data-jlayout]').click();
+    await settled();
+    await page.getByRole('button',{name:'Media 8',exact:true}).click();
+    await page.getByRole('button',{name:'Close chapter',exact:true}).click();
+    assert.equal(await page.locator('.jrn-gallery__outgoing').count(),0);
+    assert.equal(await page.locator('#journey-detail').count(),0);
+    assert.deepEqual(errors,[]);
+  } finally { await browser.close(); }
+});
+
+test('Journey blurred fill supports large unpublished image data without changing original pixels', {skip:!baseURL,timeout:60000}, async () => {
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:'reduce'});
+    const published=await journeyFixture(page);
+    const svg='<svg xmlns="http://www.w3.org/2000/svg" width="200" height="600"><!--'+'x'.repeat(2200000)+'--><rect width="200" height="600" fill="#c75061"/></svg>';
+    const source='data:image/svg+xml;base64,'+Buffer.from(svg).toString('base64');
+    assert.ok(source.length>2*1024*1024);
+    published.journey.chapters[0].entries[0].images=[{src:source,caption:'Large unpublished portrait'},published.journey.chapters[0].entries[0].images[0]];
+    await page.goto(baseURL+'/?view=about');
+    await page.getByRole('button',{name:'Edge onboarding',exact:true}).click();
+    const assertFill=async selector=>{
+      const card=page.locator(selector);
+      await card.locator('img').evaluate(image=>image.decode());
+      const background=await card.evaluate(element=>{
+        return getComputedStyle(element.querySelector('.jrn-gallery__fill')).backgroundImage;
+      });
+      assert.ok(background.includes(source),'The loaded original must also paint the blurred background for a >2MiB draft data URL');
+    };
+    for(const viewport of [{width:1440,height:900},{width:390,height:844}]) {
+      await page.setViewportSize(viewport);
+      await assertFill('.jrn-gallery__stage');
+      const pixels=await page.evaluate(async encoded=>{
+        const image=new Image();image.src='data:image/png;base64,'+encoded;await image.decode();
+        const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+        const context=canvas.getContext('2d');context.drawImage(image,0,0);
+        return {gap:[...context.getImageData(10,Math.floor(image.height/2),1,1).data],foreground:[...context.getImageData(Math.floor(image.width/2),Math.floor(image.height/2),1,1).data]};
+      },(await page.locator('.jrn-gallery__stage').screenshot()).toString('base64'));
+      assert.ok(pixels.gap[0]>100 && pixels.gap[0]<160 && pixels.gap[0]>pixels.gap[1]*1.5,JSON.stringify(pixels));
+      assert.deepEqual(pixels.foreground,[199,80,97,255]);
+    }
+    await page.setViewportSize({width:1440,height:900});
+    await page.getByRole('button',{name:'Media 2',exact:true}).click();
+    await assertFill('.jrn-gallery__neighbour');
+    assert.equal(await page.locator('.jrn-gallery__neighbour').getAttribute('data-jmedia'),'0');
+    assert.equal(await page.evaluate(()=>RK.data.journey.chapters[0].entries[0].images[0].src),source);
+  } finally { await browser.close(); }
+});
+
 test('Journey proposal supports stacked media, three desktop layouts and a mobile story sheet', {skip:!baseURL,timeout:60000}, async () => {
   const browser = await chromium.launch(launchOptions);
   try {
@@ -1327,14 +1451,14 @@ test('Journey proposal supports stacked media, three desktop layouts and a mobil
     const assertImageFill=async()=>{
       const stage=page.locator('.jrn-gallery__stage');
       const fill=await stage.evaluate(element=>{
-        const background=getComputedStyle(element,'::before'),image=element.querySelector('img'),foreground=getComputedStyle(image);
+        const background=getComputedStyle(element.querySelector('.jrn-gallery__fill')),image=element.querySelector('img'),foreground=getComputedStyle(image);
         return {source:background.backgroundImage.includes(image.src),size:background.backgroundSize,filter:background.filter,pointer:background.pointerEvents,fit:foreground.objectFit,sharp:foreground.filter,clip:getComputedStyle(element).overflow};
       });
       assert.deepEqual(fill,{source:true,size:'cover',filter:'blur(24px) brightness(0.65)',pointer:'none',fit:'contain',sharp:'none',clip:'hidden'});
       assert.equal(await stage.evaluate(element=>getComputedStyle(element).borderTopLeftRadius),'12%');
     };
     await assertImageFill();
-    assert.equal(await page.locator('.jrn-gallery__neighbour:has(> img)').evaluateAll(cards=>cards.every(card=>getComputedStyle(card,'::before').backgroundImage.includes(card.querySelector('img').src) && getComputedStyle(card).borderTopLeftRadius==='12%')),true);
+    assert.equal(await page.locator('.jrn-gallery__neighbour:has(> img)').evaluateAll(cards=>cards.every(card=>getComputedStyle(card.querySelector('.jrn-gallery__fill')).backgroundImage.includes(card.querySelector('img').src) && getComputedStyle(card).borderTopLeftRadius==='12%')),true);
     const pixels=await page.evaluate(async encoded=>{
       const image=new Image();image.src='data:image/png;base64,'+encoded;await image.decode();
       const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
@@ -1372,7 +1496,7 @@ test('Journey proposal supports stacked media, three desktop layouts and a mobil
     assert.deepEqual(await portrait.evaluate(image=>[image.naturalWidth,image.naturalHeight,getComputedStyle(image).objectFit]),[200,600,'contain']);
     await assertImageFill();
     await page.getByRole('button',{name:'Media 8',exact:true}).click();
-    assert.equal(await page.locator('.jrn-gallery__stage').evaluate(element=>getComputedStyle(element,'::before').content),'none');
+    assert.equal(await page.locator('.jrn-gallery__stage .jrn-gallery__fill').count(),0);
     const video=await page.locator('.jrn-gallery__stage video').elementHandle();
     await video.evaluate(async element=>{element.muted=true;element.loop=true;await element.play();});
     for(let index=0;index<3;index++) {
@@ -1498,6 +1622,23 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(await page.locator('.jrn-gallery__bar span').textContent(),'2025 - Present');
       await page.getByRole('button',{name:'Enlarge image',exact:true}).click();
       await page.locator('.pjx.is-open').waitFor();
+      const viewerImage=page.locator('.pjx__img');
+      assert.equal(await page.locator('.pjx').evaluate(element=>getComputedStyle(element).cursor),'auto');
+      assert.equal(await viewerImage.evaluate(element=>getComputedStyle(element).cursor),'auto');
+      assert.equal(await page.locator('.pjx__btn--close').evaluate(element=>getComputedStyle(element).cursor),'pointer');
+      if(width>900) {
+        assert.equal(await page.locator('body').evaluate(element=>getComputedStyle(element).cursor),'none');
+        assert.equal(await page.locator('.cursor').evaluate(element=>getComputedStyle(element).visibility),'hidden');
+      }
+      await page.locator('.pjx [data-lz="in"]').click();
+      assert.equal(await viewerImage.evaluate(element=>getComputedStyle(element).cursor),'grab');
+      await viewerImage.hover();
+      await page.mouse.down();
+      assert.equal(await viewerImage.evaluate(element=>getComputedStyle(element).cursor),'grabbing');
+      await page.mouse.up();
+      assert.equal(await viewerImage.evaluate(element=>getComputedStyle(element).cursor),'grab');
+      await page.locator('.pjx [data-lz="reset"]').click();
+      assert.equal(await viewerImage.evaluate(element=>getComputedStyle(element).cursor),'auto');
       await page.keyboard.press('Escape');
       await page.locator('.pjx.is-open').waitFor({state:'hidden'});
       await page.waitForFunction(()=>getComputedStyle(document.querySelector('.pjx')).opacity==='0');
@@ -1552,6 +1693,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       await page.screenshot({path:join(tmpdir(),'rk-journey-l2-'+width+'.png')});
       await page.getByRole('button',{name:'Close chapter',exact:true}).click();
       assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      assert.equal(await page.locator('.pjx').evaluate(element=>getComputedStyle(element).cursor===getComputedStyle(document.body).cursor),true);
       assert.ok(Math.abs(await page.evaluate(()=>scrollY)-returnY)<2);
       assert.equal(await page.locator('#top').evaluate(element=>element.inert),false);
       await page.keyboard.press('Enter');
