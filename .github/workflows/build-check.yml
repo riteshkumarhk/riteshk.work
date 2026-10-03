@@ -29,9 +29,7 @@ jobs:
         run: npm ci
 
       - name: Run root regressions sequentially
-        run: |
-          mapfile -t tests < <(find . -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.cjs' \) ! -name '*.browser.test.mjs' ! -name 'slide-studio-deck.test.mjs' ! -name 'ai-ribbon.test.mjs' ! -name 'resume-workspace.test.mjs' | sort)
-          node --test --test-concurrency=1 "${tests[@]}"
+        run: npm run test:root
 
       - name: Rebuild bundles
         run: npm run build

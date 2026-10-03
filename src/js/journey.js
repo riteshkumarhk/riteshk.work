@@ -15,6 +15,7 @@ import { journeyRows } from "./journey-core.mjs";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
   const md = value => window.RK?.md ? window.RK.md(value) : esc(value);
   const allStories = () => rows.flatMap(row => row.stories);
+  const detailStories = () => allStories().reverse();
   const activeStory = () => allStories().find(story => story.key === activeKey);
   const media = story => (story.entry.images || []).filter(image => image?.src && mediaUrl(image.src));
   const video = image => image.kind === "video" || /^data:video\//i.test(image.src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(image.src);
@@ -275,7 +276,7 @@ import { journeyRows } from "./journey-core.mjs";
     panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-labelledby", "journey-detail-title");
     panel.setAttribute("data-lenis-prevent", "");
-    panel.innerHTML = '<div class="jrn__top"><nav class="jrn-timeline" aria-label="Journey chapters">' + allStories().map(item =>
+    panel.innerHTML = '<div class="jrn__top"><nav class="jrn-timeline" aria-label="Journey chapters">' + detailStories().map(item =>
       '<button type="button" class="jrn-timeline__item" data-jchapter="' + esc(item.key) + '" aria-label="Open story: ' + esc(item.entry.title || item.chapter.name || "Chapter") + '"' + (item.key === key ? ' aria-current="step"' : '') + '><span class="jrn-tile__period">' + esc(item.entry.period || item.chapter.name) + '</span><span class="jrn-timeline__title">' + esc(item.entry.title || item.chapter.name || "Chapter") + '</span></button>').join('') +
       '</nav><button type="button" class="jrn-control" data-jclose title="Close chapter" aria-label="Close chapter">&#215;</button></div>' +
       '<div class="jrn__workspace"><div class="jrn__visual"><div class="jrn-gallery"></div><div class="jrn-gallery__controls"></div></div>' +
@@ -382,7 +383,7 @@ import { journeyRows } from "./journey-core.mjs";
     stopMediaMotion();
     gallery.querySelectorAll("video").forEach(element => element.pause());
     const images = media(story);
-    const stories = allStories(), storyIndex = stories.findIndex(item => item.key === activeKey);
+    const stories = detailStories(), storyIndex = stories.findIndex(item => item.key === activeKey);
     const controls = document.querySelector('#journey-detail .jrn-gallery__controls');
     controls.hidden = images.length < 2;
     mediaIndex = Math.max(0, Math.min(mediaIndex, images.length - 1));
@@ -452,7 +453,7 @@ import { journeyRows } from "./journey-core.mjs";
       const control = target.hasAttribute('data-jadvance') ? 'data-jadvance' : 'data-jstep';
       const direction = Number(target.getAttribute(control));
       if (control === 'data-jstep') {
-        const stories = allStories(), index = stories.findIndex(story => story.key === activeKey);
+        const stories = detailStories(), index = stories.findIndex(story => story.key === activeKey);
         const nextStory = stories[index + direction];
         if (!nextStory) return;
         expand(nextStory.key);
@@ -544,7 +545,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (event.key === "Escape" && panel.contains(event.target)) { event.preventDefault(); event.stopPropagation(); close(); return; }
       const chapter = event.target.closest?.("[data-jchapter]");
       if (chapter && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-        const stories = allStories(), index = stories.findIndex(item => item.key === activeKey);
+        const stories = detailStories(), index = stories.findIndex(item => item.key === activeKey);
         const next = event.key === "Home" ? 0 : event.key === "End" ? stories.length - 1 : Math.max(0, Math.min(stories.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)));
         event.preventDefault(); expand(stories[next].key, false);
         document.querySelector('.jrn-timeline [aria-current="step"]')?.focus({ preventScroll: true });

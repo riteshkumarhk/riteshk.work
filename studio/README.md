@@ -1,5 +1,34 @@
 # Content Studio Chrome
 
+## Release Gate
+
+Focused tests are development feedback, not permission to push. Before a release,
+fetch and safely integrate the latest publications without discarding drafts or
+unrelated changes. Reuse a local server serving this repository, then run:
+
+```powershell
+$env:SLIDE_LAB_URL='http://127.0.0.1:5510'
+npm run check:release
+```
+
+This runs the same root-test selection as CI, all three builds, bundle syntax
+checks, and every existing browser shard with the provider-network guard. Browser
+shards run sequentially locally to avoid contention; CI retains its parallel
+shards. Missing/wrong/live server URLs and failing commands stop the gate rather
+than silently skipping coverage. Existing dependencies and browser installation
+are reused; the command does not install packages, publish, commit or push.
+
+Review and stage rebuilt outputs explicitly. Do not edit the candidate while the
+gate runs. Fetch again before pushing: if remote changes must be integrated,
+validate that final tree, including content-dependent backup/restore checks.
+Never force-push over admin publications. CI still verifies committed bundle
+freshness and gates deployment on all shards; a local pass does not replace
+Linux CI or live-asset verification. Keep genuine manual acceptance separate.
+
+Backup round-trip tests must upload the actual downloaded file by path, not
+re-serialize a potentially large backup into Playwright's size-limited in-memory
+payload. Preserve the original bytes and all restore/undo/redo assertions.
+
 The shared Studio shell keeps Undo/Redo on the left of its working bar. The preview
 mode toggle, screen-size (or slide-view) dropdown, and new-tab (or Rehearse) action
 form a right-aligned group. Preview mode behavior is unchanged: split, editor-only,

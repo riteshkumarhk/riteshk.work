@@ -6653,12 +6653,13 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     const downloading = page.waitForEvent('download');
     await page.locator('[data-act="backup-dl"]').click();
     const download = await downloading;
-    const downloaded = JSON.parse(readFileSync(await download.path(), 'utf8'));
+    const downloadPath = await download.path();
+    const downloaded = JSON.parse(readFileSync(downloadPath, 'utf8'));
     assert.equal(downloaded.nativeDecksBackup.documents.length, 2);
     assert.ok(downloaded.nativeDecksBackup.documents.some(record => record.document.slides[0].notes === 'Pending notes must stay open'));
     const choosingFile = page.waitForEvent('filechooser');
     await page.locator('[data-act="backup-restore"]').click();
-    await (await choosingFile).setFiles({ name: 'private-native-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(downloaded)) });
+    await (await choosingFile).setFiles(downloadPath);
     await page.locator('[data-bkr-work="native-second"]').uncheck();
     await page.locator('.bkr [data-go]').click();
     await page.waitForSelector('.bkr', { state: 'detached' });

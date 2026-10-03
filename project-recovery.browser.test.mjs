@@ -1548,6 +1548,45 @@ test('Journey proposal supports stacked media, three desktop layouts and a mobil
   } finally { await browser.close(); }
 });
 
+test('Journey L2 runs oldest to newest while About order and original story media remain unchanged', {skip:!baseURL,timeout:60000}, async () => {
+  const browser=await chromium.launch(launchOptions);
+  try {
+    for(const width of [1440,390]) {
+      const page=await browser.newPage({viewport:{width,height:1000},reducedMotion:'reduce'});
+      const published=await journeyFixture(page);
+      const entries=published.journey.chapters[0].entries;
+      entries[1].period='2019 - 2020';entries[2].period='2023 - 2024';entries[3].period='2021 - 2022';
+      published.journey.chapters[1].entries[0].period='2008 - 2010';
+      const original=structuredClone(published);
+      await page.goto(baseURL+'/?view=about');
+      await page.waitForFunction(()=>!!window.RK?.renderJourney);
+      const l1=()=>page.locator('#timeline [data-jstory]').evaluateAll(elements=>elements.map(element=>element.getAttribute('aria-label')));
+      const descending=['Edge onboarding','third chapter','fourth chapter','second chapter','Early explorations'];
+      assert.deepEqual(await l1(),descending);
+      const opening=page.getByRole('button',{name:'third chapter',exact:true});
+      await opening.click();
+      assert.equal(await page.locator('#journey-detail h4').textContent(),'third chapter');
+      assert.deepEqual(await page.locator('.jrn-timeline__title').allTextContents(),[...descending].reverse());
+      await page.getByRole('button',{name:'Open story: Early explorations',exact:true}).click();
+      assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).isDisabled(),true);
+      for(const title of ['second chapter','fourth chapter','third chapter','Edge onboarding']) {
+        await page.getByRole('button',{name:'Next career block',exact:true}).click();
+        assert.equal(await page.locator('#journey-detail h4').textContent(),title);
+        assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),entries.find(entry=>entry.title===title).images[0].src);
+      }
+      assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isDisabled(),true);
+      await page.getByRole('button',{name:'Media 3',exact:true}).click();
+      assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 3');
+      await page.getByRole('button',{name:'Close chapter',exact:true}).click();
+      assert.deepEqual(await l1(),descending);
+      assert.equal(await opening.evaluate(element=>element===document.activeElement),true);
+      assert.deepEqual(await page.evaluate(()=>RK.data.journey),original.journey);
+      assert.deepEqual(await page.evaluate(()=>RK.data.path),original.path);
+      await page.close();
+    }
+  } finally { await browser.close(); }
+});
+
 test('Journey L2 preserves About tiles, original media and return position across desktop and mobile', {skip:!baseURL,timeout:90000}, async () => {
   const browser = await chromium.launch(launchOptions);
   try {
@@ -1570,6 +1609,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       await page.setViewportSize({width,height:1000});
       await page.emulateMedia({reducedMotion:width===800?'no-preference':'reduce'});
       const first=page.getByRole('button',{name:'Edge onboarding',exact:true,includeHidden:true});
+      const l1Keys=await page.locator('#timeline [data-jstory]').evaluateAll(elements=>elements.map(element=>element.dataset.jstory));
       await first.scrollIntoViewIfNeeded();
       await first.hover();
       const ctaProperties=['paddingTop','paddingRight','borderTopWidth','borderRadius','cornerShape','color','fontFamily','fontSize','gap'];
@@ -1582,6 +1622,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(await page.locator('#journey-detail').getAttribute('aria-modal'),'true');
       assert.equal(await page.locator('#timeline #journey-detail').count(),0);
       assert.equal(await page.locator('.jrn-timeline [data-jchapter]').count(),5);
+      assert.deepEqual(await page.locator('.jrn-timeline [data-jchapter]').evaluateAll(elements=>elements.map(element=>element.dataset.jchapter)),[...l1Keys].reverse());
       assert.equal(await page.locator('#journey-detail h4').evaluate(element=>element===document.activeElement),true);
       assert.equal(await page.locator('.jrn-timeline__item').evaluateAll(elements=>elements.every(element=>getComputedStyle(element,'::before').content==='none')),true);
       const viewerCta=page.locator('[data-jwork]');
@@ -1591,7 +1632,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(await caseCover.getAttribute('src'),original.work[0].image);
       assert.deepEqual(await caseCover.evaluate(image=>({width:image.getBoundingClientRect().width,height:image.getBoundingClientRect().height,radius:getComputedStyle(image).borderRadius,fit:getComputedStyle(image).objectFit})),{width:28,height:28,radius:'7px',fit:'cover'});
       assert.equal(await viewerCta.evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=16 && bounds.right<=innerWidth-16 && [...element.children].every(child=>{const rect=child.getBoundingClientRect();return rect.left>=bounds.left && rect.right<=bounds.right;});}),true);
-      assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).isDisabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isDisabled(),true);
       assert.equal(await page.locator('.jrn-gallery__bar span').textContent(),'2025 - Present');
       assert.equal(await page.locator('.jrn-detail__head .jrn-tile__period').count(),0);
       assert.equal(await page.locator('[data-jadvance="-1"]').isDisabled(),true);
@@ -1599,15 +1640,15 @@ test('Journey L2 preserves About tiles, original media and return position acros
       assert.equal(await page.locator('[data-jadvance="1"]').isDisabled(),true);
       assert.equal(await page.locator('.jrn-gallery__position').textContent(),'Media 3 of 3');
       await page.getByRole('button',{name:'Media 2',exact:true}).click();
-      assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).isDisabled(),true);
-      assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isEnabled(),true);
-      await page.getByRole('button',{name:'Next career block',exact:true}).focus();
+      assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isDisabled(),true);
+      assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).isEnabled(),true);
+      await page.getByRole('button',{name:'Previous career block',exact:true}).focus();
       await page.keyboard.press('Enter');
       assert.equal(await page.locator('#journey-detail h4').textContent(),'second chapter');
       assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[1].images[0].src);
-      assert.equal(await page.locator('[data-jstep="1"]').evaluate(element=>element===document.activeElement),true);
+      assert.equal(await page.locator('[data-jstep="-1"]').evaluate(element=>element===document.activeElement),true);
       assert.equal(await page.locator('.jrn-gallery__bar span').textContent(),'Microsoft');
-      await page.getByRole('button',{name:'Previous career block',exact:true}).click();
+      await page.getByRole('button',{name:'Next career block',exact:true}).click();
       assert.equal(await page.locator('#journey-detail h4').textContent(),'Edge onboarding');
       assert.equal(await page.locator('.jrn-gallery__caption').textContent(),'Original image 1');
       assert.equal(await page.locator('.jrn-gallery__bar span').textContent(),'2025 - Present');
@@ -1693,6 +1734,7 @@ test('Journey L2 preserves About tiles, original media and return position acros
       await page.screenshot({path:join(tmpdir(),'rk-journey-l2-'+width+'.png')});
       await page.getByRole('button',{name:'Close chapter',exact:true}).click();
       assert.equal(await first.evaluate(element=>document.activeElement===element),true);
+      assert.deepEqual(await page.locator('#timeline [data-jstory]').evaluateAll(elements=>elements.map(element=>element.dataset.jstory)),l1Keys);
       assert.equal(await page.locator('.pjx').evaluate(element=>getComputedStyle(element).cursor===getComputedStyle(document.body).cursor),true);
       assert.ok(Math.abs(await page.evaluate(()=>scrollY)-returnY)<2);
       assert.equal(await page.locator('#top').evaluate(element=>element.inert),false);
@@ -1734,19 +1776,26 @@ test('Journey L2 preserves About tiles, original media and return position acros
     await page.locator('.jrn-gallery__stage img').evaluate(image=>image.decode());
     assert.equal(await page.locator('.jrn-gallery__stage img').getAttribute('src'),original.journey.chapters[0].entries[1].images[0].src);
     await page.locator('.jrn-timeline [aria-current]').focus();
-    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('.jrn-timeline [aria-current]').getAttribute('aria-label'),'Open story: third chapter');
     await page.keyboard.press('End');
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'Edge onboarding');
+    assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isDisabled(),true);
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'second chapter');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'Edge onboarding');
+    await page.keyboard.press('Home');
     assert.equal(await page.locator('.jrn-gallery').isVisible(),false);
     assert.equal(await page.locator('.jrn__prose').textContent(),'No-image story');
-    assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).isDisabled(),true);
-    await page.getByRole('button',{name:'Previous career block',exact:true}).click();
-    assert.equal(await page.locator('#journey-detail h4').textContent(),'fourth chapter');
+    assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).isDisabled(),true);
     await page.getByRole('button',{name:'Next career block',exact:true}).click();
+    assert.equal(await page.locator('#journey-detail h4').textContent(),'fourth chapter');
+    await page.getByRole('button',{name:'Previous career block',exact:true}).click();
     assert.equal(await page.locator('#journey-detail h4').textContent(),'Early explorations');
     await page.getByRole('button',{name:'Close chapter',exact:true}).focus();
     await page.keyboard.press('Tab');
-    assert.equal(await page.getByRole('button',{name:'Previous career block',exact:true}).evaluate(element=>element===document.activeElement),true);
+    assert.equal(await page.getByRole('button',{name:'Next career block',exact:true}).evaluate(element=>element===document.activeElement),true);
     await page.keyboard.press('Tab');
     assert.equal(await page.locator('.jrn-timeline button').first().evaluate(element=>element===document.activeElement),true);
     await page.keyboard.press('Escape');

@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { browserShards, shardCommands } from './tools/browser-shards.mjs';
+import { rootTestFiles, releaseCommands, validateLocalServer } from './tools/release-check.mjs';
 
 test('browser shards retain every release file and partition all deck test registrations exactly once', () => {
   const tasks = Object.values(browserShards).flat();
@@ -29,8 +30,27 @@ test('browser shards retain every release file and partition all deck test regis
   for (const file of readdirSync(new URL('.', import.meta.url)).filter(file => /\.test\.(?:mjs|cjs)$/.test(file))) {
     if (!/\b(?:chromium|firefox|webkit|puppeteer)\.launch\s*\(/.test(readFileSync(new URL(file, import.meta.url), 'utf8'))) continue;
     assert.ok(expected.includes(file), file + ' needs a browser-equipped shard');
-    if (!file.endsWith('.browser.test.mjs')) assert.ok(workflow.includes("! -name '" + file + "'"), file + ' must not run in the browser-free build job');
+    assert.ok(!rootTestFiles().includes(file), file + ' must not run in the browser-free build job');
   }
+  assert.match(workflow, /run: npm run test:root/);
+});
+
+test('local release preflight includes every CI gate and rejects missing or live browser servers', () => {
+  const commands = releaseCommands();
+  const roots = readdirSync(new URL('.', import.meta.url)).filter(file => /\.test\.(?:mjs|cjs)$/.test(file) && !file.endsWith('.browser.test.mjs') && !['slide-studio-deck.test.mjs', 'ai-ribbon.test.mjs', 'resume-workspace.test.mjs'].includes(file)).sort();
+  assert.deepEqual(rootTestFiles(), roots);
+  assert.deepEqual(commands[0][1], ['--test', '--test-concurrency=1', ...roots]);
+  const scripts = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).scripts;
+  assert.equal(scripts['test:root'], 'node tools/release-check.mjs root');
+  assert.equal(scripts['check:release'], 'node tools/release-check.mjs');
+  assert.deepEqual(commands.slice(1, 4).map(([, args]) => 'node ' + args.join(' ')), [scripts.build, scripts['build:slide-lab'], scripts['build:resume']]);
+  assert.deepEqual(commands.filter(([label]) => label.startsWith('Browser:')).map(([, args]) => args), Object.keys(browserShards).flatMap(shardCommands));
+  const bundles = readdirSync(new URL('./js/', import.meta.url)).filter(name => name.endsWith('.js')).sort();
+  assert.deepEqual(commands.filter(([label]) => label.startsWith('Syntax:')).map(([, args]) => args), bundles.map(name => ['--check', 'js/' + name]));
+  assert.throws(() => validateLocalServer(), /required/);
+  assert.throws(() => validateLocalServer('https://riteshk.work'), /local test server/);
+  assert.throws(() => validateLocalServer('file:///tmp/site'), /local test server/);
+  assert.equal(validateLocalServer('http://127.0.0.1:5510').port, '5510');
 });
 
 test('Node executes complementary shards once without a parent-file pattern matching every child', () => {
