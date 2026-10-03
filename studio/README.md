@@ -69,6 +69,13 @@ Backup round-trip tests must upload the actual downloaded file by path, not
 re-serialize a potentially large backup into Playwright's size-limited in-memory
 payload. Preserve the original bytes and all restore/undo/redo assertions.
 
+R2 persistence tests use real HTTP against the isolated Miniflare server, keeping
+the original fetch responses alive. Deferred `dispatchFetch()` response bodies can
+be canceled when Undici collects the original response hidden behind its wrapper.
+The concurrent-save/restart regression forces GC before reading all eight responses,
+checks one winning write and seven conflicts, and verifies persisted history after
+restart. Its isolated child must report a real passing test, not an empty selection.
+
 The shared Studio shell keeps Undo/Redo on the left of its working bar. The preview
 mode toggle, screen-size (or slide-view) dropdown, and new-tab (or Rehearse) action
 form a right-aligned group. Preview mode behavior is unchanged: split, editor-only,

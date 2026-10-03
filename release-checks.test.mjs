@@ -1,12 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { setImmediate as nextTurn } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { releaseChecksRoute } from "./worker/release-checks.mjs";
+import { testSummary } from "./tools/browser-shards.mjs";
 
 function fixture() {
   const check = { id: "CHECK-01", title: "Synthetic check", steps: ["Check the fixture"], expected: "Fixture works" };
@@ -69,22 +74,42 @@ test("cloud checklist fails closed on malformed, missing or unavailable storage"
   assert.equal(fixtureData.writes(), 0);
 });
 
-test("real local R2 conditional saves retain one winner and survive runtime restart", { timeout: 60000 }, async () => {
+test("real local R2 conditional saves retain one winner and survive runtime restart", { timeout: 60000 }, async context => {
+  if (!global.gc) {
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const { stdout } = await promisify(execFile)(process.execPath, ["--expose-gc", "--test", "--test-reporter=tap",
+      "--test-name-pattern=^" + context.name + "$", fileURLToPath(import.meta.url)], { env, timeout: 55000 });
+    assert.equal(testSummary(stdout).passed, 1, stdout);
+    assert.ok(stdout.includes("ok 1 - " + context.name), stdout);
+    return;
+  }
   const directory = await mkdtemp(join(tmpdir(), "rk-checklist-r2-"));
   const bundle = await build({ stdin: { contents: 'import { releaseChecksRoute } from "./worker/release-checks.mjs"; export default { fetch(request, env) { return releaseChecksRoute(request, env.RELEASE_CHECKS); } };', resolveDir: process.cwd() }, bundle: true, write: false, format: "esm", platform: "browser" });
   const options = { modules: true, script: bundle.outputFiles[0].text, compatibilityDate: "2026-07-14", r2Buckets: ["RELEASE_CHECKS"], r2Persist: directory, outboundService: () => new Response(null, { status: 503 }) };
   let runtime = new Miniflare(options);
+  // Keep the original fetch response alive; dispatchFetch wraps a GC-owned Undici stream.
+  const send = async (suffix = "", init) => fetch(new URL("/admin/release-checks" + suffix, await runtime.ready), init);
   try {
     const bucket = await runtime.getR2Bucket("RELEASE_CHECKS"), fixtureData = fixture();
     for (const [key, value] of fixtureData.values) await bucket.put(key, value);
-    const initial = await (await runtime.dispatchFetch("https://local.invalid/admin/release-checks")).json();
+    const initial = await (await send()).json();
     const input = { revision: 0, definitionVersion: initial.document.releases[0].checks[0].definitionVersion, status: "passed", notes: "Synthetic durable result" };
-    const responses = await Promise.all(Array.from({ length: 8 }, () => runtime.dispatchFetch("https://local.invalid/admin/release-checks/results/CHECK-01", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) })));
+    const responses = await Promise.all(Array.from({ length: 8 }, (_, index) => send("/results/CHECK-01", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, notes: input.notes + " " + index }) })));
+    for (let turn = 0; turn < 8; turn++) { await nextTurn(); global.gc(); await nextTurn(); }
+    assert.ok(responses.every(response => !response.bodyUsed), "All response bodies must survive GC before consumption");
     assert.equal(responses.filter(response => response.status === 200).length, 1);
     assert.equal(responses.filter(response => response.status === 409).length, 7);
-    const saved = await responses.find(response => response.status === 200).json();
+    const bodies = await Promise.all(responses.map(response => response.json()));
+    const winner = responses.findIndex(response => response.status === 200), saved = bodies[winner];
+    assert.equal(saved.results.revision, 1);
+    assert.equal(saved.results.checks["CHECK-01"].notes, input.notes + " " + winner);
+    assert.equal(saved.results.checks["CHECK-01"].history.length, 1);
+    for (const [index, response] of responses.entries()) {
+      if (response.status === 409) assert.deepEqual(bodies[index].current.results, saved.results);
+    }
     await runtime.dispose(); runtime = new Miniflare(options);
-    const restarted = await (await runtime.dispatchFetch("https://local.invalid/admin/release-checks")).json();
+    const restarted = await (await send()).json();
     assert.deepEqual(restarted.results, saved.results);
   } finally { await runtime.dispose(); await rm(directory, { recursive: true, force: true }); }
 });
