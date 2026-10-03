@@ -15,6 +15,51 @@ const source = readFileSync(new URL("./src/js/project.js", import.meta.url), "ut
 const baseURL = process.env.SLIDE_LAB_URL;
 const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : process.platform === "win32" ? { executablePath: "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" } : {}), headless: true };
 
+async function clickSettledFrameButton(page, selector) {
+  const frame = page.locator(selector);
+  await frame.scrollIntoViewIfNeeded();
+  await frame.evaluate(async element => {
+    const animations = [];
+    for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+      animations.push(...ancestor.getAnimations().filter(animation =>
+        animation.playState !== "finished" && Number.isFinite(animation.effect?.getComputedTiming().endTime)));
+    }
+    await Promise.allSettled(animations.map(animation => animation.finished));
+  });
+  await page.frameLocator(selector).getByRole("button").click();
+}
+
+test("case-study iframe clicks wait for ancestor motion, not just the inner button", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<div id="moving"><iframe srcdoc="<button onclick=&quot;parent.clickedWhile=parent.motion.playState;this.textContent=\'Clicked\'&quot;>Prototype</button>"></iframe></div>');
+    await page.frameLocator("iframe").getByRole("button").waitFor();
+    await page.evaluate(() => {
+      const moving = document.getElementById("moving");
+      window.motion = moving.animate([{ transform: "translateY(60px)" }, { transform: "translateY(0)" }], { duration: 1000, fill: "both" });
+      window.motion.pause();
+      const getAnimations = moving.getAnimations.bind(moving);
+      moving.getAnimations = (...args) => { window.motionObserved = true; return getAnimations(...args); };
+    });
+    await page.frameLocator("iframe").getByRole("button").click();
+    assert.equal(await page.evaluate(() => window.clickedWhile), "paused", "Inner-frame actionability does not wait for ancestor motion");
+    await page.evaluate(() => { delete window.clickedWhile; });
+    await page.frameLocator("iframe").getByRole("button").evaluate(button => { button.textContent = "Prototype"; });
+    const click = clickSettledFrameButton(page, "iframe");
+    const first = await Promise.race([
+      click.then(() => "clicked"),
+      page.waitForFunction(() => window.motionObserved).then(() => "motion-observed")
+    ]);
+    assert.equal(first, "motion-observed", "The iframe must not be clicked while ancestor motion is paused");
+    assert.equal(await page.evaluate(() => window.clickedWhile), undefined);
+    await page.evaluate(() => window.motion.finish());
+    await click;
+    assert.equal(await page.evaluate(() => window.clickedWhile), "finished");
+    assert.equal(await page.frameLocator("iframe").getByRole("button").innerText(), "Clicked");
+  } finally { await browser.close(); }
+});
+
 test('production-host Present mode and visitor passes load protected sections without exposing them to visitors', { timeout: 60000 }, async () => {
   const project = await build({ entryPoints: ['src/js/project.js'], bundle: true, write: false, format: 'iife' });
   const auth = await build({ entryPoints: ['src/js/admin-core.js'], bundle: true, write: false, format: 'iife', globalName: 'fixtureAuth' });
@@ -1054,10 +1099,7 @@ test("built case study retries protected sections without restarting Figma and r
       await page.goto(baseURL + "/", { waitUntil: "domcontentloaded" });
       await page.waitForFunction(() => !!window.RK?.openProject && !!window.RK?.vaultSignedUrl);
       await page.evaluate(() => window.RK.openProject("recovery-fixture", { push: false }));
-      const publicFrame = page.locator('iframe[src*="synthetic-public"]');
-      await publicFrame.scrollIntoViewIfNeeded();
-      await page.locator('.pj').evaluate(async element=>{await Promise.all(element.getAnimations({subtree:true}).filter(animation=>Number.isFinite(animation.effect.getComputedTiming().endTime)).map(animation=>animation.finished.catch(()=>{})));});
-      await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button").click();
+      await clickSettledFrameButton(page, 'iframe[src*="synthetic-public"]');
       await page.frameLocator('iframe[src*="synthetic-public"]').getByRole("button",{name:"Prototype step 2",exact:true}).waitFor();
       await page.evaluate(() => { window.keptFrame = document.querySelector('iframe[src*="synthetic-public"]'); });
       await page.locator("[data-vault-retry]").click();
@@ -1069,7 +1111,7 @@ test("built case study retries protected sections without restarting Figma and r
       assert.equal(loads, 2);
       assert.equal(protectedReads, 2);
       const protectedTools = protectedFrame.locator("..").locator(".pjb__frame-tools");
-      await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button").click();
+      await clickSettledFrameButton(page, 'iframe[src*="synthetic-protected"]');
       await page.frameLocator('iframe[src*="synthetic-protected"]').getByRole("button", { name: "Prototype step 2", exact: true }).waitFor();
       await page.context().setOffline(true);
       await page.waitForFunction(() => document.querySelector('iframe[src*="synthetic-protected"]').parentElement.querySelector("[data-embed-state]").textContent === "Offline");

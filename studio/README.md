@@ -75,6 +75,10 @@ be canceled when Undici collects the original response hidden behind its wrapper
 The concurrent-save/restart regression forces GC before reading all eight responses,
 checks one winning write and seven conflicts, and verifies persisted history after
 restart. Its isolated child must report a real passing test, not an empty selection.
+Cross-frame clicks also wait for finite animations on the iframe's ancestors:
+Playwright's inner-button stability does not establish stable page coordinates.
+The shared helper covers both initially loaded and recovered case-study frames;
+a paused-parent regression proves it waits for animation completion, not a delay.
 
 The shared Studio shell keeps Undo/Redo on the left of its working bar. The preview
 mode toggle, screen-size (or slide-view) dropdown, and new-tab (or Rehearse) action
