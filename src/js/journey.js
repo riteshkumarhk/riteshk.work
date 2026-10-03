@@ -6,8 +6,9 @@ import { journeyRows } from "./journey-core.mjs";
   const previewFrame = new URLSearchParams(location.search).has("preview") && window.parent !== window;
   let currentData, rows = [], activeKey = null, mediaIndex = 0, editorPreview = false, caseReturn = null;
   let background = null, openingKey = null;
-  let detailLayout = "right", sheetExpanded = false, sheetGesture = null;
+  let detailLayout = "right", sheetExpanded = false, sheetGesture = null, suppressSheetClick = false;
   let mediaAnimations = [], mediaOutgoing = null;
+  let galleryGesture = null, suppressGalleryClick = false;
   let peekRow = null, peekTrigger = null, peekResize = null;
   const seenKey = 'rk:journey:seen-cases:v1';
   let seenCases = readSeenCases();
@@ -285,7 +286,7 @@ import { journeyRows } from "./journey-core.mjs";
       '<header class="jrn-detail__head"><div>' +
       '<h4 id="journey-detail-title" tabindex="-1">' + md(story.entry.title || story.chapter.name || "Chapter") + '</h4></div></header>' +
       '<div class="jrn__scroll" id="journey-detail-copy"><div class="jrn-detail__copy">' + prose(story.entry.body) + '</div>' +
-      (work ? '<div class="jrn-detail__case"><span>Case study available</span><button type="button" class="jrn-case jrn-tile__case" data-jwork="' + esc(work.id) + '" aria-label="View case study: ' + esc(work.title || 'Case study') + '">' + caseContent(work, esc(work.title || 'View case study')) + '</button></div>' : '') +
+      (work ? '<div class="jrn-detail__case"></div>' : '') +
       '</div></aside></div>';
     document.body.append(panel);
     lockBackground(true);
@@ -310,7 +311,34 @@ import { journeyRows } from "./journey-core.mjs";
     const sheet = panel.querySelector("[data-jsheet]");
     sheet.setAttribute("aria-expanded", String(expanded));
     sheet.setAttribute("aria-label", expanded ? "Collapse story details" : "Expand story details");
+    syncCaseCard();
     revealSelection();
+  }
+
+  function syncCaseCard() {
+    const container = document.querySelector("#journey-detail .jrn-detail__case");
+    const work = linkedWork(activeStory());
+    if (!container || !work) return;
+    const full = matchMedia("(min-width: 901px)").matches && detailLayout !== "minimized";
+    if (container.dataset.card === String(full)) return;
+    const hadFocus = container.contains(document.activeElement);
+    container.dataset.card = String(full);
+    container.innerHTML = '<span>Case study available</span>';
+    if (full) {
+      const list = document.createElement("ul");
+      list.className = "jrn-case-card cases--g2";
+      const index = [...document.querySelectorAll("#cases [data-work]")].findIndex(link => link.dataset.work === work.id);
+      list.innerHTML = window.RK.renderCaseCard(work, Math.max(0, index));
+      const card = list.querySelector(".case"), link = list.querySelector(".case__link");
+      card.removeAttribute("data-reveal");
+      link.removeAttribute("data-work");
+      link.dataset.jwork = work.id;
+      link.setAttribute("aria-label", "View case study: " + (work.title || "Case study"));
+      container.append(list);
+    } else {
+      container.insertAdjacentHTML("beforeend", '<button type="button" class="jrn-case jrn-tile__case" data-jwork="' + esc(work.id) + '" aria-label="View case study: ' + esc(work.title || 'Case study') + '">' + caseContent(work, esc(work.title || 'View case study')) + '</button>');
+    }
+    if (hadFocus) container.querySelector("[data-jwork]").focus({ preventScroll: true });
   }
 
   function revealSelection() {
@@ -373,6 +401,7 @@ import { journeyRows } from "./journey-core.mjs";
   }
 
   function renderMedia(animate = false) {
+    galleryGesture = null;
     const story = activeStory(), gallery = document.querySelector("#journey-detail .jrn-gallery");
     if (!story || !gallery) return;
     const previous = animate && !reduced() ? [...gallery.querySelectorAll('[data-jindex]')].map(node => ({
@@ -422,8 +451,39 @@ import { journeyRows } from "./journey-core.mjs";
     } else if (!options.silent || options.scroll) document.getElementById("sec-path")?.scrollIntoView({ behavior: reduced() ? "instant" : "smooth", block: "start" });
   }
 
+  function advanceMedia(direction) {
+    const story = activeStory(), nextIndex = mediaIndex + direction;
+    if (!story || nextIndex < 0 || nextIndex >= media(story).length) return false;
+    mediaIndex = nextIndex;
+    renderMedia(true);
+    return true;
+  }
+
+  function swipeMedia(direction) {
+    if (advanceMedia(direction) || !matchMedia("(max-width: 900px)").matches) return;
+    const stories = detailStories(), index = stories.findIndex(story => story.key === activeKey);
+    const next = stories[index + direction];
+    if (next) expand(next.key);
+  }
+
+  function sheetSurface(target) {
+    const handle = target.closest?.("[data-jsheet]");
+    if (handle) return handle;
+    const body = target.closest?.("#journey-detail .jrn-detail__body");
+    if (!body || !matchMedia("(max-width: 900px)").matches ||
+      body.closest(".jrn-detail--text") ||
+      target.closest("button, a, input, textarea, select, video, [role=button], [contenteditable]")) return null;
+    return target.closest(".jrn-detail__head") || (!body.closest(".is-sheet-expanded") ? body : null);
+  }
+
   function onClick(event) {
-    const target = event.target.closest("button, a[data-jpeek-work]");
+    const surface = sheetSurface(event.target);
+    if (surface && !surface.hasAttribute("data-jsheet")) {
+      sheetExpanded = !sheetExpanded;
+      syncDetailLayout();
+      return;
+    }
+    const target = event.target.closest("button, a[data-jpeek-work], a[data-jwork]");
     if (!target) return;
     if (target.hasAttribute("data-journey-open")) { open(); return; }
     if (!timeline()?.contains(target) && !document.getElementById("journey-detail")?.contains(target)) return;
@@ -458,10 +518,7 @@ import { journeyRows } from "./journey-core.mjs";
         if (!nextStory) return;
         expand(nextStory.key);
       } else {
-        const nextIndex = mediaIndex + direction;
-        if (nextIndex < 0 || nextIndex >= media(activeStory()).length) return;
-        mediaIndex = nextIndex;
-        renderMedia(true);
+        if (!advanceMedia(direction)) return;
       }
       const panel = document.getElementById('journey-detail');
       (panel.querySelector('[' + control + '="' + direction + '"]:not(:disabled)') || panel.querySelector('h4'))?.focus({ preventScroll: true });
@@ -482,6 +539,8 @@ import { journeyRows } from "./journey-core.mjs";
       return;
     }
     if (target.hasAttribute("data-jwork")) {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
       stopMediaMotion();
       caseReturn = { path: location.pathname + location.search + location.hash, title: document.title };
       document.querySelectorAll('#journey-detail video').forEach(element => element.pause());
@@ -494,24 +553,57 @@ import { journeyRows } from "./journey-core.mjs";
   function init() {
     window.RK = Object.assign(window.RK || {}, { openJourney: open, closeJourney: () => { editorPreview = false; close(false); render(window.RK?.data); }, renderJourney: render, journeyHasContent: () => allStories().length > 0 });
     document.addEventListener("click", onClick);
+    document.addEventListener("click", event => {
+      if (!event.detail) return;
+      const galleryClick = suppressGalleryClick && event.target.closest?.(".jrn-gallery");
+      const sheetClick = suppressSheetClick && event.target.closest?.(".jrn-detail__body");
+      if (!galleryClick && !sheetClick) return;
+      suppressGalleryClick = false; suppressSheetClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
     document.addEventListener("pointerdown", event => {
-      const handle = event.target.closest?.("[data-jsheet]");
+      suppressGalleryClick = false;
+      suppressSheetClick = false;
+      galleryGesture = null;
+      sheetGesture = null;
+      const image = event.target.closest?.("#journey-detail .jrn-gallery__stage [data-jzoom]");
+      if (image && event.pointerType === "touch" && event.isPrimary) {
+        galleryGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, image };
+      }
+      const handle = sheetSurface(event.target);
       if (handle && event.isPrimary) {
-        sheetGesture = { id: event.pointerId, y: event.clientY };
+        sheetGesture = { id: event.pointerId, x: event.clientX, y: event.clientY, handle };
         handle.setPointerCapture(event.pointerId);
       }
     });
+    document.addEventListener("pointermove", event => {
+      if (!galleryGesture || galleryGesture.id !== event.pointerId) return;
+      const dx = event.clientX - galleryGesture.x, dy = event.clientY - galleryGesture.y;
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) galleryGesture = null;
+    });
     document.addEventListener("pointerup", event => {
+      if (galleryGesture?.id === event.pointerId) {
+        const gesture = galleryGesture;
+        galleryGesture = null;
+        if (gesture.image.isConnected && !document.getElementById("journey-detail")?.hidden) {
+          const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+          // A dragged image must not also activate tap-to-enlarge, including at either endpoint.
+          suppressGalleryClick = Math.hypot(dx, dy) > 10;
+          if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) swipeMedia(dx < 0 ? 1 : -1);
+        }
+      }
       if (!sheetGesture || sheetGesture.id !== event.pointerId) return;
-      const delta = event.clientY - sheetGesture.y;
+      const gesture = sheetGesture;
       sheetGesture = null;
-      if (Math.abs(delta) < 24) return;
+      if (!gesture.handle.isConnected) return;
+      const delta = event.clientY - gesture.y, dx = event.clientX - gesture.x;
+      suppressSheetClick = Math.hypot(dx, delta) > 10;
+      if (Math.abs(delta) < 24 || Math.abs(delta) <= Math.abs(dx) * 1.4) return;
       sheetExpanded = delta < 0;
       syncDetailLayout();
-      // The drag must not also activate the handle's click toggle.
-      document.querySelector("[data-jsheet]")?.addEventListener("click", event => event.stopPropagation(), { once: true });
     });
-    document.addEventListener("pointercancel", () => { sheetGesture = null; });
+    document.addEventListener("pointercancel", () => { sheetGesture = null; galleryGesture = null; });
     document.addEventListener("pointerover", event => {
       const tile = event.target.closest?.(".jrn-tile");
       if (event.pointerType === "mouse" && matchMedia("(hover: hover) and (pointer: fine)").matches && !tile?.contains(event.relatedTarget)) peek(tile);
@@ -527,7 +619,7 @@ import { journeyRows } from "./journey-core.mjs";
       if (peekRow?.contains(event.target) && !peekRow.contains(event.relatedTarget) && !peekRow.querySelector('.jrn-stories__preview').matches(':hover')) closePeek();
     });
     document.addEventListener('scroll', positionPeek, true);
-    window.addEventListener("resize", () => { stopMediaMotion(); closePeek(); revealSelection(); });
+    window.addEventListener("resize", () => { stopMediaMotion(); closePeek(); syncCaseCard(); revealSelection(); });
     document.addEventListener("error", event => {
       if (event.target.matches?.('.jrn-tile__case-image, .tl__logo')) { event.target.remove(); return; }
       const stage = event.target.closest?.(".jrn-gallery__stage");

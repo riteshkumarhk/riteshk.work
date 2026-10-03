@@ -1269,6 +1269,7 @@ import { contentRevision } from "./content-revision.mjs";
       md: md,
       esc: esc,
       mediaUrl: mediaUrl,
+      renderCaseCard: caseEl,
       openResume: openResume,
       plateInner: plateInner,
       ABOUT_SECTIONS: ABOUT_SECTIONS,

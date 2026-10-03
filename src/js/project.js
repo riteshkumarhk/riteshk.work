@@ -436,6 +436,8 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
     gift: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M4.5 12v9h15v-9"/><path d="M12 8C12 5 13.5 3 15.5 3A2.5 2.5 0 0 1 15.5 8zM12 8C12 5 10.5 3 8.5 3A2.5 2.5 0 0 0 8.5 8z"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    "zoom-in": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/>',
+    "zoom-out": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 13a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 13H4.4a2 2 0 0 1 0-4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11 4.6V4.4a2 2 0 0 1 4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-1.3 2.9z"/>',
     chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
@@ -1401,8 +1403,8 @@ import { enhanceWorkflows } from "./workflow-loader.mjs";
     lbx.setAttribute("role", "dialog"); lbx.setAttribute("aria-modal", "true"); lbx.setAttribute("aria-label", "Image viewer");
     lbx.innerHTML =
       '<div class="pjx__ctrl">' +
-        '<button class="pjx__btn" type="button" data-lz="in" aria-label="Zoom in" title="Zoom in">+</button>' +
-        '<button class="pjx__btn pjx__btn--zctl" type="button" data-lz="out" aria-label="Zoom out" title="Zoom out">\u2212</button>' +
+        '<button class="pjx__btn" type="button" data-lz="in" aria-label="Zoom in" title="Zoom in">' + iconSvg("zoom-in") + '</button>' +
+        '<button class="pjx__btn pjx__btn--zctl" type="button" data-lz="out" aria-label="Zoom out" title="Zoom out">' + iconSvg("zoom-out") + '</button>' +
         '<button class="pjx__btn pjx__btn--zctl" type="button" data-lz="reset" aria-label="Reset zoom" title="Reset">\u21ba</button>' +
         '<button class="pjx__btn pjx__btn--close" type="button" data-lx aria-label="Close" title="Close">\u2715</button>' +
       '</div>' +
