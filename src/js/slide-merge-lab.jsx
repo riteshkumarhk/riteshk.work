@@ -1,3 +1,3 @@
 import { mountSlideEditor } from "./slide-merge.jsx";
 
-mountSlideEditor(document.getElementById("root"));
+export const editor = mountSlideEditor(document.getElementById("root"));

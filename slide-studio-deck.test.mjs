@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
+import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
 import { rkDecWithSek, rkUnwrapSek, rkNewSek, rkWrapSek, rkEncWithSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
@@ -232,7 +233,7 @@ test("native text case preserves source editing history mixed selection small ca
       };
     });
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
-    const ready = () => page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    const ready = () => waitForSlideEditor(page);
     await ready();
     await page.evaluate(async () => {
       const api = window.__slideMerge.api, original = api.getSceneElements(), template = original.find(element => element.type === 'text');
@@ -353,7 +354,7 @@ test("native text styles bullets and indents retain editing history exports and 
       };
     });
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(async () => {
       const api = window.__slideMerge.api, original = api.getSceneElements(), text = original.find(element => element.type === 'text');
       const first = { ...text, id: 'format-first', x: 60, y: 80, width: 450, height: 70, fontSize: 28, autoResize: false, containerId: null, groupIds: [], boundElements: [], locked: false, text: 'Formatting example\nSecond paragraph', originalText: 'Formatting example\nSecond paragraph', customData: { fixture: 'preserve' } };
@@ -418,7 +419,7 @@ test("native text styles bullets and indents retain editing history exports and 
     await page.evaluate(async () => { await window.__slideMerge.save(); });
     const saved = await readText();
     await page.reload();
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     assert.deepEqual((await readText()).customData, saved.customData);
     assert.equal((await readText()).originalText, saved.originalText);
     assert.ok(Number.isFinite((await readText()).height) && (await readText()).height > 0);
@@ -444,7 +445,7 @@ test("native text styles bullets and indents retain editing history exports and 
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.evaluate(() => localStorage.setItem('rk:theme', 'night'));
         await page.reload();
-        await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+        await waitForSlideEditor(page);
         await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'format-first': true } } }));
       }
       await page.evaluate(() => document.fonts.ready);
@@ -514,7 +515,7 @@ test("native bound text formatting preserves container geometry history and read
       };
     });
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(async () => {
       const api = window.__slideMerge.api, original = api.getSceneElements(), template = original.find(element => element.type === 'text');
       const shape = { ...template, type: 'rectangle', id: 'format-shape', x: 80, y: 160, width: 280, height: 180, locked: false, boundElements: [{ id: 'format-label', type: 'text' }], customData: { fixture: 'container' } };
@@ -564,7 +565,7 @@ test("cover theme follows editor audience and public previews without changing s
   try {
     await page.addInitScript(() => localStorage.setItem('rk:theme', 'night'));
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     await page.locator('summary[aria-label="Add a slide"]').click();
     await page.getByRole('button', { name: 'Add cover', exact: true }).click();
     await page.getByLabel('Cover title', { exact: true }).waitFor();
@@ -634,7 +635,7 @@ test("fixed cover edits from the right panel preserve media, other slides and hi
   try {
     await page.addInitScript(() => localStorage.setItem('rk:theme', 'day'));
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => !!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     const before = await page.evaluate(async () => { await window.__slideMerge.save(); return window.__slideMerge.deck(); });
     await page.locator('summary[aria-label="Add a slide"]').click();
     await page.getByRole('button', { name: 'Add cover', exact: true }).click();
@@ -1254,7 +1255,7 @@ test("slide eyedropper samples screen results over inserted sections and outside
       } };
     });
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5541') + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => !!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     await page.getByRole('button', { name: 'Sections', exact: true }).click();
     await page.locator('.merge-study-choices button').filter({ hasText: 'Colour source' }).click();
     await page.locator('.merge-section-choices button').filter({ hasText: 'Inserted colour section' }).click();
@@ -1525,7 +1526,7 @@ test("Native toolbar and Layers share the clearly open lock", {timeout:60000}, a
     await assertOpenShackle(native);
     await page.screenshot({path:join(tmpdir(),'rk-open-lock-native-1440.png')});
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>!!window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle')?.disabled);
+    await waitForSlideEditor(page);
     const documentSnapshot = () => page.evaluate(() => {
       const deck = window.__slideMerge.deck();
       for (const slide of deck.slides) if (slide.scene) {
@@ -6295,7 +6296,7 @@ test("Studio Publish shares private/public deck, case-section, retry and owner-r
   };
   try {
     await page.goto(base + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     const document = await page.evaluate(() => {
       const deck = window.__slideMerge.deck(); deck.slides = [deck.slides[0]]; deck.title = "Shared publishing"; deck.slidesPublic = false;
       deck.slides[0].notes = "PRIVATE INITIAL NOTES";

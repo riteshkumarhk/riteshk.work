@@ -12,6 +12,30 @@ Portable Windows x64 companion for riteshk.work. Opens Content Studio or Slide S
 
 Unsigned preview build: do not disable Windows security to run it. Report any block. The app does not attach to a presentation already open in another browser. Browser presenter windows remain ordinary, capturable windows.
 
+## Browser Preview Frame Consumption
+
+The web presenter consumes verified audience VideoFrames directly through
+MediaStreamTrackProcessor where available. It does not depend on a hidden video
+element reaching playback readiness: a live capture track can deliver frames while
+that separate video consumer is stalled. The reader buffers only the latest frame,
+closes superseded/late frames, and cancels/releases its reader on disconnect.
+Cropping, live pixels, pointer/keyboard forwarding and audience-source verification
+are unchanged. Unavailable/failed frames never become a successful live-preview claim.
+
+Browsers without the frame API retain video-based compatibility rendering. Waiting
+for its first frame is cancelable; disconnect stops the owned stream and removes the
+consumer. This does not change Windows DWM mirroring or release a new native binary.
+Real GPU-PC sharing/privacy acceptance remains separate.
+
+A static browser tab can miss the initial frame refresh even with a live track.
+After one second without a real frame, startup reapplies the owned input track's
+unchanged constraints once. It does not reopen the picker, switch sources, repaint
+authored content or retry indefinitely. Normal frame delivery bypasses recovery.
+At five seconds without frames, startup reports a reconnectable error and stops
+the capture/reader/frames. Cancellation or a replaced capture invalidates pending
+recovery. This is bounded handling of a reproduced browser delivery fault, not a
+claim that Chromium itself has been repaired.
+
 ## DJ Updates (0.3.2)
 
 This version adds a laser over media and expanded dialogs, a pointing hand over enabled controls, and a panning hand during supported canvas drags. Cover depth recovers after late decoding and slide navigation. Native next-slide previews include case-study section snapshots inside a script-disabled sandbox. Workflow no longer displays the optional React Flow attribution label.

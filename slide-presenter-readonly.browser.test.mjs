@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
+import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
@@ -17,7 +18,7 @@ test("slideshow content cannot be selected or edited directly or through the liv
     await page.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
     await page.addInitScript(() => { const capture=navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);let first=true;navigator.mediaDevices.getDisplayMedia=(...args)=>{if(first){first=false;return Promise.reject(new DOMException('Denied','NotAllowedError'));}return capture(...args);}; });
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(() => window.__slideMerge.save());
     const draft = await page.evaluate(() => JSON.stringify(window.__slideMerge.deck()));
     await page.evaluate(() => {

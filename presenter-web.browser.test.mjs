@@ -9,9 +9,41 @@ import { tmpdir } from "node:os";
 await build({ entryPoints: [fileURLToPath(new URL("./tools/studio-presenter/fixture-entry.mjs", import.meta.url))], outfile: fileURLToPath(new URL("./tools/studio-presenter/fixture.bundle.js", import.meta.url)), bundle: true, format: "iife" });
 const baseURL = process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510";
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+const headless = process.env.RK_CAPTURE_HEADED !== "1";
+console.log("Presenter web browser mode: " + (headless ? "headless" : "headed"));
+
+async function recordCaptures(page) {
+  await page.addInitScript(() => {
+    const capture = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+    window.captureStreams = [];
+    navigator.mediaDevices.getDisplayMedia = async options => {
+      const stream = await capture(options);
+      window.captureStreams.push(stream);
+      return stream;
+    };
+    const Processor = window.MediaStreamTrackProcessor;
+    window.frameReadCount = 0;
+    if (typeof Processor === "function") window.MediaStreamTrackProcessor = function (options) {
+      const processor = new Processor(options), getReader = processor.readable.getReader.bind(processor.readable);
+      processor.readable.getReader = (...args) => {
+        const reader = getReader(...args), read = reader.read.bind(reader);
+        reader.read = (...input) => read(...input).then(result => {
+          if (result.value) {
+            window.frameReadCount++;
+            window.lastFrameSize = { width: result.value.displayWidth, height: result.value.displayHeight };
+          }
+          return result;
+        });
+        return reader;
+      };
+      return processor;
+    };
+  });
+}
 
 async function openFixture(browser, { floating = false } = {}) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
+  await recordCaptures(page);
   if (!floating) await page.addInitScript(() => Object.defineProperty(window, "documentPictureInPicture", { value: undefined, configurable: true }));
   await page.goto(baseURL + "/tools/studio-presenter/fixture.html");
   await page.click("#start");
@@ -30,8 +62,22 @@ async function pointFor(page, popup, selector) {
   return { x: canvas.x + canvas.width * relative.x, y: canvas.y + canvas.height * relative.y };
 }
 
+async function stallPreviewVideo(popup) {
+  await popup.evaluate(() => {
+    const play = HTMLMediaElement.prototype.play;
+    window.blockedVideoStarts = 0;
+    HTMLMediaElement.prototype.play = function () {
+      if (this.srcObject) { window.blockedVideoStarts++; return new Promise(() => {}); }
+      return play.call(this);
+    };
+    for (const property of ["readyState", "videoWidth", "videoHeight"]) {
+      Object.defineProperty(HTMLVideoElement.prototype, property, { get: () => 0, configurable: true });
+    }
+  });
+}
+
 test("floating DJ forwards hover and controls before connecting capture", { timeout: 45000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"] });
+  const browser = await chromium.launch({ executablePath, headless, ignoreDefaultArgs: ["--disable-popup-blocking"] });
   try {
     const { page, popup } = await openFixture(browser, { floating: true });
     assert.equal(await popup.locator("html").getAttribute("data-presenter-window"), "always-on-top");
@@ -83,7 +129,7 @@ test("floating DJ forwards hover and controls before connecting capture", { time
 });
 
 test("real audience tab capture mirrors live pixels and forwards web controls", { timeout: 90000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
     const { page, popup } = await openFixture(browser);
     await popup.locator("[data-pp-live]").click();
@@ -131,10 +177,10 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
     assert.equal(await popup.locator("[data-pp-notes]").textContent(), "Private second note");
     assert.equal(await popup.locator("[data-pp-now] canvas").count(), 1);
     assert.match(await popup.locator("[data-pp-now]").textContent(), /Second slide/, "The fallback thumbnail must track slide changes even while capture is live");
-    await popup.evaluate(() => Object.defineProperty(document.querySelector("video").srcObject.getVideoTracks()[0], "muted", { value: true, configurable: true }));
+    await page.evaluate(() => Object.defineProperty(window.captureStreams.at(-1).getVideoTracks()[0], "muted", { value: true, configurable: true }));
     await popup.waitForFunction(() => document.querySelector("[data-pp-now] canvas").style.visibility === "hidden");
     assert.equal(await popup.locator("[data-pp-now] [data-pp-thumbnail]").isVisible(), true, "Interrupted capture must expose the complete current thumbnail");
-    await popup.evaluate(() => { delete document.querySelector("video").srcObject.getVideoTracks()[0].muted; });
+    await page.evaluate(() => { delete window.captureStreams.at(-1).getVideoTracks()[0].muted; });
     await popup.waitForFunction(() => document.querySelector("[data-pp-now] canvas").style.visibility === "visible");
     await page.keyboard.press("p");
     assert.equal(await page.locator(".pjp--presenting").count(), 0);
@@ -151,8 +197,96 @@ test("real audience tab capture mirrors live pixels and forwards web controls", 
   } finally { await browser.close(); }
 });
 
+test("real audience frames paint even when the video-element consumer never starts", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => {
+      const Processor = window.MediaStreamTrackProcessor;
+      if (typeof Processor !== "function") throw new Error("Native frame processing is required for this regression");
+      window.frameReaderOptions = [];
+      window.ownedFrameTracks = [];
+      window.MediaStreamTrackProcessor = function (options) {
+        window.frameReaderOptions.push({ maxBufferSize: options.maxBufferSize });
+        window.ownedFrameTracks.push(options.track);
+        return new Processor(options);
+      };
+    });
+    await stallPreviewVideo(popup);
+    await popup.locator("[data-pp-live]").click();
+    await popup.locator("[data-pp-now] canvas").waitFor();
+    assert.equal(await popup.locator("[data-pp-status]").getAttribute("data-state"), "live");
+    assert.deepEqual(await page.evaluate(() => window.frameReaderOptions), [{ maxBufferSize: 1 }]);
+    assert.equal(await page.evaluate(() => window.ownedFrameTracks[0] !== window.captureStreams[0].getVideoTracks()[0]), true);
+    assert.equal(await popup.evaluate(() => window.blockedVideoStarts), 0);
+    assert.equal(await popup.locator("video").count(), 0);
+    await page.requestGC();
+    await popup.requestGC();
+    await page.evaluate(() => { document.querySelector("#swatch").style.background = "rgb(20, 220, 60)"; });
+    const point = await pointFor(page, popup, "#swatch");
+    await popup.waitForFunction(point => {
+      const canvas = document.querySelector("[data-pp-now] canvas"), bounds = canvas.getBoundingClientRect();
+      const pixel = canvas.getContext("2d").getImageData(Math.floor((point.x - bounds.x) * canvas.width / bounds.width), Math.floor((point.y - bounds.y) * canvas.height / bounds.height), 1, 1).data;
+      return pixel[0] < 80 && pixel[1] > 150 && pixel[2] < 120;
+    }, point);
+    await popup.locator("[data-pp-live]").click();
+    await page.waitForFunction(() => window.captureStreams.at(-1).getVideoTracks()[0].readyState === "ended");
+    assert.equal(await page.evaluate(() => window.ownedFrameTracks[0].readyState), "ended");
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0);
+  } finally { await browser.close(); }
+});
+
+test("compatibility video startup remains cancellable without claiming live frames", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => { window.MediaStreamTrackProcessor = undefined; });
+    await stallPreviewVideo(popup);
+    await popup.locator("[data-pp-live]").click();
+    await popup.waitForFunction(() => document.querySelector("[data-pp-status]").textContent === "Waiting for audience frames" && !document.querySelector("[data-pp-live]").disabled);
+    assert.equal(await popup.locator("[data-pp-status]").getAttribute("data-state"), "connecting");
+    await popup.getByRole("button", { name: "Cancel live preview connection", exact: true }).click();
+    await page.waitForFunction(() => window.captureStreams.at(-1).getVideoTracks()[0].readyState === "ended");
+    assert.equal(await popup.locator("[data-pp-now] canvas").count(), 0);
+    assert.equal(await popup.locator("video").count(), 0);
+    assert.equal(await popup.locator("[data-pp-status]").getAttribute("data-state"), "disconnected");
+  } finally { await browser.close(); }
+});
+
+test("frameless capture performs one unchanged-constraint refresh then fails clearly and releases the source", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  try {
+    const { page, popup } = await openFixture(browser);
+    await page.evaluate(() => {
+      window.MediaStreamTrackProcessor = undefined;
+      window.refreshConstraints = [];
+      const capture = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getDisplayMedia = async options => {
+        const stream = await capture(options), track = stream.getVideoTracks()[0];
+        window.initialConstraints = track.getConstraints();
+        const apply = track.applyConstraints.bind(track);
+        track.applyConstraints = constraints => { window.refreshConstraints.push(constraints); return apply(constraints); };
+        return stream;
+      };
+    });
+    await stallPreviewVideo(popup);
+    await popup.locator("[data-pp-live]").click();
+    await popup.getByText("Audience frames did not arrive. Reconnect live preview.", { exact: true }).waitFor({ timeout: 8000 });
+    assert.equal(await popup.locator("[data-pp-status]").getAttribute("data-state"), "disconnected");
+    const evidence = await page.evaluate(() => ({
+      requested: window.initialConstraints, refreshes: window.refreshConstraints,
+      streams: window.captureStreams.length, ended: window.captureStreams[0].getTracks().every(track => track.readyState === "ended")
+    }));
+    assert.deepEqual(evidence.refreshes, [evidence.requested]);
+    assert.equal(evidence.streams, 1);
+    assert.equal(evidence.ended, true);
+    assert.equal(await popup.locator("video, [data-pp-now] canvas").count(), 0);
+    assert.equal(await popup.getByRole("button", { name: "Retry live preview connection", exact: true }).isEnabled(), true);
+  } finally { await browser.close(); }
+});
+
 test("laser glides without overshoot, leaves a bounded fading trail and respects reduced motion", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true });
+  const browser = await chromium.launch({ executablePath, headless });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
   async function pointAt(selector, fraction = 0.5) {
     const position = await page.locator(selector).evaluate((element, fraction) => {
@@ -211,7 +345,7 @@ test("laser glides without overshoot, leaves a bounded fading trail and respects
 });
 
 test("DJ thumbnail shares the laser and clears it on navigation without capture", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"] });
+  const browser = await chromium.launch({ executablePath, headless, ignoreDefaultArgs: ["--disable-popup-blocking"] });
   try {
     const { page, popup } = await openFixture(browser);
     const relative = await page.locator("#swatch").evaluate(element => {
@@ -233,7 +367,7 @@ test("DJ thumbnail shares the laser and clears it on navigation without capture"
 });
 
 for (const capture of [false, true]) test(`DJ input reaches native section controls while ordinary section content keeps the laser (${capture ? "live capture" : "without capture"})`, { timeout: 45000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, ignoreDefaultArgs: ["--disable-popup-blocking"], args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  const browser = await chromium.launch({ executablePath, headless, ignoreDefaultArgs: ["--disable-popup-blocking"], args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
     const { page, popup } = await openFixture(browser, { floating: !capture });
     await page.evaluate(() => {
@@ -287,7 +421,7 @@ for (const capture of [false, true]) test(`DJ input reaches native section contr
 });
 
 for (const capture of [false, true]) test(`DJ forwards native gallery, annotation, generated gestures and nested media controls (${capture ? "live capture" : "without capture"})`, { timeout: 60000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
     const { page, popup } = await openFixture(browser, { floating: !capture });
     await page.evaluate(() => {
@@ -446,7 +580,7 @@ for (const capture of [false, true]) test(`DJ forwards native gallery, annotatio
 });
 
 test("nested section documents retain control semantics, event realms and scrolling", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   try {
     const { page, popup } = await openFixture(browser);
     page.setDefaultTimeout(8000);
@@ -471,15 +605,37 @@ test("nested section documents retain control semantics, event realms and scroll
     await page.screenshot({ path: join(tmpdir(), "rk-nested-capture-audience.png") });
     await popup.bringToFront();
     await popup.waitForFunction(() => document.hasFocus() && document.visibilityState === "visible");
+    await popup.evaluate(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      window.paintRequests = 0; window.paintCallbacks = 0;
+      window.requestAnimationFrame = callback => {
+        window.paintRequests++;
+        return raf(time => { window.paintCallbacks++; callback.call(window, time); });
+      };
+    });
     await popup.locator("[data-pp-live]").click();
     await popup.locator("[data-pp-now] canvas").waitFor().catch(async error => {
-      await popup.screenshot({ path: join(tmpdir(), "rk-nested-capture-failure.png") });
-      const audience = await page.evaluate(() => ({ focused:document.hasFocus(), visibility:document.visibilityState, frame:document.querySelector('[data-pjp-frame]').getBoundingClientRect().toJSON() }));
+      const audience = await page.evaluate(() => ({ focused:document.hasFocus(), visibility:document.visibilityState, frame:document.querySelector('[data-pjp-frame]').getBoundingClientRect().toJSON(), frameReadCount:window.frameReadCount, lastFrameSize:window.lastFrameSize }));
       const capture = await popup.evaluate(() => {
         const video = document.querySelector("video"), track = video?.srcObject?.getVideoTracks()[0];
-        return { status:document.querySelector('[data-pp-status]').textContent, focused:document.hasFocus(), visibility:document.visibilityState, video:video && { width:video.videoWidth, height:video.videoHeight, ready:video.readyState, paused:video.paused }, track:track && { ready:track.readyState, muted:track.muted, settings:track.getSettings(), identity:track.getCaptureHandle() } };
+        return { status:document.querySelector('[data-pp-status]').textContent, focused:document.hasFocus(), visibility:document.visibilityState, paintRequests:window.paintRequests, paintCallbacks:window.paintCallbacks, video:video && { width:video.videoWidth, height:video.videoHeight, ready:video.readyState, paused:video.paused }, track:track && { ready:track.readyState, muted:track.muted, settings:track.getSettings(), identity:track.getCaptureHandle() } };
       });
-      throw new Error(JSON.stringify({ audience, capture }), { cause: error });
+      const frameProbe = await page.evaluate(async () => {
+        const track = window.captureStreams?.at(-1)?.getVideoTracks()[0];
+        if (!track) return { trackMissing: true };
+        if (typeof MediaStreamTrackProcessor !== "function") return { processorUnavailable: true };
+        const clone = track.clone();
+        const reader = new MediaStreamTrackProcessor({ track: clone, maxBufferSize: 1 }).readable.getReader();
+        let timer, result;
+        try {
+          const pending = reader.read();
+          const timedOut = await Promise.race([pending.then(value => { result = value; return false; }), new Promise(resolve => { timer = setTimeout(() => resolve(true), 1500); })]);
+          if (timedOut) { await reader.cancel(); await pending; }
+          return { timedOut, original: { ready: track.readyState, muted: track.muted, settings: track.getSettings() }, frame: result?.value && { width: result.value.displayWidth, height: result.value.displayHeight } };
+        } finally { clearTimeout(timer); result?.value?.close(); await reader.cancel(); reader.releaseLock(); clone.stop(); }
+      });
+      await popup.screenshot({ path: join(tmpdir(), "rk-nested-capture-after-probe.png") });
+      throw new Error(JSON.stringify({ audience, capture, frameProbe }), { cause: error });
     });
     for (const selector of ["#disabled", "#action", "summary", 'input[type="range"]']) {
       const point = await pointFor(page, popup, inner.locator(selector)); await popup.mouse.click(point.x, point.y);
@@ -498,7 +654,7 @@ test("nested section documents retain control semantics, event realms and scroll
 });
 
 test("capture denial preserves notes and thumbnail fallback", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true });
+  const browser = await chromium.launch({ executablePath, headless });
   try {
     const { page, popup } = await openFixture(browser);
     await page.evaluate(() => { navigator.mediaDevices.getDisplayMedia = async () => { throw new DOMException("Denied", "NotAllowedError"); }; });
@@ -515,7 +671,7 @@ test("capture denial preserves notes and thumbnail fallback", { timeout: 30000 }
 });
 
 test("wrong capture source and late permission result never enter the preview", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true });
+  const browser = await chromium.launch({ executablePath, headless });
   try {
     const { page, popup } = await openFixture(browser);
     await page.evaluate(() => {
@@ -561,9 +717,10 @@ test("wrong capture source and late permission result never enter the preview", 
 });
 
 test("always-on-top web presenter supports real live capture and stops on close", { timeout: 30000 }, async () => {
-  const browser = await chromium.launch({ executablePath, headless: true, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
+  const browser = await chromium.launch({ executablePath, headless, args: ["--auto-select-tab-capture-source-by-title=Presenter integration fixture", "--auto-accept-this-tab-capture"] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   try {
+    await recordCaptures(page);
     await page.goto(baseURL + "/tools/studio-presenter/fixture.html");
     await page.click("#start");
     await page.getByRole("button", { name: "Open presenter window", exact: true }).click();
@@ -583,11 +740,14 @@ test("always-on-top web presenter supports real live capture and stops on close"
     assert.equal(pointing.capturing, false);
     assert.ok(Math.abs(pointing.actual.x - pointing.expected.x) < 1 && Math.abs(pointing.actual.y - pointing.expected.y) < 1);
     await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-live]").click());
-    await page.waitForFunction(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-now] canvas"), null, { timeout: 6000 }).catch(async error => {
+    await page.waitForFunction(() => {
+      const doc = window.documentPictureInPicture.window.document, canvas = doc.querySelector("[data-pp-now] canvas");
+      return canvas?.style.visibility === "visible" && doc.querySelector("[data-pp-status]").dataset.state === "live";
+    }, null, { timeout: 6000 }).catch(async error => {
       throw new Error(await page.evaluate(() => window.documentPictureInPicture.window.document.querySelector("[data-pp-status]").textContent), { cause: error });
     });
     assert.equal(await page.evaluate(() => window.documentPictureInPicture.window.matchMedia("(display-mode: picture-in-picture)").matches), true);
-    await page.evaluate(() => { window.webCapture = window.documentPictureInPicture.window.document.querySelector("video").srcObject; });
+    await page.evaluate(() => { window.webCapture = window.captureStreams.at(-1); });
     await page.evaluate(() => window.documentPictureInPicture.window.close());
     await page.waitForFunction(() => window.webCapture.getVideoTracks()[0].readyState === "ended", null, { timeout: 6000 });
   } finally { await browser.close(); }

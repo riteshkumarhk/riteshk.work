@@ -104,7 +104,7 @@ test('shard runner collects every independent task failure and machine-readable 
   ]) {
     const calls = [], events = [];
     let time = 0;
-    const report = await runShard('authoring', {
+    const report = await runShard('presenters', {
       now: () => time += 10,
       onTask: task => events.push(task),
       run: (executable, args) => {
@@ -115,18 +115,18 @@ test('shard runner collects every independent task failure and machine-readable 
         return { ...result, summary: { tests: 1, passed: result.status === 0 ? 1 : 0, failed: result.status === 0 ? 0 : 1, skipped: 0, todo: 0 } };
       }
     });
-    assert.deepEqual(calls, shardCommands('authoring'));
+    assert.deepEqual(calls, shardCommands('presenters'));
     assert.deepEqual(events, report.tasks);
     assert.equal(report.status, results.every(result => result.status === 0) ? 0 : 1);
     assert.deepEqual(report.tasks.map(task => task.status), results.map(result => result.status ?? 1));
     assert.deepEqual(report.tasks.map(task => task.durationMs), [10, 10]);
     assert.equal(report.durationMs, 50);
     assert.equal(report.schemaVersion, 1);
-    assert.equal(report.shard, 'authoring');
+    assert.equal(report.shard, 'presenters');
     assert.deepEqual(JSON.parse(JSON.stringify(report)), report);
     for (const [index, task] of report.tasks.entries()) {
       assert.equal(task.index, index);
-      assert.deepEqual(task.files, browserShards.authoring[index].files);
+      assert.deepEqual(task.files, browserShards.presenters[index].files);
       assert.equal(task.error, results[index] instanceof Error ? results[index].message : results[index].error?.message || null);
       assert.equal(task.signal, results[index].signal || null);
     }
@@ -142,7 +142,7 @@ test('shard runner rejects empty skipped-only todo-only and missing execution su
     { tests: 2, passed: 0, failed: 0, skipped: 0, todo: 2 }
   ]) {
     let calls = 0;
-    const report = await runShard('authoring', { run: async () => {
+    const report = await runShard('presenters', { run: async () => {
       calls++;
       return { status: 0, summary };
     } });
@@ -211,4 +211,11 @@ test('Pages requires the build and every browser shard against the same tested a
   assert.match(workflow, /actions\/cache@v4/);
   assert.match(workflow, /actions\/upload-pages-artifact@v3/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
+});
+
+test('native web capture belongs only to presenters while authoring retains its deck partition', () => {
+  const capture = 'presenter-web.browser.test.mjs';
+  assert.deepEqual(Object.entries(browserShards).filter(([, tasks]) => tasks.some(task => task.files.includes(capture))).map(([shard]) => shard), ['presenters']);
+  assert.deepEqual(browserShards.authoring.map(task => task.files), [['slide-studio-deck.test.mjs']]);
+  assert.deepEqual(browserShards.presenters.at(-1), { files: [capture] });
 });

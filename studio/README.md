@@ -53,6 +53,11 @@ For Windows-native/capture, browser/OS integration, dependencies and broad chang
 include the applicable Windows browser suites locally; use full local coverage if
 impact cannot be bounded. Full Linux CI is not a substitute for platform-specific
 acceptance. Fix or explicitly escalate local failures; never relabel them passed.
+The presenters shard now owns the web-presenter tests rather than authoring.
+Headless CI keeps the same real tab-capture, pixel, source-identity, input and cleanup
+assertions. Optional isolated Windows display-backed checks can set
+`$env:RK_CAPTURE_HEADED='1'`. A headed run also reproduced the video-consumption
+stall, so changing display mode is not its fix or physical-GPU certification.
 
 Report two milestones separately: **live and verified**, then **release closeout
 complete**. The latter still requires updated regression/checklist evidence,
@@ -79,6 +84,28 @@ Cross-frame clicks also wait for finite animations on the iframe's ancestors:
 Playwright's inner-button stability does not establish stable page coordinates.
 The shared helper covers both initially loaded and recovered case-study frames;
 a paused-parent regression proves it waits for animation completion, not a delay.
+
+Web presenter capture reads verified native VideoFrames directly where supported,
+instead of waiting for a hidden video's playback pipeline. The reader retains only
+the newest frame and closes superseded, canceled and late frames. Compatibility
+video startup remains available when the frame API is absent, with a cancelable
+waiting state rather than a stuck disabled control or premature live claim.
+Tests deliberately stall video playback/readiness while verifying real captured
+pixels, plus reader ownership/cancellation and normal presenter input/cleanup.
+The owner-approved startup guard makes one unchanged-constraint refresh at1s only
+if no real frame arrived. A5s deadline disconnects and releases a frameless source,
+including when native refresh is still pending. Ready sources incur no delay.
+The missing-first-refresh fault also reproduces without presenter code; this is
+explicit bounded application recovery, not a CI retry or a claim to fix Chromium.
+
+Standalone slide-editor tests consume the entry module's existing `editor.ready`
+promise through `tools/browser-editor-ready.mjs`, not an API/disabled-button proxy.
+All 49 matching waits across five suites share it. Startup rejections and page
+errors fail immediately with the original cause and a document/API/busy/status
+snapshot. A genuinely stalled boot retains its 30s deadline; diagnostics have their
+own 1s bound so an unresponsive renderer cannot stall error reporting. A controlled
+unsupported-deck regression verifies rejection in under 5s without changing data or
+assertions in normal workflows.
 
 The shared Studio shell keeps Undo/Redo on the left of its working bar. The preview
 mode toggle, screen-size (or slide-view) dropdown, and new-tab (or Rehearse) action

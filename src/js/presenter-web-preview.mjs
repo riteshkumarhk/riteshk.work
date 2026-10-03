@@ -1,5 +1,6 @@
 import { presenterIcon } from "./presenter-panel.mjs";
 import { createPresenterLaser } from "./presenter-pointer.mjs";
+import { createPresenterFrameSource, guardPresenterFrameStartup } from "./presenter-frame-source.mjs";
 import { createPresentationHover, dispatchPresenterInput, presentationContains, presentationCursor, presentationMedia, presentationPoint, presentationSurface } from "./presenter-interaction.mjs";
 export function requestPresenterCapture() {
   const handle = crypto.randomUUID();
@@ -25,13 +26,14 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
   const hover = createPresentationHover(frame);
   const mediaDevices = navigator.mediaDevices;
   const handle = captureTicket?.handle || crypto.randomUUID();
-  let stream = null, video = null, canvas = null, stopped = false, pending = false, animation = 0;
+  let stream = null, video = null, frameTrack = null, frameSource = null, canvas = null, stopped = false, pending = false, animation = 0;
   let liveFrame = false, detachTrack = null, pendingTicket = null;
+  let startup = null;
   let pressed = null, focused = null, hovered = null;
   const supported = !!(mediaDevices?.getDisplayMedia && mediaDevices?.setCaptureHandleConfig);
   function connection(state, message) {
     status.dataset.state = state; status.textContent = message;
-    const label = state === "live" ? "Disconnect live preview" : state === "connecting" ? "Connecting live preview" : "Retry live preview connection";
+    const label = state === "live" ? "Disconnect live preview" : state === "connecting" ? stream ? "Cancel live preview connection" : "Connecting live preview" : "Retry live preview connection";
     button.title = label; button.setAttribute("aria-label", label);
     button.innerHTML = presenterIcon(state === "live" ? "disconnect" : state === "connecting" ? "connect" : "retry");
   }
@@ -79,8 +81,12 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     release();
     focused = null;
     presenterWindow.cancelAnimationFrame(animation);
+    startup?.dispose(); startup = null;
     detachTrack?.(); detachTrack = null;
     liveFrame = false;
+    const source = frameSource; frameSource = null;
+    source?.dispose().catch(error => console.error("Audience frame reader cleanup failed.", error));
+    frameTrack?.stop(); frameTrack = null;
     if (stream) stream.getTracks().forEach(track => track.stop());
     stream = null;
     if (video) { video.pause(); video.srcObject = null; video.remove(); }
@@ -226,21 +232,25 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
     if (handled) { event.preventDefault(); event.stopPropagation(); }
   }
   function paint() {
-    if (!stream || !canvas || !video) return;
+    if (!stream || !canvas || (!video && !frameSource)) return;
     const track = stream.getVideoTracks()[0];
     if (!verified(track)) { stop("Preview disconnected: the captured tab changed."); return; }
+    startup?.check();
     const bounds = presentationSurface(frame).getBoundingClientRect();
-    const ratio = video.videoWidth / window.innerWidth;
-    const verticalRatio = video.videoHeight / window.innerHeight;
+    const image = frameSource ? frameSource.frame : video;
+    const imageWidth = frameSource ? image?.displayWidth : video.videoWidth;
+    const imageHeight = frameSource ? image?.displayHeight : video.videoHeight;
+    const ratio = imageWidth / window.innerWidth;
+    const verticalRatio = imageHeight / window.innerHeight;
     const width = Math.max(1, Math.round(container.clientWidth * (presenterWindow.devicePixelRatio || 1)));
     const height = Math.max(1, Math.round(width * bounds.height / (bounds.width || 1)));
     if (bounds.width > 0 && bounds.height > 0) container.parentElement.style.aspectRatio = bounds.width + " / " + bounds.height;
     if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, width, height);
-    const drawable = !track.muted && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && bounds.width > 0 && bounds.height > 0;
+    const drawable = !track.muted && (frameSource || video.readyState >= 2) && imageWidth > 0 && imageHeight > 0 && bounds.width > 0 && bounds.height > 0;
     if (drawable) {
-      try { context.drawImage(video, bounds.left * ratio, bounds.top * verticalRatio, bounds.width * ratio, bounds.height * verticalRatio, 0, 0, width, height); }
+      try { context.drawImage(image, bounds.left * ratio, bounds.top * verticalRatio, bounds.width * ratio, bounds.height * verticalRatio, 0, 0, width, height); }
       catch { stop("Live frames unavailable. Showing the current slide thumbnail."); return; }
     }
     if (drawable !== liveFrame) {
@@ -276,20 +286,44 @@ export function installWebPresenterPreview({ frame, pointer, container, presente
       track.addEventListener("ended", ended);
       track.addEventListener("capturehandlechange", identityChanged);
       detachTrack = () => { track.removeEventListener("ended", ended); track.removeEventListener("capturehandlechange", identityChanged); };
-      video = doc.createElement("video");
-      video.muted = true;
-      video.playsInline = true;
-      video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none";
-      video.srcObject = stream;
-      doc.body.appendChild(video);
-      const player = video;
-      await player.play();
-      if (stopped || stream !== captured || video !== player) return;
+      if (typeof globalThis.MediaStreamTrackProcessor === "function") {
+        frameTrack = track.clone();
+        const processor = new MediaStreamTrackProcessor({ track: frameTrack, maxBufferSize: 1 });
+        frameSource = createPresenterFrameSource(processor, error => {
+          if (stream !== captured) return;
+          console.error("Audience frame reading failed.", error);
+          stop("Live frames unavailable. Showing the current slide thumbnail.");
+        });
+      } else {
+        video = doc.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none";
+        video.srcObject = stream;
+        doc.body.appendChild(video);
+        const player = video;
+        player.play().catch(error => {
+          if (stream !== captured || video !== player) return;
+          console.error("Audience video playback failed.", error);
+          stop("Live frames unavailable. Showing the current slide thumbnail.");
+        });
+      }
       canvas = doc.createElement("canvas");
       canvas.setAttribute("aria-label", "Live audience slide controls");
       canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;visibility:hidden";
       container.appendChild(canvas);
-      connection("live", "Waiting for audience frames");
+      connection("connecting", "Waiting for audience frames");
+      const input = frameSource, player = video, inputTrack = frameTrack || track;
+      startup = guardPresenterFrameStartup({
+        isCurrent: () => stream === captured && verified(track),
+        isReady: () => input ? !!input.frame : player.readyState >= 2 && player.videoWidth > 0 && player.videoHeight > 0,
+        refresh: () => inputTrack.applyConstraints(inputTrack.getConstraints()),
+        onError(error) {
+          if (stream !== captured) return;
+          console.error("Audience capture startup failed.", error);
+          stop("Audience frames did not arrive. Reconnect live preview.");
+        }
+      }, presenterWindow);
       paint();
     } catch (error) {
       if (!stopped) stop(error.name === "NotAllowedError" ? "Capture cancelled or denied. Controls remain connected." : "Live preview unavailable. Controls remain connected.");

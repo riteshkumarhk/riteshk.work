@@ -6,8 +6,32 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
 import { publicDeckPayload } from './src/js/slide-merge-visibility.mjs';
+import { MERGE_DB } from './src/js/slide-merge-core.mjs';
+import { waitForSlideEditor } from './tools/browser-editor-ready.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : chromium.executablePath());
+test('standalone editor startup failures surface immediately through the real readiness contract', { timeout:30000 }, async () => {
+  const browser = await chromium.launch({ executablePath, headless:true });
+  try {
+    const page = await browser.newPage();
+    await page.goto(base + '/404.html');
+    await page.evaluate(name => new Promise((resolve, reject) => {
+      const request = indexedDB.open(name, 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('decks');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result, transaction = database.transaction('decks', 'readwrite');
+        transaction.objectStore('decks').put({ version:999, slides:[] }, 'draft');
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => { database.close(); reject(transaction.error); };
+      };
+    }), MERGE_DB);
+    await page.goto(base + '/studio/slide-merge-lab/');
+    const start = performance.now();
+    await assert.rejects(waitForSlideEditor(page), /Unsupported deck format/);
+    assert.ok(performance.now() - start < 5000, 'A known startup rejection must not consume the 30-second timeout');
+  } finally { await browser.close(); }
+});
 test('DJ pad can use the original tab without exposing notes or opening a second window', { timeout:30000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true, ignoreDefaultArgs:['--disable-popup-blocking'] });
   const context = await browser.newContext({ viewport:{width:1280,height:800}, reducedMotion:'reduce' });
@@ -172,7 +196,7 @@ test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely
   try {
     await page.clock.install();
     await page.goto(base + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.locator('.merge-layout-toggle').click();
     assert.equal(await page.locator('.merge-layout-toggle').textContent(),'Rehearse');
     await page.getByRole('spinbutton',{name:'Slide time budget',exact:true}).fill('02:00');
@@ -284,7 +308,7 @@ test('Rehearse budgets and DJ-pad notes, timing, overview and end persist safely
     const saved = await page.evaluate(id => window.__slideMerge.deck().slides.find(slide=>slide.id===id),first);
     assert.equal(saved.notes,'Notes edited privately during rehearsal'); assert.equal(saved.durationMinutes,3.5);
     await page.reload();
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).durationMinutes,first),3.5);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
@@ -299,7 +323,7 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
   const notes = () => page.getByRole('button', {name:'Speaker notes panel',exact:true});
   try {
     await page.goto(base + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     const originalNotes = await page.evaluate(() => window.__slideMerge.deck().slides.map(slide => slide.notes));
     assert.equal(await page.locator('.merge-slide-timing').count(),0);
     assert.equal(await page.getByRole('button',{name:/Time budget for slide/}).count(),0);
@@ -356,7 +380,7 @@ test('bottom-right Notes and time controls replace slide-list timing and preserv
     assert.equal(await budget().inputValue(),'01:30');
     await page.evaluate(() => window.__slideMerge.save());
     await page.reload();
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal(await budget().inputValue(),'01:30');
     for (const width of [1440,901,880,760,390,320]) {
       await page.setViewportSize({width,height:900});
@@ -423,7 +447,7 @@ test('slide names edit inline without selection changes and preserve history and
       const page = await browser.newPage({viewport:{width,height:1000}}), errors=[];
       page.on('pageerror',error=>errors.push(error.message));
       await page.goto(base+'/studio/slide-merge-lab/');
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       const ready=()=>page.waitForFunction(()=>!document.querySelector('.merge-layout-toggle').disabled);
       const initial=await page.evaluate(()=>window.__slideMerge.deck());
       const target=initial.slides.find(slide=>slide.id!==initial.selected);
@@ -462,7 +486,7 @@ test('slide names edit inline without selection changes and preserve history and
       await page.getByRole('textbox',{name:'Deck title',exact:true}).focus(); await ready();
       assert.equal(await title.innerText(),'Saved on blur');
       await page.reload();
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).title,target.id),'Saved on blur');
       if (!await title.isVisible()) await page.getByRole('button',{name:'Toggle slides',exact:true}).click();
       await page.getByRole('button',{name:'Editing on',exact:true}).click();
@@ -480,7 +504,7 @@ test('rich notes and full deck history preserve formatting, reordering and slide
   try {
     await page.addInitScript(() => { window.__RKStudio = { draftSlides() {}, improveText: async (text, options) => options.rich ? '<p><strong>Improved</strong> notes.</p><script>window.compromised=true</script>' : 'Improved selected text' }; });
     await page.goto(base + '/studio/slide-merge-lab/');
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     const order = () => page.evaluate(() => window.__slideMerge.deck().slides.map(slide => slide.id));
     const original = await order();
     await page.locator('.merge-slide-card').first().getByRole('button',{name:'Move slide down',exact:true}).click();
@@ -521,7 +545,7 @@ test('rich notes and full deck history preserve formatting, reordering and slide
     await page.getByRole('button',{name:'Redo',exact:true}).click();
     await page.waitForFunction(() => window.__slideMerge.deck().slides.length===3&&!document.querySelector('.merge-layout-toggle').disabled);
     await page.reload();
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal((await order()).length,3);
     assert.match(await page.evaluate(() => window.__slideMerge.deck().slides[0].notes),/<(?:b|strong)>/);
     const savedOrder = await order();
@@ -547,7 +571,7 @@ test('rich notes and full deck history preserve formatting, reordering and slide
       assert.deepEqual(await retained(),savedContent);
       if (index === 2) {
         await page.reload();
-        await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector('.merge-layout-toggle').disabled);
+        await waitForSlideEditor(page);
         assert.deepEqual(await order(),expected);
         assert.deepEqual(await retained(),savedContent);
         break;
@@ -580,7 +604,7 @@ test('embed links, text improvement and generated draft icons integrate with sli
     });
     await page.route('https://www.youtube-nocookie.com/embed/**',route=>route.fulfill({contentType:'text/html',body:'<html><body style="margin:0;background:#32bc9a">Embedded video fixture</body></html>'}));
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.typographySource),'draft');
     await page.getByRole('button',{name:'Media',exact:true}).click();
     await page.getByRole('button',{name:'Embed link',exact:true}).click();
@@ -618,7 +642,7 @@ test('embed links, text improvement and generated draft icons integrate with sli
     await page.frameLocator('.merge-workspace iframe[title="Embedded widget"]').locator('#saved-widget[data-isolated="true"]').waitFor();
     assert.equal(await page.locator('body').getAttribute('data-compromised'),null);
     await page.reload();
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal(await page.evaluate(id=>window.__slideMerge.api.getSceneElements().find(element=>element.id===id).customData.slideEmbed.url,savedEmbed.id),savedWidget);
     await page.getByRole('button',{name:'Icons',exact:true}).click();
     await page.getByRole('button',{name:'Insert draft-only icon',exact:true}).waitFor();
@@ -644,7 +668,7 @@ test('embed links, text improvement and generated draft icons integrate with sli
     await page.getByRole('button',{name:'Studio saved title',exact:true}).click();
     await page.getByRole('button',{name:'Apply layout',exact:true}).click();
     await page.waitForFunction(()=>window.__slideMerge.api.getSceneElements().some(element=>element.text==='Legacy title'));
-    await page.reload(); await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await page.reload(); await waitForSlideEditor(page);
     assert.ok(await page.evaluate(()=>window.__slideMerge.api.getSceneElements().some(element=>element.text==='Legacy title')));
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
@@ -660,7 +684,7 @@ test('before-after sections render inside picker cards, navigator and slideshow'
       navigator.mediaDevices.getDisplayMedia=()=>Promise.reject(new DOMException('Denied','NotAllowedError'));
     });
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.getByRole('button',{name:'Sections',exact:true}).click();
     await page.getByRole('button',{name:'Comparison sample',exact:true}).click();
     const picker=page.frameLocator('.merge-section-choices iframe[title="Case-study section"]').first();
@@ -689,7 +713,7 @@ test('inserted icon colour uses native properties and preserves geometry origina
         if(!localStorage.getItem('rk:content:draft'))localStorage.setItem('rk:content:draft',JSON.stringify({work:[],customIcons:{'colour-fixture':'<path d="M4 4h16v16H4Z" stroke="#001122"/><circle cx="12" cy="12" r="2" fill="#001122" stroke="none"/>'}}));
       });
       await page.goto(base+'/studio/slide-merge-lab/');
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       await page.getByRole('button',{name:'Icons',exact:true}).click();
       await page.getByRole('button',{name:'Insert colour-fixture icon',exact:true}).click();
       await page.waitForFunction(()=>window.__slideMerge.api.getSceneElements().some(element=>element.customData?.studioIcon));
@@ -738,7 +762,7 @@ test('inserted icon colour uses native properties and preserves geometry origina
       await page.getByRole('button',{name:'Insert colour-fixture icon',exact:true}).click();
       await page.getByRole('button',{name:'Close panel',exact:true}).click();
       await page.reload();
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       assert.deepEqual(await page.evaluate(id=>{const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id===id);return {fileId:element.fileId,color:element.strokeColor,icon:element.customData.studioIcon,dataURL:api.getFiles()[element.fileId].dataURL};},original.element.id),{fileId:changed.element.fileId,color:'#e03131',icon:true,dataURL:changed.file.dataURL});
       await page.evaluate(id=>window.__slideMerge.api.updateScene({appState:{selectedElementIds:{[id]:true}}}),original.element.id);
       if(width===390)await page.getByRole('button',{name:'Open properties',exact:true}).click();
@@ -770,7 +794,7 @@ test('icon generation stays in the icon panel with cancellation retry and mobile
         window.__RKStudio = {draftSlides(){},generateIcon:(description,references,{signal})=>new Promise((resolve,reject)=>window.iconJobs.push({description,signal,resolve,reject}))};
       });
       await page.goto(base+'/studio/slide-merge-lab/');
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       await page.getByRole('button',{name:'Icons',exact:true}).click();
       const search = page.getByRole('searchbox',{name:'Search icons',exact:true});
       await search.fill('square');
@@ -919,7 +943,7 @@ test('partial speaker notes copy between slides strips browser clipboard wrapper
       Object.defineProperty(window,'documentPictureInPicture',{value:undefined,configurable:true});
     });
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     const notes = page.locator('.merge-notes-input');
     const original = 'Before. Selected onboarding sentence. After.';
     await notes.fill(original);
@@ -946,7 +970,7 @@ test('partial speaker notes copy between slides strips browser clipboard wrapper
     await page.evaluate(()=>window.__slideMerge.save());
     assert.equal(await page.evaluate(id=>window.__slideMerge.deck().slides.find(slide=>slide.id===id).notes,sourceId),original);
     await page.reload();
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     assert.equal(await notes.innerText(), 'Selected onboarding sentence.');
     assert.doesNotMatch(await notes.innerHTML(), /StartFragment|EndFragment|&lt;(?:html|body|span)|style=/);
     for (const width of [1440,390]) {
@@ -1000,7 +1024,7 @@ test('speaker note clipboard paragraphs do not accumulate spacing during seriali
       Object.defineProperty(window,'documentPictureInPicture',{value:undefined,configurable:true});
     });
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     const notes = page.locator('.merge-notes-input');
     await notes.fill('');
     await notes.evaluate(element => {
@@ -1017,7 +1041,7 @@ test('speaker note clipboard paragraphs do not accumulate spacing during seriali
     const heights = [];
     for (let cycle = 0; cycle < 3; cycle++) {
       await page.reload();
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       heights.push(await notes.evaluate(element=>element.scrollHeight));
       await notes.evaluate(element=>element.dispatchEvent(new InputEvent('input',{bubbles:true})));
       await page.evaluate(()=>window.__slideMerge.save());
@@ -1052,7 +1076,7 @@ test('unpublished font faces are authored choices and rich notes survive the web
       Object.defineProperty(window,'documentPictureInPicture',{value:undefined,configurable:true});
     });
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.waitForFunction(()=>[...document.fonts].some(font=>font.family==='Draft Display'&&font.status==='loaded'));
     const point=await page.evaluate(()=>{const api=window.__slideMerge.api,state=api.getAppState(),text=api.getSceneElements().find(element=>element.id==='title'),box=document.querySelector('.lab-canvas').getBoundingClientRect();return {x:box.left+(text.x+text.width/2+state.scrollX)*state.zoom.value,y:box.top+(text.y+text.height/2+state.scrollY)*state.zoom.value};});
     await page.mouse.click(point.x,point.y);
@@ -1070,7 +1094,7 @@ test('unpublished font faces are authored choices and rich notes survive the web
     assert.equal(await popup.locator('[data-pp-notes]').innerText(),'Rich note for presenter');
     await popup.getByRole('button',{name:'End presentation',exact:true}).click();
     await page.waitForSelector('.pjp',{state:'detached'});
-    await page.reload();await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await page.reload();await waitForSlideEditor(page);
     assert.equal(await page.evaluate(()=>window.__slideMerge.deck().fonts[0].family),'Draft Display');
     assert.equal(await page.locator('.merge-notes-input b,.merge-notes-input strong').count(),1);
   } finally {await browser.close();}
@@ -1081,7 +1105,7 @@ test('video navigator previews decode actual frames and compact notes and embed 
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   try {
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.locator('input[type=file]').setInputFiles(join(process.cwd(),'studio','slide-lab','motion.webm'));
     await page.waitForFunction(()=>{const video=document.querySelector('.merge-slide-card.is-active video');return video?.readyState>=2;});
     const video=page.locator('.merge-slide-card.is-active video');
@@ -1125,7 +1149,7 @@ test('real Studio AI service improves notes and sanitizes generated icons withou
       return route.fulfill({contentType:'application/json',body:JSON.stringify({choices:[{message:{content}}],usage:{prompt_tokens:10,completion_tokens:10}})});
     });
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.getByRole('button',{name:'Improve speaker notes with AI',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.merge-notes-input strong')?.textContent==='Sharper');
     await page.getByRole('button',{name:'Icons',exact:true}).click();
@@ -1150,7 +1174,7 @@ test('canvas drag stays one deck-history step through autosave and slide navigat
   try{
     await page.bringToFront();
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     const ready=await page.waitForFunction(()=>{
       const api=window.__slideMerge.api,element=api.getSceneElements().find(element=>element.id==='step-0'),state=api.getAppState(),box=document.querySelector('.lab-canvas').getBoundingClientRect();
       if(Math.abs(state.offsetLeft-box.left)>1||Math.abs(state.offsetTop-box.top)>1)return false;
@@ -1202,7 +1226,7 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
       navigator.mediaDevices.getDisplayMedia=(...args)=>{window.captureRequests++;return live?capture(...args).then(stream=>{window.captureStreams.push(stream);return stream;}):Promise.reject(new DOMException('Denied','NotAllowedError'));};
     },{live,published});
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     if(!live){
       await page.evaluate(()=>window.__slideMerge.choose('fidelity'));
       await page.waitForFunction(()=>window.__slideMerge.deck().selected==='fidelity'&&!document.querySelector('.merge-layout-toggle').disabled);
@@ -1217,7 +1241,7 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
       await page.waitForFunction(()=>window.__slideMerge.deck().selected==='opening'&&!document.querySelector('.merge-layout-toggle').disabled);
       await page.evaluate(()=>window.__slideMerge.save());
       await page.reload();
-      await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+      await waitForSlideEditor(page);
       await page.locator('.merge-layout-toggle').click();
       await page.evaluate(()=>window.__slideMerge.save());
     }
@@ -1277,10 +1301,12 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
           const comparison=await section.locator('.pjb__cmp').boundingBox(),frame=await page.locator('[data-pjp-frame]').boundingBox();
           const corners=[[0.1,0.1],[0.9,0.1],[0.1,0.9],[0.9,0.9]].map(([horizontal,vertical])=>({x:(comparison.x+comparison.width*horizontal-frame.x)/frame.width,y:(comparison.y+comparison.height*vertical-frame.y)/frame.height,red:horizontal<0.5}));
           await popup.waitForFunction(corners=>{const canvas=document.querySelector('[data-pp-now] canvas'),context=canvas.getContext('2d');return corners.every(point=>{const [red,green,blue]=context.getImageData(Math.floor(point.x*canvas.width),Math.floor(point.y*canvas.height),1,1).data;return point.red?red>120&&green<100&&blue<130:red<90&&green>130&&blue>90;});},corners,{timeout:8000}).catch(async error=>{
-            const diagnostic=await popup.evaluate(corners=>{const canvas=document.querySelector('[data-pp-now] canvas'),video=document.querySelector('video');return {video:{width:video.videoWidth,height:video.videoHeight},canvas:{width:canvas.width,height:canvas.height,transform:canvas.getContext('2d').getTransform().toJSON()},points:corners.map(point=>({...point,pixel:[...canvas.getContext('2d').getImageData(Math.floor(point.x*canvas.width),Math.floor(point.y*canvas.height),1,1).data]}))};},corners);
+            const diagnostic=await popup.evaluate(corners=>{const canvas=document.querySelector('[data-pp-now] canvas'),video=document.querySelector('video');return {video:video&&{width:video.videoWidth,height:video.videoHeight},canvas:{width:canvas.width,height:canvas.height,transform:canvas.getContext('2d').getTransform().toJSON()},points:corners.map(point=>({...point,pixel:[...canvas.getContext('2d').getImageData(Math.floor(point.x*canvas.width),Math.floor(point.y*canvas.height),1,1).data]}))};},corners);
             await popup.screenshot({path:join(tmpdir(),'rk-dj-crop-failure.png')});
-            await popup.evaluate(()=>{document.querySelector('video').style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;object-fit:contain;background:#ffffff';});
-            await popup.screenshot({path:join(tmpdir(),'rk-dj-raw-capture-failure.png')});
+            if(await popup.locator("video").count()){
+              await popup.evaluate(()=>{document.querySelector('video').style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;object-fit:contain;background:#ffffff';});
+              await popup.screenshot({path:join(tmpdir(),'rk-dj-raw-capture-failure.png')});
+            }
             throw new Error(JSON.stringify({width,height,frame,comparison,...diagnostic}),{cause:error});
           });
           await page.screenshot({path:join(tmpdir(),`rk-dj-section-audience-${width}.png`)});
@@ -1314,7 +1340,7 @@ test('Slide Show automatically connects and supports fullscreen retry when brows
   const page=await browser.newPage();
   try {
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(()=>{document.title='DJ launch integration';});
     await page.bringToFront();
     await page.getByRole('button',{name:'Slide Show',exact:true}).click();
@@ -1340,7 +1366,7 @@ test('Single-click launch requires both fullscreen and the floating DJ pad', {ti
   try {
     await page.addInitScript(()=>{navigator.mediaDevices.getDisplayMedia=()=>Promise.reject(new DOMException('Denied','NotAllowedError'));});
     await page.goto(base+'/studio/slide-merge-lab/');
-    await page.waitForFunction(()=>window.__slideMerge?.api&&!document.querySelector('.merge-layout-toggle').disabled);
+    await waitForSlideEditor(page);
     await page.getByRole('button',{name:'Slide Show',exact:true}).click();
     await page.waitForFunction(()=>!!window.documentPictureInPicture.window?.document.querySelector('[data-pp-notes]'));
     assert.equal(await page.evaluate(()=>document.fullscreenElement?.classList.contains('pjp')),true);

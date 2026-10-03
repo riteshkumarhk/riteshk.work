@@ -8,7 +8,7 @@ const authoring = '(?:Prepare |Resume canvas |AI |Draft entire deck |fixed cover
 const recovery = 'project-recovery.browser.test.mjs';
 const journey = 'Journey';
 export const browserShards = {
-  authoring: [{ files: [deck], pattern: '^' + authoring }, { files: ['presenter-web.browser.test.mjs'] }],
+  authoring: [{ files: [deck], pattern: '^' + authoring }],
   sections: [{ files: [deck], skipPattern: '^' + authoring }],
   'resume-workspace': [{ files: ['resume-workspace.test.mjs'] }],
   journey: [{ files: [recovery], pattern: journey }],
@@ -23,7 +23,7 @@ export const browserShards = {
     'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs',
     'slide-presenter.browser.test.mjs',
     'studio-capture-download.browser.test.mjs'
-  ] }]
+  ] }, { files: ['presenter-web.browser.test.mjs'] }]
 };
 
 export function shardCommands(shard) {

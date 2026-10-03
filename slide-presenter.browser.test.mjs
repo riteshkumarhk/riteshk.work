@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
+import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
@@ -118,7 +119,7 @@ test("website Play uses the published native audience without loading the editor
   try {
     await page.addInitScript(denyCapture);
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     const document = await page.evaluate(() => {
       const deck = window.__slideMerge.deck();
       deck.slides = [deck.slides[0]]; deck.slides[0].notes = "OWNER-ONLY NOTES"; deck.slidesPublic = true;
@@ -181,7 +182,7 @@ for (const nativeHost of [true, false]) test(`owner Present mode retries undeplo
     await page.addInitScript(denyCapture);
     if (nativeHost) await page.addInitScript(() => { window.__RK_NATIVE_PRESENTER = true; });
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     const fixture = await page.evaluate(() => {
       const deck = window.__slideMerge.deck();
       deck.slides = [deck.slides[0]]; deck.slidesPublic = false; deck.slides[0].notes = "PRIVATE RECOVERY NOTES";
@@ -284,7 +285,7 @@ test("shared presentation preserves canvas, navigation, private presenter window
   page.on("pageerror", error => errors.push(error.message));
   try {
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(() => window.__slideMerge.choose("fidelity"));
     await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "2 / 2");
@@ -366,7 +367,7 @@ test("production and experimental players share responsive presentation chrome",
   try {
     await lab.bringToFront();
     await lab.goto(baseURL + "/studio/slide-merge-lab/");
-    await lab.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(lab);
     await lab.getByRole("button", { name: "Slide Show", exact: true }).click();
     await lab.waitForSelector(".pjp");
     await audienceOnly(lab);
@@ -413,7 +414,7 @@ test("canvas presentation retains media and all transition modes while skipping 
     await page.addInitScript(denyCapture);
   try {
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(async () => {
       await window.__slideMerge.save();
       const deck = window.__slideMerge.deck();
@@ -440,7 +441,7 @@ test("canvas presentation retains media and all transition modes while skipping 
       });
     });
     await page.reload();
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.waitForFunction(() => document.querySelector("[data-pjp-count]")?.textContent === "1 / 5");
     await audienceOnly(page);
@@ -497,7 +498,7 @@ test("native always-on-top presenter survives audience focus and synchronizes co
   page.on("pageerror", error => errors.push(error.message));
   try {
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     assert.equal(await page.evaluate(() => typeof window.documentPictureInPicture?.requestWindow), "function");
     await page.getByRole("button", { name: "Slide Show", exact: true }).click();
     await page.locator('[data-pjp="popout"]').click();
@@ -540,7 +541,7 @@ test("denied and pending floating-window requests recover safely", { skip: !enab
     await page.addInitScript(denyCapture);
   try {
     await page.goto(baseURL + "/studio/slide-merge-lab/");
-    await page.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(page);
     await page.evaluate(() => Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: { requestWindow: () => Promise.reject(new DOMException("Denied", "NotAllowedError")) } }));
     const popupPromise = page.waitForEvent("popup");
     await page.getByRole("button", { name: "Slide Show", exact: true }).click();

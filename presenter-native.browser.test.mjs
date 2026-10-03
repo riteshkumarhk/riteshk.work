@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
+import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { build } from "esbuild";
@@ -31,7 +32,7 @@ test("built production and canvas players deliver native notes without exposing 
   try {
     const lab = await context.newPage();
     await lab.goto(baseURL + "/studio/slide-merge-lab/");
-    await lab.waitForFunction(() => window.__slideMerge?.api && !document.querySelector(".merge-layout-toggle")?.disabled);
+    await waitForSlideEditor(lab);
     await lab.evaluate(() => window.__slideMerge.choose("fidelity"));
     await lab.waitForFunction(() => window.__slideMerge?.api?.getSceneElements().some(element=>element.type!=='frame'));
     await lab.evaluate(() => {
