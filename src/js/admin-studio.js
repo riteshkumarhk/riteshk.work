@@ -20873,7 +20873,16 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     }
     // Auto-hide the L2 bar (title + tabs) on scroll down, reveal on scroll up.
     root.addEventListener("scroll", l2BarScroll, true);
-    frame.addEventListener("load", previewApply);
+    frame.addEventListener("load", function () {
+      const doc = frame.contentDocument;
+      if (!frame.contentWindow.__siteRendered) {
+        // Async content bootstrap can finish after load; let its router initialise first.
+        doc.addEventListener("site:rendered", () => queueMicrotask(() => {
+          if (frame.contentDocument === doc) previewApply();
+        }), { once: true });
+      }
+      previewApply();
+    });
     document.addEventListener("keydown", onKey);
     window.addEventListener("message", function (e) {
       if (e.origin !== location.origin || !frame || e.source !== frame.contentWindow || !root.classList.contains("is-open")) return;

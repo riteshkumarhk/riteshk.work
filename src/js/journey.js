@@ -15,7 +15,7 @@ import { journeyRows } from "./journey-core.mjs";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
   const md = value => window.RK?.md ? window.RK.md(value) : esc(value);
   const allStories = () => rows.flatMap(row => row.stories);
-  const detailStories = () => allStories().reverse();
+  const detailStories = () => [...rows].reverse().flatMap(row => row.stories);
   const activeStory = () => allStories().find(story => story.key === activeKey);
   const media = story => (story.entry.images || []).filter(image => image?.src && mediaUrl(image.src));
   const video = image => image.kind === "video" || /^data:video\//i.test(image.src) || /\.(mp4|webm|mov|m4v|ogv)($|\?|#)/i.test(image.src);
