@@ -2,28 +2,68 @@
 
 ## Release Gate
 
-Focused tests are development feedback, not permission to push. Before a release,
-fetch and safely integrate the latest publications without discarding drafts or
-unrelated changes. Reuse a local server serving this repository, then run:
+The release policy separates focused local validation from full mandatory CI.
+Before a release, fetch and safely integrate the latest publications without
+discarding drafts or unrelated changes. Reuse a local server serving this
+repository, then explicitly select coverage for the affected behavior:
 
 ```powershell
 $env:SLIDE_LAB_URL='http://127.0.0.1:5510'
-npm run check:release
+npm.cmd run check:release -- --file project-recovery.browser.test.mjs --pattern Journey
+# Or select one or more complete browser shards:
+npm.cmd run check:release -- --shard authoring
+# Release-pipeline scripts/tests/workflow and documentation only:
+npm.cmd run check:release -- --tooling
+# Full Windows/local coverage when required for diagnosis or a broad change:
+npm run check:release:full
 ```
 
-This runs the same root-test selection as CI, all three builds, bundle syntax
-checks, and every existing browser shard with the provider-network guard. Browser
-shards run sequentially locally to avoid contention; CI retains its parallel
-shards. Missing/wrong/live server URLs and failing commands stop the gate rather
-than silently skipping coverage. Existing dependencies and browser installation
-are reused; the command does not install packages, publish, commit or push.
+Every local release selection runs the same root-test selection as CI, all three
+builds and bundle syntax checks. Selected browser tests retain the provider-network
+guard. Omitted/unknown selections and zero-match/skipped-only test runs fail
+explicitly. `--tooling` rejects application, content and dependency changes; it is
+not a general no-browser escape hatch. File/pattern selection is an explicit
+engineering decision, not an automatic claim that other features are unaffected.
+Use `npm.cmd` for argument forwarding in Windows PowerShell; on Linux/macOS use
+`npm`. Direct invocation (`node tools/release-check.mjs --tooling`) also works.
+
+Local commands run sequentially to avoid software-renderer contention. Independent
+browser selections continue after a failure so the report contains all results,
+but the command still exits nonzero; root/build failures stop immediately.
+Missing/wrong/live server URLs fail before testing. Existing dependencies and
+browser installations are reused; no install, publication, commit or push occurs.
+
+Each run writes a timestamped JSON timing/result report outside the repository
+by default; `--report <absolute-path>` selects a private/session evidence location.
+It records the base revision, input-content fingerprint, exact commands, durations,
+test totals and failures. HEAD/input changes during validation invalidate the run.
+Generated bundles are excluded from the input fingerprint because builds replace
+them; CI separately verifies committed output freshness. A report is evidence,
+not authorization to skip tests or a reusable deployment approval.
 
 Review and stage rebuilt outputs explicitly. Do not edit the candidate while the
 gate runs. Fetch again before pushing: if remote changes must be integrated,
 validate that final tree, including content-dependent backup/restore checks.
-Never force-push over admin publications. CI still verifies committed bundle
-freshness and gates deployment on all shards; a local pass does not replace
-Linux CI or live-asset verification. Keep genuine manual acceptance separate.
+Never force-push over admin publications. Full CI still runs every required test,
+regardless of the local selection, and deploys only its verified artifact after
+every job succeeds. Inventory tests protect browser-shard coverage and partitioning.
+Do not remove tests, add blanket retries or deploy through failed CI for speed.
+
+For Windows-native/capture, browser/OS integration, dependencies and broad changes,
+include the applicable Windows browser suites locally; use full local coverage if
+impact cannot be bounded. Full Linux CI is not a substitute for platform-specific
+acceptance. Fix or explicitly escalate local failures; never relabel them passed.
+
+Report two milestones separately: **live and verified**, then **release closeout
+complete**. The latter still requires updated regression/checklist evidence,
+preserved manual results, definitions-only hosted checklist verification, updated
+private history/design/master records, and a hash-verified full memory backup with
+verified private push. Prepare records during CI where safe, but finalize them
+using actual deployment results. Keep credentials and private records out of the
+public repository; genuine manual device acceptance remains separate.
+
+Measure release request to verified-live separately from final closeout and active
+work. Estimate gains only until several comparable releases provide actual timings.
 
 Backup round-trip tests must upload the actual downloaded file by path, not
 re-serialize a potentially large backup into Playwright's size-limited in-memory

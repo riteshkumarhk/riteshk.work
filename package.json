@@ -9,7 +9,8 @@
     "build:slide-lab": "node slide-lab.build.mjs",
     "build:resume": "node tools/resume-preview.mjs --build",
     "test:root": "node tools/release-check.mjs root",
-    "check:release": "node tools/release-check.mjs"
+    "check:release": "node tools/release-check.mjs",
+    "check:release:full": "node tools/release-check.mjs all"
   },
   "devDependencies": {
     "@excalidraw/excalidraw": "0.18.1",

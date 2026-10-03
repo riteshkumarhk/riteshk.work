@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [authoring, sections, recovery]
+        shard: [authoring, sections, resume-workspace, journey, recovery, presenters]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -106,6 +106,7 @@ jobs:
       - name: Run required browser shard
         env:
           BROWSER_SHARD: ${{ matrix.shard }}
+          BROWSER_SHARD_REPORT: browser-timings-${{ matrix.shard }}.json
           TMPDIR: ${{ runner.temp }}
         run: |
           python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
@@ -115,6 +116,15 @@ jobs:
           export PLAYWRIGHT_CHROMIUM_EXECUTABLE="$(node -p "require('playwright-core').chromium.executablePath()")"
           curl --silent --show-error --fail --retry 5 --retry-delay 1 --retry-connrefused --max-time 2 "$SLIDE_LAB_URL/index.html" > /dev/null
           node tools/browser-shards.mjs "$BROWSER_SHARD"
+
+      - name: Preserve browser task timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-timings-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: browser-timings-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Preserve browser failure evidence
         if: failure()
