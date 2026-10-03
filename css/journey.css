@@ -107,13 +107,13 @@ body:has(> .jrn-detail:not([hidden])) > .pjx { cursor: auto; }
 .jrn-gallery[hidden] { display: none; }
 .jrn-gallery__figure { height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; margin: 0; }
 .jrn-gallery__stack { position: relative; min-height: 0; min-width: 0; display: grid; place-items: center; isolation: isolate; container-type: size; }
-.jrn-gallery__stage, .jrn-gallery__neighbour, .jrn-gallery__outgoing { grid-area: 1 / 1; width: min(68cqw, 120cqh); height: min(100cqh, 56.67cqw); border: 2px solid var(--line); border-radius: 12%; corner-shape: squircle; overflow: hidden; background: var(--bg-elev); }
+.jrn-gallery__stage, .jrn-gallery__neighbour, .jrn-gallery__outgoing { grid-area: 1 / 1; width: min(68cqw, 120cqh); height: min(100cqh, 56.67cqw); border: 2px solid var(--line); border-radius: 12%; corner-shape: squircle; overflow: hidden; background: var(--bg-elev); container-type: size; }
 .jrn-gallery__stage, .jrn-gallery__outgoing { position: relative; z-index: 10; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; }
 .jrn-gallery__outgoing { z-index: 11; pointer-events: none; }
 .jrn-gallery__stage, .jrn-gallery__neighbour { transition: border-color .2s ease, box-shadow .2s ease; }
 .jrn-gallery__stage:has(> [data-jzoom]:focus-visible), .jrn-gallery__neighbour:focus-visible { border-color: var(--accent); box-shadow: 0 12px 28px rgb(0 0 0 / .24); }
 @media (hover: hover) and (pointer: fine) {
-	.jrn-gallery__stage:has(> [data-jzoom]):hover, .jrn-gallery__neighbour:hover { border-color: var(--accent); box-shadow: 0 12px 28px rgb(0 0 0 / .24); }
+	.jrn-gallery__stage:has(> [data-jzoom]):hover, .jrn-gallery__neighbour:hover { box-shadow: 0 12px 28px rgb(0 0 0 / .24); }
 }
 @media (prefers-reduced-motion: no-preference) {
 	.jrn-gallery__stage, .jrn-gallery__neighbour { transition: translate .22s ease, filter .22s ease, border-color .2s ease, box-shadow .2s ease; }
@@ -125,7 +125,7 @@ body:has(> .jrn-detail:not([hidden])) > .pjx { cursor: auto; }
 	.jrn-gallery__neighbour:hover { translate: 0 -8px; filter: brightness(calc(.76 - var(--jrn-depth) * .18)); }
 }
 .jrn-gallery__neighbour { position: relative; padding: 0; cursor: pointer; transform: translateX(calc(var(--jrn-offset) * 9%)) scale(calc(1 - var(--jrn-depth) * .09)); z-index: calc(9 - var(--jrn-depth)); filter: brightness(calc(.64 - var(--jrn-depth) * .18)); }
-.jrn-gallery__fill { position: absolute; inset: -48px; z-index: 0; background: center / cover no-repeat; filter: blur(24px) brightness(.65); pointer-events: none; }
+.jrn-gallery__fill { position: absolute; inset: -16cqmin; z-index: 0; background: center / cover no-repeat; filter: blur(8cqmin) brightness(.65); pointer-events: none; }
 .jrn-gallery__stage > [data-jzoom], .jrn-gallery__outgoing > [data-jzoom], .jrn-gallery__neighbour > img { position: relative; z-index: 1; }
 .jrn-gallery__neighbour img, .jrn-gallery__neighbour video { width: 100%; height: 100%; object-fit: contain; }
 .jrn-gallery__stage button, .jrn-gallery__outgoing button { width: 100%; height: 100%; min-height: 0; min-width: 0; display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }

@@ -1253,14 +1253,18 @@ test('Journey gallery reacts to hover and animates directional changes with safe
     await page.getByRole('button',{name:'Media 4',exact:true}).click();
     const settled=()=>page.waitForFunction(()=>!document.querySelector('.jrn-gallery__outgoing') && !document.querySelector('.jrn-gallery').getAnimations({subtree:true}).some(a=>a.effect.getTiming().duration===420));
     await settled();
+    const frontBorder=await page.locator('.jrn-gallery__stage').evaluate(e=>getComputedStyle(e).borderColor);
     await page.locator('.jrn-gallery__stage').hover();
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__stage')).translate==='0px -5px');
+    assert.equal(await page.locator('.jrn-gallery__stage').evaluate(e=>getComputedStyle(e).borderColor),frontBorder);
     assert.notEqual(await page.locator('.jrn-gallery__stage').evaluate(e=>getComputedStyle(e).boxShadow),'none');
     const rear=page.locator('.jrn-gallery__neighbour[data-jindex="4"]');
     const rearBox=await rear.boundingBox();
+    const rearBorder=await rear.evaluate(e=>getComputedStyle(e).borderColor);
     await rear.hover({position:{x:rearBox.width-6,y:rearBox.height/2}});
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='0px -8px');
     assert.equal(await rear.evaluate(e=>getComputedStyle(e).filter),'brightness(0.58)');
+    assert.equal(await rear.evaluate(e=>getComputedStyle(e).borderColor),rearBorder);
     await page.mouse.move(0,0);
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='none');
     await rear.focus();
@@ -1268,6 +1272,7 @@ test('Journey gallery reacts to hover and animates directional changes with safe
     await rear.focus();
     await page.waitForFunction(()=>document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]').matches(':focus-visible'));
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='0px -8px');
+    assert.notEqual(await rear.evaluate(e=>getComputedStyle(e).borderColor),rearBorder);
     await page.locator('[data-jadvance="1"]').focus();
     await page.waitForFunction(()=>getComputedStyle(document.querySelector('.jrn-gallery__neighbour[data-jindex="4"]')).translate==='none');
     const movement=await page.evaluate(()=>{
@@ -1324,6 +1329,50 @@ test('Journey gallery reacts to hover and animates directional changes with safe
     assert.equal(await page.locator('#journey-detail').count(),0);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
+});
+
+test('Journey transparent-image blur retains proportional fill from mobile to 4K without altering originals', {skip:!baseURL,timeout:60000}, async () => {
+  const browser=await chromium.launch(launchOptions);
+  try {
+    const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'});
+    const published=await journeyFixture(page);
+    const source='data:image/svg+xml;base64,'+Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect x="30" y="40" width="140" height="120" fill="#46a0dc"/></svg>').toString('base64');
+    published.journey.chapters[0].entries[0].images=[{src:source,caption:'Transparent original'},...published.journey.chapters[0].entries[0].images];
+    const original=structuredClone(published),samples=[];
+    await page.addInitScript(()=>localStorage.setItem('rk:theme','night'));
+    await page.goto(baseURL+'/?view=about');
+    await page.getByRole('button',{name:'Edge onboarding',exact:true}).click();
+    for(const viewport of [{width:390,height:844},{width:1440,height:900},{width:2560,height:1440},{width:3840,height:2160}]) {
+      await page.setViewportSize(viewport);
+      const card=page.locator('.jrn-gallery__stage');
+      await card.locator('img').evaluate(image=>image.decode());
+      const geometry=await card.evaluate(element=>{
+        const fill=getComputedStyle(element.querySelector('.jrn-gallery__fill'));
+        return {width:element.clientWidth,height:element.clientHeight,blur:parseFloat(fill.filter.match(/blur\(([\d.]+)px\)/)[1]),inset:parseFloat(fill.top),fit:getComputedStyle(element.querySelector('img')).objectFit,sharp:getComputedStyle(element.querySelector('img')).filter};
+      });
+      const pixels=await page.evaluate(async encoded=>{
+        const image=new Image();image.src='data:image/png;base64,'+encoded;await image.decode();
+        const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+        const context=canvas.getContext('2d');context.drawImage(image,0,0);
+        return [[.5,.1],[.08,.5],[.92,.5],[.5,.9],[.5,.5]].map(([x,y])=>[...context.getImageData(Math.floor(x*image.width),Math.floor(y*image.height),1,1).data]);
+      },(await card.screenshot()).toString('base64'));
+      samples.push({viewport,...geometry,pixels});
+      assert.deepEqual(pixels.at(-1),[70,160,220,255],'The sharp original must retain its exact centre pixel');
+      assert.equal(geometry.fit,'contain');assert.equal(geometry.sharp,'none');
+    }
+    for(const sample of samples) {
+      for(const [index,pixel] of sample.pixels.slice(0,4).entries()) {
+        assert.ok(pixel[2]>40 && pixel[2]>pixel[0]*1.5,'Transparent gaps must receive the image colour: '+JSON.stringify(samples));
+        assert.ok(pixel.slice(0,3).every((channel,i)=>Math.abs(channel-samples[0].pixels[index][i])<=12),'Normalized background coverage must remain consistent at every resolution: '+JSON.stringify(samples));
+      }
+      assert.ok(Math.abs(sample.blur/Math.min(sample.width,sample.height)-.08)<.001,JSON.stringify(sample));
+      assert.ok(Math.abs(sample.inset+sample.blur*2)<.1,JSON.stringify(sample));
+    }
+    await page.getByRole('button',{name:'Media 2',exact:true}).click();
+    const rear=page.locator('.jrn-gallery__neighbour[data-jindex="0"]');
+    assert.equal(await rear.locator('.jrn-gallery__fill').evaluate(element=>element.style.backgroundImage.includes('data:image/svg+xml;base64,')),true);
+    assert.deepEqual(await page.evaluate(()=>RK.data),original);
+  } finally {await browser.close();}
 });
 
 test('Journey blurred fill supports large unpublished image data without changing original pixels', {skip:!baseURL,timeout:60000}, async () => {
@@ -1452,9 +1501,10 @@ test('Journey proposal supports stacked media, three desktop layouts and a mobil
       const stage=page.locator('.jrn-gallery__stage');
       const fill=await stage.evaluate(element=>{
         const background=getComputedStyle(element.querySelector('.jrn-gallery__fill')),image=element.querySelector('img'),foreground=getComputedStyle(image);
-        return {source:background.backgroundImage.includes(image.src),size:background.backgroundSize,filter:background.filter,pointer:background.pointerEvents,fit:foreground.objectFit,sharp:foreground.filter,clip:getComputedStyle(element).overflow};
+        const blur=parseFloat(background.filter.match(/blur\(([\d.]+)px\)/)[1]);
+        return {source:background.backgroundImage.includes(image.src),size:background.backgroundSize,proportional:Math.abs(blur/Math.min(element.clientWidth,element.clientHeight)-.08)<.001,dimmed:background.filter.endsWith('brightness(0.65)'),pointer:background.pointerEvents,fit:foreground.objectFit,sharp:foreground.filter,clip:getComputedStyle(element).overflow};
       });
-      assert.deepEqual(fill,{source:true,size:'cover',filter:'blur(24px) brightness(0.65)',pointer:'none',fit:'contain',sharp:'none',clip:'hidden'});
+      assert.deepEqual(fill,{source:true,size:'cover',proportional:true,dimmed:true,pointer:'none',fit:'contain',sharp:'none',clip:'hidden'});
       assert.equal(await stage.evaluate(element=>getComputedStyle(element).borderTopLeftRadius),'12%');
     };
     await assertImageFill();
