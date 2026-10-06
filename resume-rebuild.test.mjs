@@ -62,14 +62,11 @@ test('Feedback rebuild uses all findings and job context, revises content and re
   assert.deepEqual(document, before);
 });
 
-test('Rebuild rejects partial fields, omitted roles, dropped metrics, unsupported skills and invented success', async () => {
+test('Rebuild rejects incomplete structure, invalid citations and invented success', async () => {
   for (const change of [
     result => { result.fields.pop(); return result; },
     result => { result.entryOrder[0].itemIds.pop(); return result; },
     result => { result.fixes.pop(); return result; },
-    result => { result.fields.find(field => field.text.includes('20%')).text = 'Improved task completion.'; return result; },
-    result => { result.fields.find(field => field.text.includes('20%')).text = 'Improved task completion by 90%.'; return result; },
-    result => { result.fields.find(field => field.id.endsWith('.items')).text += ', UnsupportedCRM'; return result; },
     result => { result.fixes[1] = { id: 'fix-1', status: 'applied', reason: 'Added revenue', fieldIds: [] }; return result; },
     result => { result.fields[0].evidence = ['made-up']; return result; },
     result => { result.model = { name: 'Someone Else' }; return result; },
@@ -80,6 +77,93 @@ test('Rebuild rejects partial fields, omitted roles, dropped metrics, unsupporte
     const document = fixture(), before = structuredClone(document);
     await assert.rejects(rebuildResumeWithAI(document, options(document, change)), /Resume rebuild:|not supported/);
     assert.deepEqual(document, before);
+  }
+});
+
+test('Mixed rebuild retains rejected metrics and skills, saves valid edits and records honest field-level outcomes', async () => {
+  const document = fixture(), before = structuredClone(document), packet = resumeRebuildPacket(document);
+  const metric = packet.fields.find(field => field.text.includes('20%'));
+  const skills = packet.fields.find(field => field.existingSkills);
+  assert.deepEqual(metric.preserveNumbers, ['20%']);
+  assert.deepEqual(skills.existingSkills, ['Research', 'Figma']);
+  let calls = 0;
+  const next = await rebuildResumeWithAI(document, { ...options(document), complete: async request => {
+    calls++;
+    assert.match(request.system, /return that field's original text/);
+    const result = response(JSON.parse(request.user));
+    result.fields.find(field => field.id === metric.id).text = 'Improved task completion by 90%.';
+    result.fields.find(field => field.id === skills.id).text += ', UnsupportedCRM';
+    result.fixes[1] = { id: 'fix-1', status: 'applied', reason: 'Everything fixed.', fieldIds: ['summary', metric.id, skills.id] };
+    result.summary = 'All feedback fixed.';
+    return result;
+  } });
+  assert.equal(calls, 1);
+  assert.equal(next.aiRebuild.outcome, 'partial');
+  assert.equal(next.aiRebuild.retainedFields.length, 2);
+  assert.match(next.aiRebuild.retainedFields[0].reason, /Not retained: 20%.*New or changed: 90%/);
+  assert.match(next.aiRebuild.retainedFields[1].reason, /UnsupportedCRM/);
+  assert.equal(next.aiRebuild.retainedFields[0].original, metric.text);
+  assert.equal(next.aiRebuild.retainedFields[1].original, skills.text);
+  assert.deepEqual(next.aiRebuild.changedFields, ['summary']);
+  assert.equal(next.aiRebuild.fixes[0].status, 'applied');
+  assert.equal(next.aiRebuild.fixes[1].status, 'needs-attention');
+  assert.notEqual(next.aiRebuild.fixes[1].reason, 'Everything fixed.');
+  assert.match(next.aiRebuild.summary, /not all feedback was applied/);
+  assert.deepEqual(next.model.sections, document.model.sections);
+  assert.deepEqual(next.model.contact, document.model.contact);
+  assert.deepEqual(next.atsChecks[0].review, document.aiReview);
+  assert.deepEqual(document, before);
+});
+
+test('Rejected-only output never creates an unchanged success copy or sends another AI request', async () => {
+  const document = fixture(), before = structuredClone(document);
+  let calls = 0;
+  await assert.rejects(rebuildResumeWithAI(document, { ...options(document), complete: async request => {
+    calls++;
+    const result = response(JSON.parse(request.user));
+    result.fields.find(field => field.id === 'summary').text = document.model.summary;
+    const metric = result.fields.find(field => field.text.includes('20%'));
+    metric.text = 'Improved task completion.';
+    result.fixes[0] = { id: 'fix-0', status: 'already-satisfied', reason: 'Summary unchanged.', fieldIds: ['summary'] };
+    result.fixes[1] = { id: 'fix-1', status: 'applied', reason: 'Revised achievement.', fieldIds: [metric.id] };
+    return result;
+  } }), /no edits passed validation.*20%.*original is unchanged/);
+  assert.equal(calls, 1); assert.deepEqual(document, before);
+});
+
+test('Rebuild preserves numeric magnitudes and plus signs instead of accepting changed metrics', async () => {
+  for (const replacement of ['175K', '175M+', '250M', '80', '175']) {
+    const document = fixture();
+    const bullet = document.model.sections.find(section => section.kind === 'experience').items[0].bullets[0];
+    bullet.text = 'Served 175K+ people across 250M+ requests with 80% completion.';
+    const packet = resumeRebuildPacket(document);
+    assert.deepEqual(packet.fields.find(field => field.id === bullet.id).preserveNumbers, ['175K+', '250M+', '80%']);
+    const next = await rebuildResumeWithAI(document, options(document, result => {
+      result.fields.find(field => field.id === bullet.id).text = 'Served ' + replacement + ' people.';
+      return result;
+    }));
+    assert.equal(next.aiRebuild.outcome, 'partial');
+    assert.equal(next.aiRebuild.retainedFields[0].fieldId, bullet.id);
+    assert.equal(next.model.sections.find(section => section.kind === 'experience').items[0].bullets[0].text, bullet.text);
+  }
+});
+
+test('Skill evidence accepts case/whitespace equivalence but not substrings or invented skills', async () => {
+  const document = fixture();
+  document.model.sections.find(section => section.kind === 'skills').groups[0].items = ['User research', 'Figma', 'Ongoing research'];
+  const next = await rebuildResumeWithAI(document, options(document, result => {
+    result.fields.find(field => field.id.endsWith('.items')).text = 'FIGMA, User   research, Ongoing research';
+    return result;
+  }));
+  assert.equal(next.aiRebuild.outcome, 'complete');
+  for (const skill of ['Go', 'UnsupportedCRM']) {
+    const rejected = await rebuildResumeWithAI(document, options(document, result => {
+      result.fields.find(field => field.id.endsWith('.items')).text += ', ' + skill;
+      return result;
+    }));
+    assert.equal(rejected.aiRebuild.outcome, 'partial');
+    assert.match(rejected.aiRebuild.retainedFields[0].reason, new RegExp(skill));
+    assert.deepEqual(rejected.model.sections, document.model.sections);
   }
 });
 

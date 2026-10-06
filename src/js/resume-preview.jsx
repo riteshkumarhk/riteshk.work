@@ -1510,7 +1510,11 @@ function App() {
       setDialog(null); setAiConsent(false);
       const unresolved = result.aiRebuild.fixes.filter(fix => fix.status === "needs-fact").length;
       const unreadable = result.importNotes?.unmappedGlyphs || result.importNotes?.unresolvedMarkers || 0;
-      setMessage("Resume rebuilt using ATS feedback." + (unresolved ? " " + unresolved + " findings need facts; see Rebuild details." : "") + (unreadable ? " " + unreadable + " unreadable source characters need review." : "") + " Run ATS check when you are ready.");
+      const outcome = result.aiRebuild.outcome === "partial"
+        ? "Validated edits saved. " + result.aiRebuild.retainedFields.length + " fields kept unchanged; open Needs attention. Not all feedback was applied."
+        : result.aiRebuild.outcome === "unchanged" ? "No supported wording or order changes were needed; see Rebuild details."
+        : "Resume rebuilt using ATS feedback.";
+      setMessage(outcome + (unresolved ? " " + unresolved + " findings need facts; see Rebuild details." : "") + (unreadable ? " " + unreadable + " unreadable source characters need review." : "") + " Run ATS check when you are ready.");
     } catch (failure) {
       if (task.current === currentTask && !currentTask.signal.aborted) {
         if (!hosted) setDialog(null);
@@ -2015,6 +2019,7 @@ function App() {
     );
   const fields = resumeFields(doc.model),
     currentSection = doc.model.sections.find((section) => section.id === group);
+  const pendingRebuildFields = (doc.aiRebuild?.retainedFields || []).filter(issue => fields.some(field => field.id === issue.fieldId && field.value === issue.original));
   const widthScale = Math.min(1, Math.max(1, availableWidth) / pageInfo.width);
   const scale = zoom === "page" ? Math.min(widthScale, Math.max(1, availableHeight) / pageInfo.pageHeight)
     : zoom === "fit" ? widthScale : zoom;
@@ -2324,6 +2329,7 @@ function App() {
               </button>
             ))}
           </div>}
+          {mode === "edit" && pendingRebuildFields.length > 0 && <button className="adm__bar-prev" disabled={!!busy} onClick={() => setDialog("rebuild-details")}><CircleAlert size={15} /><span className="adm__bar-prev-tx">Needs attention ({pendingRebuildFields.length})</span></button>}
           {hosted && mode === "edit" && <button className="adm__bar-prev" disabled={!!busy} onClick={openAtsCheck}><ScanText size={15} /><span className="adm__bar-prev-tx">ATS check</span></button>}
           <button
             className="adm__bar-prev rws-preview-pdf"
@@ -3134,6 +3140,18 @@ function App() {
       {dialog === "rebuild-details" && doc.aiRebuild && <Dialog title="Rebuild details" onClose={() => setDialog(null)} actions={<button className="btn" onClick={() => setDialog(null)}>Close</button>}>
         <p>{doc.aiRebuild.summary}</p>
         <p>No new ATS check has been run by rebuilding. Choose ATS check when you want fresh results.</p>
+        {doc.aiRebuild.retainedFields?.length > 0 && <>
+          <h3>Fields kept unchanged during rebuild</h3>
+          {doc.aiRebuild.retainedFields.map(issue => {
+            const field = fields.find(field => field.id === issue.fieldId);
+            return <section className="rws-review-finding" key={issue.fieldId}>
+              <h4>{doc.model.sections.find(section => section.id === issue.group)?.heading || issue.group} / {issue.label}</h4>
+              <p>{issue.reason}</p><blockquote>{issue.original}</blockquote>
+              {field && field.value !== issue.original && <p>Edited since rebuild; not rechecked.</p>}
+              {field && <button className="btn btn--ghost" onClick={() => { setDialog(null); selectDocumentField(field.group, field.id); }}>Review {issue.label}</button>}
+            </section>;
+          })}
+        </>}
         {(doc.importNotes?.unmappedGlyphs > 0 || doc.importNotes?.unresolvedMarkers > 0) && <p className="rws-inline-warning">The original contains unreadable characters. Their replacement markers remain in the resume; review them against your original rather than guessing.</p>}
         {doc.aiRebuild.fixes.map(fix => <section className="rws-review-finding" key={fix.id}><h4>{fix.finding}</h4><p>{fix.status.replaceAll("-", " ")}: {fix.reason}</p></section>)}
       </Dialog>}

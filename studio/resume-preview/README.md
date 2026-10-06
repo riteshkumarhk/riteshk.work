@@ -72,6 +72,18 @@ history now includes an **ATS checks** tab with dated, read-only results,
 targets and submitted text. Older document snapshots are labelled as such;
 unavailable checked text is disclosed rather than replaced with today's draft.
 Opening history runs no AI, restores nothing and creates no version checkpoint.
+If an otherwise valid response changes source numbers or introduces unsupported
+skills, only those fields retain their exact original wording; other validated
+edits can form a separate copy. The editor explicitly reports partial completion,
+with **Needs attention** linking to field-specific reasons, retained text and
+document targets. Related findings are not marked applied, and the provider's
+success summary is not shown for partial results. Notes persist after reload;
+fields edited since rebuilding are labelled as not rechecked. Rebuild never
+invents missing skills or purchases an automatic repair call. If no wording or
+ordering change validates, no rebuilt copy is created. Malformed/incomplete
+responses, invalid citations and stale/cancelled requests still fail closed.
+The prompt supplies each field's numeric tokens and original skill list;
+numeric magnitude suffixes and plus signs must remain intact.
 Visible versions remain export/manual checkpoints only.
 Every supported section's authored bullet text, including education/custom
 entries, prints and remains subject to strict PDF text verification. Original

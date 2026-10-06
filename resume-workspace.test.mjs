@@ -12,6 +12,7 @@ import { createHostedResumeClient, resumeSaveFailureFeedback } from './src/js/re
 import { extractResumePdfText, structureResumeText, resumeNeedsSourceRebuild } from './src/js/resume-workspace.mjs';
 import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorReview } from './src/js/resume-ats.mjs';
 import { AI_TEXT_REQUEST_ATTEMPTS } from './src/js/ai-request-limits.mjs';
+import { rebuildResumeWithAI } from './src/js/resume-rebuild.mjs';
 import { assertStudioToolbar, assertResumeViewTools } from './tools/studio-toolbar-assertions.mjs';
 
 test('Resume save feedback gives evidence-based causes and recovery without ineffective auth retry', () => {
@@ -1413,6 +1414,50 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(requests, []); assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
+  test('Partial rebuild notes survive reload and target retained fields without another AI call', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'partial-rebuild-original';
+    document.model.sections.push({ id: 'skills', kind: 'skills', heading: 'Skills', groups: [{ id: 'tools', label: 'Tools', items: ['Figma', 'Research'] }] });
+    document.aiReview = atsEditorReview(document, { at: 100, res: { score: 63, fixes: [{ point: 'Clarify summary' }, { point: 'Clarify skills and achievements' }] } });
+    const original = preview.store.create(document);
+    let calls = 0;
+    const rebuilt = await rebuildResumeWithAI(document, { provider: 'fixture', model: 'scripted', getCurrent: () => document, complete: async request => {
+      calls++;
+      const packet = JSON.parse(request.user);
+      return { fields: packet.fields.map(field => ({ id: field.id,
+        text: field.id === 'summary' ? 'Research-led product designer.' : field.id === 'bullet-0' ? 'Improved outcomes by 99%.' : field.id === 'tools.items' ? 'Figma, Research, UnsupportedCRM' : field.text,
+        evidence: [packet.evidence.find(item => item.fieldId === field.id).id] })),
+        sectionOrder: packet.sections.map(section => section.id), entryOrder: [],
+        fixes: [{ id: 'fix-0', status: 'applied', reason: 'Clarified summary.', fieldIds: ['summary'] },
+          { id: 'fix-1', status: 'applied', reason: 'All fixed.', fieldIds: ['bullet-0', 'tools.items'] }],
+        summary: 'All feedback fixed.' };
+    } });
+    preview.store.create(rebuilt);
+    const { page, context, errors } = await openSample(rebuilt.id, 1440, false);
+    let extraCalls = 0;
+    await page.route('**/__resume/api/ai/**', route => { extraCalls++; return route.abort(); });
+    try {
+      await page.reload(); await saved(page);
+      await page.getByRole('button', { name: 'Needs attention (2)', exact: true }).click();
+      const details = page.getByRole('dialog', { name: 'Rebuild details', exact: true });
+      assert.match(await details.innerText(), /not all feedback was applied/);
+      assert.match(await details.innerText(), /99%/);
+      assert.match(await details.innerText(), /UnsupportedCRM/);
+      assert.match(await details.innerText(), /needs attention: Not fully applied/);
+      assert.doesNotMatch(await details.innerText(), /All feedback fixed|All fixed/);
+      await details.getByRole('button', { name: 'Review Skills', exact: true }).click();
+      await page.frameLocator('.rws-paper').locator('[data-field="tools.items"].rws-active-field').waitFor();
+      await fillInline(page, 'tools.items', 'Figma, Research, Author-confirmed skill'); await saved(page);
+      await page.getByRole('button', { name: 'Needs attention (1)', exact: true }).click();
+      assert.match(await details.innerText(), /Edited since rebuild; not rechecked/);
+      await details.getByRole('button', { name: 'Close', exact: true }).click();
+      await page.reload(); await saved(page);
+      await page.getByRole('button', { name: 'Needs attention (1)', exact: true }).waitFor();
+      assert.equal(preview.store.get(rebuilt.id).document.model.summary, 'Research-led product designer.');
+      assert.equal(preview.store.get(rebuilt.id).document.model.sections[0].items[0].bullets[0].text, 'Authored achievement 1');
+      assert.deepEqual(preview.store.get(document.id), original);
+      assert.equal(calls, 1); assert.equal(extraCalls, 0); assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
   test('Review stays left while cited fields edit on the page without changing the ATS result', { timeout: 90000 }, async () => {
     const document = fixture(); document.id = 'coherent-review';
     document.model.sections[0].items[0].bullets[0].text = 'Distinct authored contribution.';
@@ -1992,7 +2037,7 @@ describe('Resume browser acceptance', () => {
           if (window.invalidRebuild) return { text: "invalid JSON" };
           const packet = JSON.parse(input.user);
           return { text: JSON.stringify({
-            fields: packet.fields.map(field => ({ id: field.id, text: field.id === 'summary' ? 'Accessible services designed through research.' : field.text, evidence: [packet.evidence.find(item => item.fieldId === field.id).id] })),
+            fields: packet.fields.map(field => ({ id: field.id, text: field.id === 'summary' ? 'Accessible services designed through research.' : window.partialRebuild && field.id === packet.fields.find(item => item.label === 'Achievement')?.id ? field.text + ' Improved by 99%.' : field.text, evidence: [packet.evidence.find(item => item.fieldId === field.id).id] })),
             sectionOrder: packet.sections.map(section => section.id),
             entryOrder: [],
             fixes: packet.fixes.map((fix, index) => ({ id: fix.id, status: index === 0 ? 'applied' : 'needs-fact', reason: index === 0 ? 'Clarified research approach.' : 'More source facts are needed.', fieldIds: index === 0 ? ['summary'] : [] })),
@@ -2048,7 +2093,7 @@ describe('Resume browser acceptance', () => {
       assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1);
       assert.equal(await page.locator('.atsv').isVisible(), true);
       assert.equal(await page.locator('.adm__resume-host').isVisible(), false);
-      await page.evaluate(() => { window.deferRebuild = false; window.releaseRebuild(); });
+      await page.evaluate(() => { window.partialRebuild = true; window.deferRebuild = false; window.releaseRebuild(); });
       await page.locator('.resume-rebuild-progress').waitFor({ state: 'detached' });
       await page.locator('.adm__resume-host').waitFor({ state: 'visible' });
       const repaired = (await store.list()).documents.find(row => row.document.rebuiltFrom?.id === brokenImport.document.id).document;
@@ -2057,6 +2102,14 @@ describe('Resume browser acceptance', () => {
       assert.equal(repaired.model.contact.phone, '+44 1234567890');
       assert.equal(resumeNeedsSourceRebuild(repaired), false);
       assert.equal(repaired.model.summary, 'Accessible services designed through research.');
+      assert.equal(repaired.aiRebuild.outcome, 'partial');
+      assert.equal(repaired.aiRebuild.retainedFields.length, 1);
+      await editor.getByRole('button', { name: 'Needs attention (1)', exact: true }).click();
+      const rebuildDetails = editor.getByRole('dialog', { name: 'Rebuild details', exact: true });
+      assert.match(await rebuildDetails.innerText(), /not all feedback was applied/);
+      assert.match(await rebuildDetails.innerText(), /New or changed: 99%/);
+      await rebuildDetails.getByRole('button', { name: 'Review Achievement', exact: true }).click();
+      await editor.frameLocator('.rws-paper').locator(`[data-field="${repaired.aiRebuild.retainedFields[0].fieldId}"].rws-active-field`).waitFor();
       assert.equal(repaired.aiReview, undefined, 'The previous score is not a review of the rebuilt resume');
       assert.equal(repaired.atsChecks[0].review.score, 62);
       assert.equal(await editor.getByRole('complementary', { name: 'Resume review', exact: true }).isVisible(), false);
