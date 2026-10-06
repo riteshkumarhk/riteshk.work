@@ -80,6 +80,28 @@ test('Rebuild rejects incomplete structure, invalid citations and invented succe
   }
 });
 
+test('Rebuild can title unlabeled skill groups without changing skills or existing headings', async () => {
+  const document = fixture(), before = structuredClone(document);
+  const group = document.model.sections.find(section => section.kind === 'skills').groups[0];
+  const next = await rebuildResumeWithAI(document, { ...options(document), complete: async request => {
+    const packet = JSON.parse(request.user);
+    assert.match(request.system, /two-page A4 resume is a layout goal/);
+    assert.deepEqual(packet.unlabeledSkillGroups, [{ id: group.id, fieldId: group.id + '.label', items: group.items }]);
+    const result = response(packet);
+    result.fixes[1] = { id: 'fix-1', status: 'applied', reason: 'Added an editorial heading.', fieldIds: [group.id + '.label'] };
+    return { ...result, skillLabels: [{ id: group.id, label: 'Design & research' }] };
+  } });
+  const revised = next.model.sections.find(section => section.kind === 'skills').groups[0];
+  assert.equal(revised.label, 'Design & research');
+  assert.deepEqual(revised.items, group.items);
+  assert.deepEqual(document, before);
+  for (const skillLabels of [[{ id: 'unknown', label: 'Design & research' }], [{ id: group.id, label: '10 years of design' }], [{ id: group.id, label: 'UnsupportedCRM' }], [{ id: group.id, label: 'Design & research', items: ['Invented'] }]]) {
+    await assert.rejects(rebuildResumeWithAI(document, options(document, result => ({ ...result, skillLabels }))), /invalid skill group title/);
+  }
+  document.model.sections.find(section => section.kind === 'skills').groups[0].label = 'Authored title';
+  await assert.rejects(rebuildResumeWithAI(document, options(document, result => ({ ...result, skillLabels: [{ id: group.id, label: 'Replacement' }] }))), /invalid skill group title/);
+});
+
 test('Mixed rebuild retains rejected metrics and skills, saves valid edits and records honest field-level outcomes', async () => {
   const document = fixture(), before = structuredClone(document), packet = resumeRebuildPacket(document);
   const metric = packet.fields.find(field => field.text.includes('20%'));

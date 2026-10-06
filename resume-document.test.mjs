@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createResume, createResumeHistory, editResumeField, resumeSignature } from './src/js/resume-workspace.mjs';
 import { resumeBody, renderResumeHtml } from './src/js/resume-render.mjs';
-import { resumeContactItems, resumeSectionColumn, reorderResumeItems, validateResumeOrder } from './src/js/resume-document.mjs';
+import { resumeContactItems, resumeSectionColumn, reorderResumeItems, validateResumeOrder, resumeEntryDate, organizeResumeDates } from './src/js/resume-document.mjs';
 import { RESUME_ICON_PATHS, resumeIcon } from './src/js/resume-icons.mjs';
 
 const fixture = () => createResume({
@@ -90,7 +90,7 @@ test('Resume detail icons accompany real text in editor and print without becomi
   assert.deepEqual(document, before);
   document.model.sections[0].items[0].dates = '';
   assert.doesNotMatch(resumeBody(document), /data-resume-icon="cal"/);
-  assert.match(resumeBody(document, true), /data-resume-icon="cal"/);
+  assert.doesNotMatch(resumeBody(document, true), /data-resume-icon="cal"/);
   assert.throws(() => resumeIcon('unknown'), /Unknown resume detail icon/);
 });
 
@@ -104,5 +104,49 @@ test('Education dates share the calendar icon without printing icons for empty d
   }
   document.model.sections[0].items[0].dates = '';
   assert.doesNotMatch(resumeBody(document), /data-resume-icon="cal"/);
-  assert.match(resumeBody(document, true), /data-resume-icon="cal"/);
+  assert.doesNotMatch(resumeBody(document, true), /data-resume-icon="cal"/);
+});
+
+test('Source dates move only from unambiguous metadata boundaries and never overwrite authored dates', () => {
+  for (const [meta, dates, remaining] of [
+    ['Microsoft \u2022 Aug 2024', 'Aug 2024', 'Microsoft'],
+    ['Federation \u2022 Oct\n2021', 'Oct 2021', 'Federation'],
+    ['Event\nNovember 2020', 'November 2020', 'Event'],
+    ['2024', '2024', ''],
+    ['Example | 03/2020 - Present', '03/2020 - Present', 'Example'],
+  ]) assert.deepEqual(resumeEntryDate({ meta }), { dates, meta: remaining });
+  for (const meta of ['Design certification', 'https://example.test/2024', 'Presented Authenticate 2024', 'Changed since Oct 2024', 'Example \u2022 99/2024']) {
+    assert.equal(resumeEntryDate({ meta }), null);
+  }
+  assert.equal(resumeEntryDate({ meta: 'Example \u2022 Aug 2024', dates: '2023' }), null);
+  assert.equal(resumeEntryDate({ meta: 'Example \ufffd Oct\n2021' }), null, 'An unrecovered separator must not split a month from its year');
+  const model = fixture().model;
+  model.sections.push({ id: 'awards', kind: 'list', heading: 'Awards', items: [{ id: 'award', title: 'Example award', meta: 'Example \u2022 Aug 2024', dates: '', bullets: [] }] });
+  const before = structuredClone(model), organized = organizeResumeDates(model);
+  assert.deepEqual(model, before);
+  assert.equal(organized.sections.at(-1).items[0].dates, 'Aug 2024');
+  assert.deepEqual(organizeResumeDates(organized), organized);
+  const dateBullet = structuredClone(model);
+  dateBullet.sections.at(-1).items[0] = { id: 'speaker', title: 'Speaker', meta: 'Representative', dates: '', bullets: [{ id: 'event-date', text: 'Oct 2024' }, { id: 'achievement', text: 'Presented research findings' }] };
+  const recoveredBullet = organizeResumeDates(dateBullet).sections.at(-1).items[0];
+  assert.equal(recoveredBullet.dates, 'Oct 2024');
+  assert.deepEqual(recoveredBullet.bullets, [{ id: 'achievement', text: 'Presented research findings' }]);
+  const history = createResumeHistory(createResume({ model }));
+  history.record(createResume({ model: organized }));
+  assert.deepEqual(history.undo().model.sections.at(-1), before.sections.at(-1));
+});
+
+test('Optional empty fields take no canvas or export space and metadata wraps naturally', () => {
+  const document = fixture();
+  document.model.sections[1].groups[0].label = '';
+  document.model.sections.push({ id: 'education', kind: 'education', heading: 'Education', items: [{ id: 'school', school: 'Example University', credential: 'Degree', dates: '', note: '' }] },
+    { id: 'awards', kind: 'list', heading: 'Awards', items: [{ id: 'award', title: 'Award', dates: '', meta: 'First line\nSecond line', bullets: [] }] });
+  for (const interactive of [false, true]) {
+    const html = resumeBody(document, interactive);
+    assert.doesNotMatch(html, /data-field="(?:tools.label|school.note|school.dates|award.dates)"/);
+    assert.match(html, /First line\nSecond line/);
+  }
+  assert.match(renderResumeHtml(document), /\.resume-entry>p,.skill-group\{white-space:normal\}/);
+  document.model.sections.at(-1).items[0].meta = '';
+  assert.doesNotMatch(resumeBody(document, true), /data-field="award.meta"/);
 });

@@ -1,4 +1,5 @@
 import { atsKeywordMatch, atsSemanticFit, atsModelChecks, atsStructFromChecks, atsBlendScore, atsParseScore } from './ats-core.js';
+import { organizeResumeDates } from './resume-document.mjs';
 
 export const RESUME_DESIGN = Object.freeze({ font: 'inter', size: 'a4', accent: '#167d83', density: 'normal', margin: 'normal', layout: 'single', keepWhole: true });
 const copy = value => structuredClone(value);
@@ -177,7 +178,7 @@ export function structureResumeText(text) {
     model.sections.push(section);
   }
   warnings.push('Check the imported layout against the original before exporting. Original wording and unresolved characters are retained.');
-  return { model, warnings, method: 'Source-preserving section import v2' };
+  return { model: organizeResumeDates(model), warnings, method: 'Source-preserving section import v3' };
 }
 
 export function resumeFields(model) {

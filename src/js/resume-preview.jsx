@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { organizeResumeDates } from "./resume-document.mjs";
 import { createRoot } from "react-dom/client";
 import {
   Archive,
@@ -463,6 +464,7 @@ function App() {
   const [proposalDraft, setProposalDraft] = useState(null);
   const [aiConfiguration, setAiConfiguration] = useState(null);
   const rebuildActive = useRef(false), rebuildReady = useRef(null);
+  const assessmentActive = useRef(null);
   const [atsChecks, setAtsChecks] = useState([]), [historyTab, setHistoryTab] = useState("versions"), [selectedCheck, setSelectedCheck] = useState(null);
   const [aiConsent, setAiConsent] = useState(false);
   const [aiPacket, setAiPacket] = useState(null);
@@ -1288,7 +1290,7 @@ function App() {
   }, [findingContextOpen, focusedFinding, previewFieldIds, mode, rendering, zoom, pageInfo, availableWidth, availableHeight]);
   const reviewProposals = () => setProposals(sampleProposals(live.current.document, sources).map(proposal => ({ ...proposal, impact: projectResumeProposal(live.current.document, proposal, sources) })));
   const openAiReview = async () => {
-    if (hosted) { await openAtsCheck(); return; }
+    if (hosted) { await runHostedAssessment(); return; }
     setError(""); setAiConsent(false); setRequirementsConsent(false);
     setAiPacket(null); setAiConfiguration(null);
     setDialog("ai-review");
@@ -1441,11 +1443,6 @@ function App() {
     } catch (failure) { setError(failure.message); throw failure; }
     finally { setBusy(null); }
   };
-  const openAtsCheck = async () => {
-    setAiConsent(false); setError(''); setAiConfiguration(null); setDialog('ats-check');
-    try { setAiConfiguration(await studioBridge.configuration(window)); }
-    catch (failure) { setError(failure.message); }
-  };
   const openFeedbackRebuild = async (prepared = live.current.document) => {
     if (rebuildActive.current) return;
     rebuildActive.current = true; rebuildReady.current = null;
@@ -1526,12 +1523,16 @@ function App() {
     }
   };
   const runHostedAssessment = async () => {
-    if (busy || !aiConsent || !aiConfiguration?.available) return;
-    if (aiConfiguration.reviewResponseVersion !== 1) { setError("Studio needs to be reopened before this updated review can run. No AI request was made."); return; }
+    if (busy || assessmentActive.current && !assessmentActive.current.signal.aborted) return;
     const currentTask = createResumeTask(live.current.document);
+    assessmentActive.current = currentTask;
     task.current?.cancel(); task.current = currentTask;
     setBusy('ats-check'); setError('');
     try {
+      const configuration = await studioBridge.configuration(window);
+      if (task.current !== currentTask || currentTask.signal.aborted) return;
+      if (!configuration.available) throw new Error("Connect AI in Studio settings before running ATS check. No AI request was made.");
+      if (configuration.reviewResponseVersion !== 1) throw new Error("Studio needs to be reopened before this updated review can run. No AI request was made.");
       await persist();
       if (task.current !== currentTask || !currentTask.accept(live.current.document, {})) return;
       const artifact = await api('resumes/' + currentTask.snapshot.id + '/export', { method: 'POST', headers: { 'If-Match': String(live.current.version) }, body: '{"transient":true}', signal: currentTask.signal });
@@ -1551,7 +1552,10 @@ function App() {
       if (task.current !== currentTask || currentTask.signal.aborted) return;
       setDialog(null); setFocusedFinding(null); setFindingContextOpen(false); setPreviewFieldIds([]); openReview(); setMessage('ATS check saved for this resume and target.');
     } catch (failure) { if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message); }
-    finally { if (task.current === currentTask) { task.current = null; setBusy(null); } }
+    finally {
+      if (assessmentActive.current === currentTask) assessmentActive.current = null;
+      if (task.current === currentTask) { task.current = null; setBusy(null); }
+    }
   };
   const prepareCandidateExport = async (signal) => {
     signal.throwIfAborted();
@@ -2019,6 +2023,7 @@ function App() {
     );
   const fields = resumeFields(doc.model),
     currentSection = doc.model.sections.find((section) => section.id === group);
+  const hasSourceDates = JSON.stringify(organizeResumeDates(doc.model)) !== JSON.stringify(doc.model);
   const pendingRebuildFields = (doc.aiRebuild?.retainedFields || []).filter(issue => fields.some(field => field.id === issue.fieldId && field.value === issue.original));
   const widthScale = Math.min(1, Math.max(1, availableWidth) / pageInfo.width);
   const scale = zoom === "page" ? Math.min(widthScale, Math.max(1, availableHeight) / pageInfo.pageHeight)
@@ -2304,6 +2309,8 @@ function App() {
         </div>
         <div className="rws-workbar-actions">
           <div className="rws-preview-controls">
+          {hosted && mode === "edit" && <button className="adm__bar-prev" disabled={!!busy} aria-busy={busy === "ats-check"} title="Review the saved PDF using your configured Studio AI" onClick={runHostedAssessment}>{busy === "ats-check" ? <LoaderCircle size={15} className="is-spinning" /> : <ScanText size={15} />}<span className="adm__bar-prev-tx">{busy === "ats-check" ? "Checking..." : "ATS check"}</span></button>}
+          {busy === "ats-check" && <button className="adm__bar-prev" onClick={cancelAiReview}>Cancel check</button>}
           {mode === "edit" && <div className="adm__hm-seg rws-panel-toggle" role="tablist" aria-label="Workspace panels">
             {tabs.map(([id, Icon, label], index) => (
               <button
@@ -2330,7 +2337,6 @@ function App() {
             ))}
           </div>}
           {mode === "edit" && pendingRebuildFields.length > 0 && <button className="adm__bar-prev" disabled={!!busy} onClick={() => setDialog("rebuild-details")}><CircleAlert size={15} /><span className="adm__bar-prev-tx">Needs attention ({pendingRebuildFields.length})</span></button>}
-          {hosted && mode === "edit" && <button className="adm__bar-prev" disabled={!!busy} onClick={openAtsCheck}><ScanText size={15} /><span className="adm__bar-prev-tx">ATS check</span></button>}
           <button
             className="adm__bar-prev rws-preview-pdf"
             onClick={() =>
@@ -2352,6 +2358,10 @@ function App() {
             { label: "Download PDF", icon: FileDown, action: () => renderPdf(true) },
             { label: "Rename resume", icon: TextCursorInput, action: () => openDialog("rename", doc.name) },
             { label: "Duplicate resume", icon: Copy, action: () => openDialog("duplicate", doc.name + " / copy") },
+            ...(hasSourceDates ? [{ label: "Organize source dates", icon: List, action: () => {
+              mutate(next => { next.model = organizeResumeDates(next.model); }, "Organized source dates");
+              setMessage("Moved unambiguous dates from entry details into date fields. No dates were invented; Undo restores the previous arrangement.");
+            } }] : []),
             ...(doc.aiReview?.kind === "ats" ? [{ label: "Rebuild using ATS feedback", icon: RefreshCw, action: () => openFeedbackRebuild() }] : []),
             ...(doc.aiRebuild ? [{ label: "Rebuild details", icon: Info, action: () => setDialog("rebuild-details") }] : []),
             ...(originalFiles.length === 1 ? [{ label: "Rebuild from original", icon: RefreshCw, action: () => rebuildOriginal(originalFiles[0]) }] : []),
@@ -2724,8 +2734,8 @@ function App() {
                         {atsReview.summary && <p>{atsReview.summary}</p>}
                       </div>
                     </div>
-                    <div className="rws-score-actions"><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review again</button><button className="rws-text-button" disabled={!!busy} onClick={() => openFeedbackRebuild()}><Pencil size={13} />Rebuild using feedback</button></div>
-                  </> : <><div className="rws-panel-heading"><h3><BookOpen size={17} />Resume review</h3>{reviewContext}</div><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review resume"}</button></>}
+                    <div className="rws-score-actions"><button className="rws-text-button" disabled={!!busy} onClick={hosted ? runHostedAssessment : openAiReview}><RefreshCw size={13} />Review again</button><button className="rws-text-button" disabled={!!busy} onClick={() => openFeedbackRebuild()}><Pencil size={13} />Rebuild using feedback</button></div>
+                  </> : <><div className="rws-panel-heading"><h3><BookOpen size={17} />Resume review</h3>{reviewContext}</div><button className="rws-text-button" disabled={!!busy} onClick={hosted ? runHostedAssessment : openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review resume"}</button></>}
                   {busy?.startsWith("ai-") && <div className="rws-inline-actions"><span role="status">Review in progress</span><button className="rws-text-button" onClick={cancelAiReview}>Cancel</button></div>}
                   {doc.aiReview ? <>
                     {doc.aiReview.signature !== signature && <p role="status" className="rws-inline-warning">Resume, target or source changed. This review is historical; review again for an updated assessment.</p>}
@@ -2859,7 +2869,7 @@ function App() {
                       {decision.note && <p>{decision.note}</p>}
                       {decision.evidence && <div className="rws-review-passage"><small>{decision.evidence.label} / evidence recorded then</small><blockquote>{decision.evidence.text}</blockquote></div>}
                       {decision.archived?.proposal && <div className="rws-diff"><span>Original</span><p>{decision.archived.proposal.before}</p><span>Proposed then</span><p>{decision.archived.proposal.after}</p></div>}
-                      <button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review current resume</button>
+                      <button className="rws-text-button" disabled={!!busy} onClick={hosted ? runHostedAssessment : openAiReview}><RefreshCw size={13} />Review current resume</button>
                     </section>;
                   })}
                 </details>
@@ -3112,13 +3122,6 @@ function App() {
           }
           const bytes = new Uint8Array(await blob.arrayBuffer()); signal.throwIfAborted(); return bytes;
         }} />}
-      {dialog === 'ats-check' && <Dialog wide title="Re-check ATS" onClose={cancelAiReview} actions={<><button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button><button className="btn btn--primary" disabled={!!busy || !aiConsent || !aiConfiguration?.available} onClick={runHostedAssessment}>Run ATS check</button></>}>
-        <p className="pass__sub">{aiConfiguration?.available ? aiConfiguration.provider + ' / ' + aiConfiguration.model : 'Configure AI in Studio before running a check.'}</p>
-        <p>The current saved resume will be rendered to PDF and reviewed, with proposed revisions prepared in the same request. Supporting sources can inform revisions, not raise the current resume score. Nothing is applied automatically. Earlier reviews remain in history. This is a paid AI request using your Studio configuration.</p>
-        <details><summary>Resume, target and supporting sources sent for review</summary><pre>{resumeText(doc)}</pre><pre>{doc.target.jd || doc.target.level}</pre>{linkedSources.map(source => <details key={source.id}><summary>{source.name}</summary><pre>{source.text}</pre></details>)}</details>
-        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume, target and selected supporting sources to be sent for review and proposed revisions.</label>
-        {busy && <p role="status">Checking current PDF...</p>}{error && <p role="alert" className="rws-inline-warning">{error}</p>}
-      </Dialog>}
       {dialog === "ai-review" && <Dialog wide title="Review target requirements" onClose={cancelAiReview} actions={<>
         <button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button>
           <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !aiConsent || !aiPacket || !doc.target.jd.trim()} onClick={() => runAiReview("requirements")}>Build requirements</button>

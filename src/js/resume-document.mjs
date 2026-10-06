@@ -15,6 +15,35 @@ export function resumeSectionColumn(section) {
   return section.column || (['experience', 'text'].includes(section.kind) ? 'main' : 'side');
 }
 
+export function resumeEntryDate(item) {
+  if (item.dates?.trim() || !item.meta?.trim()) return null;
+  const month = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+  const date = `(?:${month}\\s+(?:19|20)\\d{2}|(?:0?[1-9]|1[0-2])[/.](?:19|20)\\d{2}|(?:19|20)\\d{2})`;
+  const match = item.meta.match(new RegExp(`^(?:(.*?)\\s*(?:[\\u2022|]|\\n)\\s*)?(${date}(?:\\s*(?:[-\\u2013\\u2014]|to)\\s*(?:${date}|present|current))?)\\s*$`, 'is'));
+  if (!match) return null;
+  if (/^\d{4}$/.test(match[2]) && new RegExp(`\\b${month}\\s*$`, 'i').test(match[1] || '')) return null;
+  return { dates: match[2].replace(/\s+/g, ' ').trim(), meta: (match[1] || '').trim() };
+}
+
+export function organizeResumeDates(model) {
+  const next = structuredClone(model);
+  for (const section of next.sections) {
+    if (['experience', 'education', 'skills', 'text', 'links'].includes(section.kind)) continue;
+    for (const item of section.items || []) {
+      const recovered = resumeEntryDate(item);
+      if (recovered) Object.assign(item, recovered);
+      else if (!item.dates?.trim()) {
+        const dates = (item.bullets || []).map(bullet => ({ bullet, recovered: resumeEntryDate({ meta: bullet.text }) })).filter(row => row.recovered && !row.recovered.meta);
+        if (dates.length === 1) {
+          item.dates = dates[0].recovered.dates;
+          item.bullets = item.bullets.filter(bullet => bullet.id !== dates[0].bullet.id);
+        }
+      }
+    }
+  }
+  return next;
+}
+
 export function reorderResumeItems(items, activeId, overId) {
   const from = items.findIndex(item => item.id === activeId), to = items.findIndex(item => item.id === overId);
   if (from < 0 || to < 0) throw new Error('This document item no longer exists. Refresh the document before moving it.');

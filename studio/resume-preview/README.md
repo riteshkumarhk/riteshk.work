@@ -65,7 +65,14 @@ original bytes without modifying the legacy review snapshot or its identity.
 
 The AI-rebuilt copy opens in the modern editor with no old score/findings panel
 or empty navigation column. **ATS check** is explicit; rebuilding never runs
-an assessment. **Rebuild details** in Resume options explains each finding's
+an assessment. The hosted **ATS check** button sits before Document/Design and
+starts immediately using the configured Studio AI: no second confirmation or
+checkbox. Checking progress, duplicate-click protection and Cancel check cover
+configuration, save, PDF export and assessment. Missing AI setup and outdated
+bridges report errors before making a provider request. Existing budgets,
+source scoping, cancellation and stale-result guards remain in force.
+The separate local experimental requirements-review workflow is unchanged.
+**Rebuild details** in Resume options explains each finding's
 disposition and missing facts. After a requested check, the new results appear
 and **Rebuild using feedback** supports another iteration. Existing version
 history now includes an **ATS checks** tab with dated, read-only results,
@@ -82,6 +89,34 @@ fields edited since rebuilding are labelled as not rechecked. Rebuild never
 invents missing skills or purchases an automatic repair call. If no wording or
 ordering change validates, no rebuilt copy is created. Malformed/incomplete
 responses, invalid citations and stale/cancelled requests still fail closed.
+
+Layout borrows the useful legacy principles, not its old UI or unsafe shortcuts.
+Rebuild guidance aims for a 2-3-line summary and short outcome-first bullets
+(usually 20-30 words where facts allow), without caps that drop achievements,
+source truncation, invented keywords or automatic font shrinking. Two A4 pages
+is a goal, not a promised result. Explicit typography settings still take
+precedence over density defaults.
+
+Optional empty dates, locations, education notes and skill headings do not
+consume canvas or PDF space. Select an entry in Document to edit these values;
+nonempty values remain editable on the page. Custom metadata and skill text
+reflow soft line breaks without changing saved text. New imports and rebuilt
+copies move unambiguous metadata dates (including wrapped month/year or a
+date-only bullet) into date fields. Existing dates, narrative years and
+undated links/certifications are not guessed or overwritten. Saved copies are
+not silently migrated: **Resume options > Organize source dates** is an
+explicit, saved, undoable edit.
+
+Unlabeled skill blocks can receive editorial category headings during a rebuild,
+selected from a bounded neutral category list using their existing skills.
+These are newly supplied headings, not recovered source text or added skills.
+Existing headings and all skill items remain protected. The response may omit
+headings when uncertain; the Document panel always supports manual titles.
+Renderer version 15 invalidates earlier cached PDFs. It is shared with the
+PDF-export Worker: releasing these changes requires the matching Worker bundle,
+not only the Pages assets. A Pages-only release would leave editor/export
+rendering inconsistent.
+
 The prompt supplies each field's numeric tokens and original skill list;
 numeric magnitude suffixes and plus signs must remain intact.
 Visible versions remain export/manual checkpoints only.

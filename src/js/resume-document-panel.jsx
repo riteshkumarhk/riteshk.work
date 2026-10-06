@@ -51,6 +51,13 @@ export function ResumeDocumentPanel({ document, group, selectedField, onSelect, 
           {bullet => <><button className="rws-document-item-label" onClick={() => select(section.id, bullet.id)}>{bullet.label}</button><button aria-label="Remove achievement" onClick={() => mutate(next => { const entry = next.model.sections.find(row => row.id === section.id).items.find(row => row.id === item.id); entry.bullets = entry.bullets.filter(row => row.id !== bullet.id); }, "Removed achievement")}><Trash2 size={13} /></button></>}
         </DocumentList>}
         <div className="rws-document-entry-actions">
+          {(section.kind === "skills" ? [["label", "Skill group title"]] : [["dates", "Date (optional)"], ...(section.kind === "education" ? [["note", "Note (optional)"]] : section.kind === "experience" ? [["location", "Location (optional)"]] : [["meta", "Details (optional)"]])]).map(([key, label]) => {
+            const Input = key === "meta" ? "textarea" : "input";
+            return <label className="rws-field" key={key}><span>{label}</span><Input aria-label={label} value={(section.groups || section.items).find(entry => entry.id === item.id)[key] || ""} onChange={event => mutate(next => {
+              const current = next.model.sections.find(row => row.id === section.id);
+              (current.groups || current.items).find(entry => entry.id === item.id)[key] = event.target.value;
+            }, "Edited " + label.toLowerCase())} /></label>;
+          })}
           {item.bullets && <button onClick={() => mutate(next => { next.model.sections.find(row => row.id === section.id).items.find(row => row.id === item.id).bullets.push({ id: crypto.randomUUID(), text: "" }); }, "Added achievement")}><Plus size={13} />Add bullet</button>}
           <button onClick={() => duplicate(section.id, item.id)}><Copy size={13} />Duplicate</button>
           <button onClick={() => mutate(next => { const current = next.model.sections.find(row => row.id === section.id); const key = current.groups ? "groups" : "items"; current[key] = current[key].filter(row => row.id !== item.id); }, "Removed entry")}><Trash2 size={13} />Remove</button>

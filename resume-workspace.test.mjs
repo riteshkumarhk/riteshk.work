@@ -995,6 +995,13 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(document.id).document.model.summary, document.model.summary);
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="award.title"]').first().click();
+      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('');
+      await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="award.meta"]').waitFor({ state: 'detached' });
+      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('Example\nResearch practice');
+      await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections.at(-2).items[0].meta, 'Example\nResearch practice');
       assert.equal(preview.store.get(document.id).document.model.summary, 'Typing on the page.\nNo lost caret.');
       const cancelled = await inlineField(page, 'summary');
       await cancelled.fill('Discard this edit'); await cancelled.press('Escape'); await saved(page);
@@ -1256,6 +1263,43 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
+  test('Optional details stay editable without canvas placeholders and source date organization is undoable', async () => {
+    const document = fixture(); document.id = 'optional-layout';
+    document.model.sections.push(
+      { id: 'skills', kind: 'skills', heading: 'Skills', groups: [{ id: 'practice', label: '', items: ['Research', 'Design'] }] },
+      { id: 'awards', kind: 'list', heading: 'Awards', items: [{ id: 'award', title: 'Research award', meta: 'Example \u2022 Oct\n2021', dates: '', bullets: [] }] },
+      { id: 'education', kind: 'education', heading: 'Education', items: [{ id: 'degree', school: 'Example School', credential: 'Degree', dates: '', note: '' }] });
+    preview.store.create(document);
+    const before = structuredClone(preview.store.get(document.id).document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      const canvas = page.frameLocator('.rws-paper');
+      assert.equal(await canvas.locator('.pagedjs_page [data-field="award.dates"], .pagedjs_page [data-field="degree.note"], .pagedjs_page [data-field="practice.label"]').count(), 0);
+      assert.deepEqual(preview.store.get(document.id).document.model, before.model, 'Opening a saved copy does not mutate its model');
+      await page.getByRole('button', { name: 'Resume options', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Organize source dates', exact: true }).click();
+      await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections.at(-2).items[0].dates, 'Oct 2021');
+      await canvas.locator('.pagedjs_page [data-field="award.dates"]').filter({ hasText: 'Oct 2021' }).waitFor();
+      await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model, before.model);
+      await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="practice.items"]').first().click();
+      await page.getByRole('textbox', { name: 'Skill group title', exact: true }).fill('Design practice');
+      await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="practice.label"]').filter({ hasText: 'Design practice' }).waitFor();
+      await canvas.locator('.pagedjs_page [data-field="degree.school"]').first().click();
+      await page.getByRole('textbox', { name: 'Note (optional)', exact: true }).fill('Honours');
+      await page.getByRole('textbox', { name: 'Date (optional)', exact: true }).fill('2018');
+      await saved(page);
+      const expected = structuredClone(preview.store.get(document.id).document.model);
+      await page.reload(); await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="degree.note"]').filter({ hasText: 'Honours' }).waitFor();
+      assert.deepEqual(preview.store.get(document.id).document.model, expected);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+
   test('Document Design toggle lives before Preview PDF and switches panels without changing the resume', async () => {
     const document = fixture(); document.id = 'panel-toggle'; preview.store.create(document);
     const before = structuredClone(preview.store.get(document.id));
@@ -1926,8 +1970,8 @@ describe('Resume browser acceptance', () => {
       await openReviewPanel(editor);
       assert.equal(await editor.getByRole('button', { name: 'Review with AI', exact: true }).count(), 0);
       await editor.getByRole('button', { name: 'Review resume', exact: true }).click();
-      assert.equal(await editor.getByRole('button', { name: 'Run ATS check', exact: true }).isEnabled(), false);
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('alert').filter({ hasText: 'Connect AI in Studio settings' }).waitFor();
+      assert.equal(await editor.getByRole('dialog').count(), 0);
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: width < 760 ? 844 : 1000 });
         await page.screenshot({ path: join(tmpdir(), 'rk-resume-hosted-' + width + '.png') });
@@ -2128,10 +2172,19 @@ describe('Resume browser acceptance', () => {
       await rebuiltHistory.getByRole('button', { name: 'ATS checks', exact: true }).click();
       assert.match(await rebuiltHistory.getByRole('region', { name: 'Historical ATS check' }).innerText(), /62[\s\S]*Clarify summary/);
       await rebuiltHistory.getByRole('button', { name: 'Close', exact: true }).click();
-      await editor.getByRole('button', { name: 'ATS check', exact: true }).click();
-      await editor.getByRole('dialog', { name: 'Re-check ATS', exact: true }).waitFor();
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1, 'Opening or cancelling a new check never calls AI');
+      await page.evaluate(() => {
+        window.configurationBeforeCancel = window.__RKStudio.resume.configuration;
+        window.__RKStudio.resume.configuration = caller => new Promise(resolve => { window.releaseCheckConfiguration = () => resolve(window.configurationBeforeCancel(caller)); });
+      });
+      assert.equal(await editor.getByRole('tablist', { name: 'Workspace panels' }).evaluate(node => node.previousElementSibling.textContent.trim()), 'ATS check');
+      await editor.getByRole('button', { name: 'ATS check', exact: true }).evaluate(node => { node.click(); node.click(); });
+      await editor.getByRole('button', { name: 'Checking...', exact: true }).waitFor();
+      assert.equal(await editor.getByRole('button', { name: 'Checking...', exact: true }).isDisabled(), true);
+      assert.equal(await editor.getByRole('dialog', { name: 'Re-check ATS', exact: true }).count(), 0);
+      await page.waitForFunction(() => !!window.releaseCheckConfiguration);
+      await editor.getByRole('button', { name: 'Cancel check', exact: true }).click();
+      await page.evaluate(() => { window.releaseCheckConfiguration(); window.__RKStudio.resume.configuration = window.configurationBeforeCancel; });
+      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1, 'Cancelling before configuration completes never calls AI');
       await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.locator('.atsv__bar [data-atsv-close]').click();
@@ -2320,18 +2373,13 @@ describe('Resume browser acceptance', () => {
       } while (Date.now() < saveDeadline);
       assert.equal(beforeOutdatedBridge.document.assessment?.signature, expectedPdfSignature);
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
-      await editor.getByRole('dialog', { name: 'Re-check ATS' }).getByRole('alert').filter({ hasText: 'No AI request was made.' }).waitFor();
+      await editor.getByRole('alert').filter({ hasText: 'No AI request was made.' }).waitFor();
       assert.equal((await page.evaluate(() => window.atsMigrationCalls)).length, 0);
       assert.deepEqual(await store.get(migratedId), beforeOutdatedBridge);
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.evaluate(() => { window.__RKStudio.resume.configuration = window.originalReviewConfiguration; delete window.originalReviewConfiguration; });
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.getByRole('checkbox', { name: 'Allow this resume, target and selected supporting sources to be sent for review and proposed revisions.' }).check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
-      await Promise.race([editor.locator('dialog.rws-dialog').waitFor({ state: 'hidden' }), editor.locator('dialog.rws-dialog').getByRole('alert').waitFor()]);
-      assert.equal(await editor.locator('dialog.rws-dialog').count(), 0, (await editor.locator('dialog.rws-dialog').allTextContents()).join(''));
+      await editor.getByRole('status').filter({ hasText: 'ATS check saved for this resume and target.' }).waitFor();
+      assert.equal(await editor.locator('dialog.rws-dialog').count(), 0);
       const assessed = await store.get(migratedId);
       assert.equal(assessed.document.aiReview.kind, 'ats');
       assert.equal(assessed.document.aiReview.signature, resumeSignature(assessed.document));
@@ -2349,10 +2397,8 @@ describe('Resume browser acceptance', () => {
       assert.equal((await store.get(migratedId)).document.model.summary, assessed.document.model.summary);
       await page.evaluate(() => { window.deferMigrationCheck = true; });
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('button', { name: 'Cancel check', exact: true }).click();
       await fillInline(editor, 'summary', 'Newer wording after cancelled assessment.');
       await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       const cancelled = await store.get(migratedId);
@@ -2365,9 +2411,7 @@ describe('Resume browser acceptance', () => {
       const callsBeforeEarlyCancel = await page.evaluate(() => window.atsMigrationCalls.length), exportsBeforeEarlyCancel = (await store.get(migratedId)).exports.length;
       await openReviewPanel(editor);
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('button', { name: 'Cancel check', exact: true }).click();
       releaseSave(); await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), callsBeforeEarlyCancel);
       assert.equal((await store.get(migratedId)).exports.length, exportsBeforeEarlyCancel);
@@ -2407,8 +2451,6 @@ describe('Resume browser acceptance', () => {
       await openReviewPanel(editor);
       await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
       const peer = await store.get(migratedId);
       const peerDocument = editResumeField(peer.document, 'summary', 'Newer wording saved from another device.');
@@ -2417,17 +2459,13 @@ describe('Resume browser acceptance', () => {
       await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
       await page.locator('.adm__status[data-resume-state="conflict"]').waitFor();
       assert.deepEqual(await store.get(migratedId), peerSaved);
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.getByRole('button', { name: 'Compare versions', exact: true }).click();
       await editor.getByRole('button', { name: 'Use server version', exact: true }).click();
       await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
       await editor.getByRole('button', { name: 'Review again', exact: true }).click();
-      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
       const beforeClose = await store.get(migratedId);
-      await editor.locator('dialog.rws-dialog').press('Escape');
       await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
