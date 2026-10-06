@@ -45,6 +45,7 @@ export function resumeRebuildPacket(document, sources = []) {
     target: copy(document.target),
     profile: { name: document.model.name, title: document.model.title, contact: copy(document.model.contact) },
     sections: copy(document.model.sections),
+    entryGroups: document.model.sections.filter(section => Array.isArray(section.items)).map(section => ({ sectionId: section.id, itemIds: section.items.map(item => item.id) })),
     fields: fields.map(field => ({ id: field.id, label: field.label, group: field.group, text: field.value })),
     evidence,
     review: copy(document.aiReview.result),
@@ -62,6 +63,7 @@ Revise every supplied editable field as needed for clear, concise, results-first
 Apply EVERY truthfully applicable finding, not only the selected card. Use the job description and missing keywords only where existing source evidence supports them. Never insert unsupported tools or skills, even into Skills. Do not guess unreadable characters or missing facts.
 Each changed field needs citations using supplied evidence IDs, including its own original excerpt. A citation establishes provenance, not independent truth. Preserve all original numbers in their own field; do not move metrics between roles. Do not delete content to meet a page target.
 You may reorder existing sections and entries for a coherent resume but cannot omit or invent one. Do not change item boundaries or merge distinct roles. The application supplies the complete structured model and layout from these values.
+entryGroups is the exact entry-order manifest. entryOrder is a list of reorder operations, NOT resume content: return [] when no entries need reordering. Omitted groups retain every original entry in its existing order. Each submitted group must use one manifest sectionId and ALL its itemIds exactly once. Never include Skills groups or text sections unless they appear in entryGroups.
 For EVERY fix, state applied, already-satisfied, needs-fact, or not-applicable, with a short honest reason and affected field IDs. If a fact is missing, leave the unsupported claim out and name the required fact. A fix can be applied only when an affected field actually changed, or for an order-only fix when the section or entry order changed (use an empty fieldIds list).
 Return ONLY JSON:
 {"fields":[{"id":"supplied field id","text":"complete revised field text","evidence":["excerpt-0"]}],
@@ -89,8 +91,13 @@ export async function rebuildResumeWithAI(document, { sources = [], complete, ge
   if (!['fields', 'entryOrder', 'fixes'].every(name => Array.isArray(result[name]) && result[name].every(item => item && typeof item === 'object' && !Array.isArray(item)))) fail('AI returned invalid rebuild lists.');
   exactIds(result.fields?.map(field => field.id), packet.fields.map(field => field.id), 'resume fields');
   exactIds(result.sectionOrder, snapshot.model.sections.map(section => section.id), 'sections');
-  const itemSections = snapshot.model.sections.filter(section => section.items);
-  exactIds(result.entryOrder?.map(section => section.sectionId), itemSections.map(section => section.id), 'entry groups');
+  const orderedGroups = new Set();
+  for (const order of result.entryOrder) {
+    const expected = packet.entryGroups.find(group => group.sectionId === order.sectionId);
+    if (Object.keys(order).sort().join() !== 'itemIds,sectionId' || !expected || orderedGroups.has(order.sectionId)) fail('unknown or duplicated entry reorder group. Nothing was rebuilt.');
+    exactIds(order.itemIds, expected.itemIds, 'entries');
+    orderedGroups.add(order.sectionId);
+  }
   exactIds(result.fixes?.map(fix => fix.id), packet.fixes.map(fix => fix.id), 'feedback dispositions');
   text(result.summary, 'summary');
   let revised = copy(snapshot);

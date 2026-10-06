@@ -33,6 +33,7 @@ function pdfFixture({ text = 'Avery Example', numPages = 1, items } = {}) {
     return { destroy: async () => { destroyed++; }, promise: Promise.resolve({ numPages,
       getPage: async () => ({ getViewport: () => ({ width: 595.28, height: 841.89 }),
         getTextContent: async () => ({ items: items || [{ str: text, width: 80, height: 12, transform: [1, 0, 0, 1, 40, 780], hasEOL: true }] }),
+        getOperatorList: async () => ({ fnArray: [], argsArray: [] }),
         getAnnotations: async () => [{ subtype: 'Link', url: 'https://example.test' }] }) }) };
   } }), get destroyed() { return destroyed; }, get supplied() { return supplied; } };
 }

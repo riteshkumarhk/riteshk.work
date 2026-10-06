@@ -1,5 +1,6 @@
 import { extractResumePdfText, validatePdfText } from './resume-workspace.mjs';
 import { atsParseLayout } from './ats-core.js';
+import { recoverResumePdfGlyphs } from './resume-pdf-glyphs.mjs';
 
 export function resumePdfContentItems(document, page, index, count) {
   const margin = (document.design.margin === 'narrow' ? 10 : 15) * 72 / 25.4;
@@ -46,13 +47,13 @@ export function mapResumePdfEvidence(pages, document = null) {
   return { text, spans, unmappedGlyphs, unresolvedMarkers };
 }
 
-export async function readResumePdf(bytes, { signal, document, separateDistantRuns = false, loadPdf = () => import('pdfjs-dist/build/pdf.mjs') } = {}) {
+export async function readResumePdf(bytes, { signal, document, separateDistantRuns = false, recoverGlyphs = true, loadPdf = () => import('pdfjs-dist/build/pdf.mjs') } = {}) {
   const reference = document ? structuredClone(document) : null;
   signal?.throwIfAborted();
   const pdfjs = await loadPdf();
   signal?.throwIfAborted();
   if (typeof window !== 'undefined') pdfjs.GlobalWorkerOptions.workerSrc = '/studio/resume-preview/assets/pdf.worker.mjs';
-  const task = pdfjs.getDocument({ data: bytes.slice() });
+  const task = pdfjs.getDocument({ data: bytes.slice(), fontExtraProperties: true, disableFontFace: true });
   let destruction;
   const abort = () => {
     destruction = task.destroy();
@@ -63,10 +64,13 @@ export async function readResumePdf(bytes, { signal, document, separateDistantRu
     const pdf = await task.promise;
     if (!Number.isInteger(pdf.numPages) || pdf.numPages < 1 || pdf.numPages > 50) throw new Error('PDF exceeds the supported page count.');
     const pages = [], links = [], text = [];
-    let items = 0, unmappedGlyphs = 0, unresolvedMarkers = 0;
+    let items = 0, unmappedGlyphs = 0, unresolvedMarkers = 0, recoveredGlyphs = 0;
     for (let number = 1; number <= pdf.numPages; number++) {
       signal?.throwIfAborted();
-      const page = await pdf.getPage(number), viewport = page.getViewport({ scale: 1 }), content = await page.getTextContent();
+      const page = await pdf.getPage(number), viewport = page.getViewport({ scale: 1 });
+      const rawContent = await page.getTextContent();
+      const recovered = recoverGlyphs ? await recoverResumePdfGlyphs(page, rawContent, pdfjs) : { content: rawContent, recoveredGlyphs: 0 }, content = recovered.content;
+      recoveredGlyphs += recovered.recoveredGlyphs;
       items += content.items.length;
       if (items > 50000) throw new Error('PDF exceeds the supported text-item count.');
       const originals = content.items.filter(item => item.str);
@@ -93,10 +97,10 @@ export async function readResumePdf(bytes, { signal, document, separateDistantRu
     }
     signal?.throwIfAborted();
     const mapped = separateDistantRuns ? mapResumePdfEvidence(pages, reference) : null;
-    return { text: mapped ? mapped.text : text.join('\n\n'), pages, links,
+    return { text: mapped ? mapped.text : text.join('\n\n'), pages, links, recoveredGlyphs,
       unmappedGlyphs: mapped ? mapped.unmappedGlyphs : unmappedGlyphs, unresolvedMarkers: mapped ? mapped.unresolvedMarkers : unresolvedMarkers,
       ...(mapped ? { evidenceMapVersion: 'pdf-evidence-map-v1' } : {}),
-      extractorVersion: 'pdfjs-' + pdfjs.version + '-resume-lines-v1' + (reference ? '-checked-body-v1' : '') + (separateDistantRuns ? '-separated-runs-v1-pdf-evidence-map-v1' : '') };
+      extractorVersion: 'pdfjs-' + pdfjs.version + '-resume-lines-v1' + (recoverGlyphs ? '-outline-recovery-v1' : '') + (reference ? '-checked-body-v1' : '') + (separateDistantRuns ? '-separated-runs-v1-pdf-evidence-map-v1' : '') };
   } finally {
     signal?.removeEventListener('abort', abort);
     await (destruction || task.destroy());

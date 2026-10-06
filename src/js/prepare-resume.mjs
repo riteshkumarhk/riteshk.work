@@ -10,6 +10,11 @@ async function digest(blob) {
   return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export async function matchesResumeSource(file, value) {
+  const saved = reference(value);
+  return file.size === saved.size && await digest(file) === saved.sha256;
+}
+
 async function store(mode, operation) {
   const database = await new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1);
@@ -38,7 +43,7 @@ export async function readResumeSource(value) {
   const saved = reference(value);
   const file = await store("readonly", documents => documents.get(saved.sha256));
   if (!(file instanceof Blob)) throw new Error("The original resume is not available on this device. Restore it from private history or attach the original file.");
-  if (file.size !== saved.size || await digest(file) !== saved.sha256) throw new Error("The saved resume failed its integrity check. Its reference has been kept.");
+  if (!await matchesResumeSource(file, saved)) throw new Error("The saved resume failed its integrity check. Its reference has been kept.");
   return new File([file], saved.name, { type: saved.type, lastModified: saved.lastModified });
 }
 
@@ -58,7 +63,7 @@ export async function restoreResumeSource(value) {
   if (typeof value.data !== "string") { await readResumeSource(saved); return saved; }
   const bytes = Uint8Array.from(atob(value.data), character => character.charCodeAt(0));
   const file = new File([bytes], saved.name, { type: saved.type, lastModified: saved.lastModified });
-  if (file.size !== saved.size || await digest(file) !== saved.sha256) throw new Error("The synced resume failed its integrity check. The existing document was not changed.");
+  if (!await matchesResumeSource(file, saved)) throw new Error("The synced resume failed its integrity check. The existing document was not changed.");
   await store("readwrite", documents => documents.put(file, saved.sha256));
   return saved;
 }

@@ -57,7 +57,6 @@ import {
   applyResumeProposal,
   projectResumeProposal,
   assessResume,
-  extractResumePdfText,
   structureResumeText,
   resumeNeedsSourceRebuild,
 } from "./resume-workspace.mjs";
@@ -463,7 +462,7 @@ function App() {
   const [canvasMode, setCanvasMode] = useState(readResumeCanvasMode);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [aiConfiguration, setAiConfiguration] = useState(null);
-  const [rebuildDraft, setRebuildDraft] = useState(null);
+  const rebuildActive = useRef(false), rebuildReady = useRef(null);
   const [atsChecks, setAtsChecks] = useState([]), [historyTab, setHistoryTab] = useState("versions"), [selectedCheck, setSelectedCheck] = useState(null);
   const [aiConsent, setAiConsent] = useState(false);
   const [aiPacket, setAiPacket] = useState(null);
@@ -735,7 +734,7 @@ function App() {
       setBusy(null);
       const context = initialContext || (hosted ? await studioBridge.initialize(window, id) : {});
       const record = await api("resumes/" + id);
-      if (generation !== navigation.current) return;
+      if (generation !== navigation.current || hosted && !window.frameElement?.isConnected) return;
       install(record);
       let pending;
       try {
@@ -758,6 +757,7 @@ function App() {
         setLegacyConflict(true); setConflict(record); setSaveState('conflict'); setDialog('conflict');
         setError('Legacy ATS copies differ. Recover them as separate variants before saving.');
       }
+      if (live.current.conflict && context.reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "input");
       const reviewNavigation = context.reviewNavigation;
       setReturnToReview(!!reviewNavigation?.reviewId);
       if (reviewNavigation?.reviewId && !reviewNavigation.editRole && !live.current.conflict) {
@@ -774,6 +774,7 @@ function App() {
           else {
             sourceRebuild.current = { documentId: id, reviewNavigation };
             setDialog("rebuild-source");
+            if (reviewNavigation.rebuild) studioBridge?.rebuildProgress?.(window, "input");
           }
           return record;
         }
@@ -789,7 +790,9 @@ function App() {
       focusReviewNavigation(reviewNavigation);
       return record;
     } catch (failure) {
+      if (hosted && !window.frameElement?.isConnected) return;
       setError(failure.message);
+      if (initialContext?.reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "error", failure.message);
     }
   };
   useEffect(() => {
@@ -811,8 +814,10 @@ function App() {
         else setSaveState("saved");
       })
       .catch((failure) => {
+        if (hosted && !window.frameElement?.isConnected) return;
         setSaveState("error");
         setError(failure.message);
+        studioBridge?.rebuildProgress?.(window, "error", failure.message);
       });
     fetch("/content.json")
       .then((response) => response.json())
@@ -912,6 +917,7 @@ function App() {
   };
   const closeHosted = async () => {
     finishInlineEdit();
+    rebuildActive.current = false; rebuildReady.current = null;
     task.current?.cancel(); setBusy(null);
     try { await persist(); studioBridge.close(window); return true; } catch (failure) { setError(failure.message); return false; }
   };
@@ -1033,12 +1039,21 @@ function App() {
         return;
       if (event.data.type === "resume-ready") {
         const firstPage = frame.current.contentDocument.querySelector('.pagedjs_page');
-        if (!firstPage) { setError("The resume page could not be measured. Reload the preview to try again."); setRendering(false); return; }
+        if (!firstPage) {
+          const message = "The resume page could not be measured. Reload the preview to try again.";
+          setError(message); setRendering(false);
+          if (rebuildReady.current) studioBridge?.rebuildProgress?.(window, "error", message);
+          return;
+        }
         const pageStyle = frame.current.contentWindow.getComputedStyle(firstPage.parentElement);
         setPageInfo({ ...event.data, pageHeight: firstPage.getBoundingClientRect().height + parseFloat(pageStyle.paddingTop) + parseFloat(pageStyle.paddingBottom) });
         requestAnimationFrame(() => requestAnimationFrame(() => {
           if (renderedSignature.current !== event.data.signature) return;
           setRendering(false);
+          if (rebuildReady.current === event.data.signature) {
+            rebuildReady.current = null;
+            studioBridge?.rebuildProgress?.(window, "ready");
+          }
           if (inlineNext.current) {
             const next = inlineNext.current; inlineNext.current = null;
             requestAnimationFrame(() => frame.current?.contentWindow?.resumeInline?.open(next));
@@ -1048,6 +1063,7 @@ function App() {
       if (event.data.type === "resume-error") {
         setError(event.data.message);
         setRendering(false);
+        if (rebuildReady.current) studioBridge?.rebuildProgress?.(window, "error", event.data.message);
       }
       if (event.data.type === "resume-field") {
         const field = resumeFields(live.current.document.model).find(
@@ -1281,6 +1297,7 @@ function App() {
   };
   const cancelAiReview = () => {
     task.current?.cancel(); task.current = null;
+    rebuildActive.current = false; rebuildReady.current = null;
     setBusy(null); setDialog(null); setAiConsent(false);
   };
   const runAiReview = async (stage) => {
@@ -1430,31 +1447,52 @@ function App() {
     catch (failure) { setError(failure.message); }
   };
   const openFeedbackRebuild = async (prepared = live.current.document) => {
-    setAiConsent(false); setError(""); setAiConfiguration(null);
-    setRebuildDraft({ document: structuredClone(prepared), sourceSignature: resumeSignature(live.current.document), review: JSON.stringify(live.current.document.aiReview) });
-    setDialog("feedback-rebuild");
-    try {
-      resumeRebuildPacket(prepared, sources);
-      setAiConfiguration(hosted ? await studioBridge.configuration(window) : await api("ai/config"));
-    } catch (failure) { setError(failure.message); }
-  };
-  const runFeedbackRebuild = async () => {
-    if (busy || !aiConsent || !aiConfiguration?.available || !rebuildDraft) return;
-    if (hosted && aiConfiguration.rebuildResponseVersion !== 1) { setError("Reopen Studio before rebuilding. No AI request was made."); return; }
-    const currentTask = createResumeTask(live.current.document), pending = rebuildDraft;
+    if (rebuildActive.current) return;
+    rebuildActive.current = true; rebuildReady.current = null;
+    const pending = { document: structuredClone(prepared), sourceSignature: resumeSignature(live.current.document), review: JSON.stringify(live.current.document.aiReview) };
+    const currentTask = createResumeTask(live.current.document);
     task.current?.cancel(); task.current = currentTask;
     const current = () => task.current === currentTask && !currentTask.signal.aborted &&
       resumeSignature(live.current.document) === pending.sourceSignature && JSON.stringify(live.current.document.aiReview) === pending.review;
     setBusy("feedback-rebuild"); setError("");
+    if (!hosted) setDialog("feedback-rebuild");
     try {
+      studioBridge?.rebuildProgress?.(window, "working");
+      if (resumeFields(pending.document.model).some(field => /[\u0000\ufffd]/.test(field.value))) {
+        const { readResumePdf } = await import("./resume-pdf.mjs");
+        const { repairResumeGlyphsFromSource } = await import("./resume-pdf-glyphs.mjs");
+        pending.document.atsChecks = resumeAtsChecks({ document: pending.document });
+        const answers = new Set((pending.document.evidenceAnswers || []).map(answer => answer.sourceId));
+        const originals = [];
+        for (const source of sources.filter(source => pending.document.sourceIds.includes(source.id) && !answers.has(source.id) && (source.type === "application/pdf" || /\.pdf$/i.test(source.name)))) {
+          let blob;
+          if (hosted) blob = await hostedClient.file("sources/" + source.id, source.type, { signal: currentTask.signal });
+          else {
+            const response = await fetch("/__resume/sources/" + source.id, { signal: currentTask.signal });
+            if (!response.ok) throw new Error("The original PDF could not be read to repair its symbols. Your resume is unchanged.");
+            blob = await response.blob();
+          }
+          const extracted = await readResumePdf(new Uint8Array(await blob.arrayBuffer()), { signal: currentTask.signal });
+          if (!current()) return;
+          originals.push(extracted.text);
+        }
+        pending.document = repairResumeGlyphsFromSource(pending.document, originals.join("\n\n")).document;
+        const unreadable = resumeFields(pending.document.model).reduce((count, field) => count + (field.value.match(/[\u0000\ufffd]/g) || []).length, 0);
+        pending.document.importNotes = { ...pending.document.importNotes, unmappedGlyphs: unreadable };
+      }
+      resumeRebuildPacket(pending.document, sources);
+      const configuration = hosted ? await studioBridge.configuration(window) : await api("ai/config");
+      if (!current()) return;
+      if (!configuration.available) throw new Error("Connect AI in Studio settings, then choose Rebuild again. No AI request was made.");
+      if (hosted && (configuration.rebuildResponseVersion !== 2 || !studioBridge.rebuildProgress)) throw new Error("Reopen Studio before rebuilding. No AI request was made.");
       await persist();
       if (!current()) throw new Error("The resume or feedback changed. Reopen Rebuild; nothing was replaced.");
       const result = await rebuildResumeWithAI(pending.document, {
-        sources, provider: aiConfiguration.provider, model: aiConfiguration.model, signal: currentTask.signal,
+        sources, provider: configuration.provider, model: configuration.model, signal: currentTask.signal,
         getCurrent: () => current() ? pending.document : null,
         complete: async request => {
           const { signal, ...input } = request;
-          const payload = { ...input, provider: aiConfiguration.provider, model: aiConfiguration.model };
+          const payload = { ...input, provider: configuration.provider, model: configuration.model };
           const response = hosted ? await studioBridge.complete(payload, window, signal) : await api("ai/complete", { method: "POST", body: JSON.stringify(payload), signal });
           return response.text;
         },
@@ -1465,14 +1503,22 @@ function App() {
       if (!current()) return;
       await refreshLibrary();
       if (!current()) return;
+      rebuildReady.current = resumeSignature(record.document);
+      rebuildActive.current = false;
       install(record); setLeftPane("none"); setLibraryOpen(false); setSheetOpen(true);
-      setDialog(null); setRebuildDraft(null); setAiConsent(false);
+      studioBridge?.rebuildProgress?.(window, "working", "Preparing your rebuilt resume\u2026");
+      setDialog(null); setAiConsent(false);
       const unresolved = result.aiRebuild.fixes.filter(fix => fix.status === "needs-fact").length;
-      setMessage("Resume rebuilt using ATS feedback." + (unresolved ? " " + unresolved + " findings need facts; see Rebuild details." : "") + " Run ATS check when you are ready.");
+      const unreadable = result.importNotes?.unmappedGlyphs || result.importNotes?.unresolvedMarkers || 0;
+      setMessage("Resume rebuilt using ATS feedback." + (unresolved ? " " + unresolved + " findings need facts; see Rebuild details." : "") + (unreadable ? " " + unreadable + " unreadable source characters need review." : "") + " Run ATS check when you are ready.");
     } catch (failure) {
-      if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message);
+      if (task.current === currentTask && !currentTask.signal.aborted) {
+        if (!hosted) setDialog(null);
+        setError(failure.message);
+        studioBridge?.rebuildProgress?.(window, "error", failure.message);
+      }
     } finally {
-      if (task.current === currentTask) { task.current = null; setBusy(null); }
+      if (task.current === currentTask) { task.current = null; setBusy(null); rebuildActive.current = false; }
     }
   };
   const runHostedAssessment = async () => {
@@ -1785,23 +1831,12 @@ function App() {
       let text = "",
         pages = null, unmappedGlyphs = 0, unresolvedMarkers = 0;
       if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
-        const pdfjs = await import("pdfjs-dist");
-        if (!isCurrent()) return;
-        pdfjs.GlobalWorkerOptions.workerSrc =
-          "/studio/resume-preview/assets/pdf.worker.mjs";
-        const pdf = await pdfjs.getDocument({ data: bytes.slice(0) }).promise;
-        try {
-          pages = pdf.numPages;
-          const lines = [];
-          for (let number = 1; number <= pages; number++) {
-            if (!isCurrent()) return;
-            const extracted = extractResumePdfText(await (await pdf.getPage(number)).getTextContent());
-            lines.push(extracted.text);
-            unmappedGlyphs += extracted.unmappedGlyphs;
-            unresolvedMarkers += extracted.unresolvedMarkers;
-          }
-          text = lines.join("\n\n");
-        } finally { await pdf.destroy(); }
+        const { readResumePdf } = await import("./resume-pdf.mjs");
+        const extracted = await readResumePdf(new Uint8Array(bytes));
+        pages = extracted.pages.length;
+        text = extracted.text;
+        unmappedGlyphs = extracted.unmappedGlyphs;
+        unresolvedMarkers = extracted.unresolvedMarkers;
       } else if (/\.docx$/i.test(file.name)) {
         const mammoth = await import("mammoth/mammoth.browser.js");
         if (!isCurrent()) return;
@@ -1825,12 +1860,19 @@ function App() {
         throw new Error(
           "The extracted text exceeds the sample limit. Nothing was silently truncated.",
         );
-      setImported({ file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation, rebuildFrom, reviewNavigation });
+      const pending = { file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation, rebuildFrom, reviewNavigation };
+      if (reviewNavigation?.rebuild && !resumeNeedsSourceRebuild(pending.structure)) {
+        await saveSource(true, pending, true);
+        return;
+      }
+      setImported(pending);
       setDialog("import");
+      if (reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "input");
     } catch (failure) {
       if (isCurrent()) {
         setError(failure.message);
         if (rebuildFrom) setDialog("rebuild-source");
+        if (reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "input");
       }
     } finally {
       if (task.current === currentTask) {
@@ -1858,19 +1900,21 @@ function App() {
       if (task.current !== currentTask || currentTask.signal.aborted || navigation.current !== generation || !currentTask.accept(live.current.document, true)) return;
       await importFile(new File([blob], source.name, { type: source.type }), structuredClone(live.current.document), reviewNavigation);
     } catch (failure) {
-      if (task.current === currentTask && !currentTask.signal.aborted) { setError(failure.message); setDialog("rebuild-source"); }
+      if (task.current === currentTask && !currentTask.signal.aborted) { setError(failure.message); setDialog("rebuild-source"); if (reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "input"); }
     } finally {
       if (task.current === currentTask) { setBusy(null); task.current = null; }
     }
   };
   const cancelImport = () => {
+    const returnToReviewer = hosted && (imported?.reviewNavigation?.rebuild || sourceRebuild.current?.reviewNavigation?.rebuild);
     task.current?.cancel(); task.current = null;
     sourceRebuild.current = null;
     setBusy(null); setDialog(null); setImported(null);
+    if (returnToReviewer) closeHosted();
   };
-  const saveSource = async (createNew) => {
-    if (busy || !imported || imported.documentId !== live.current.document.id || imported.generation !== navigation.current) return;
-    const pendingImport = imported, currentTask = createResumeTask(live.current.document), generation = navigation.current;
+  const saveSource = async (createNew, pendingImport = imported, automatic = false) => {
+    if (busy && !automatic || !pendingImport || pendingImport.documentId !== live.current.document.id || pendingImport.generation !== navigation.current) return;
+    const currentTask = createResumeTask(live.current.document), generation = navigation.current;
     task.current?.cancel(); task.current = currentTask;
     const isCurrent = () => task.current === currentTask && !currentTask.signal.aborted && navigation.current === generation;
     setBusy("import-save"); setError("");
@@ -1902,7 +1946,7 @@ function App() {
           design: pendingImport.rebuildFrom ? {} : pendingImport.pages ? { pageLimit: pendingImport.pages } : {},
           model: pendingImport.structure.model,
         });
-        next.importNotes = { sourcePages: pendingImport.pages, sourceId: source.id, method: pendingImport.structure.method, warnings: pendingImport.structure.warnings };
+        next.importNotes = { sourcePages: pendingImport.pages, sourceId: source.id, method: pendingImport.structure.method, warnings: pendingImport.structure.warnings, unmappedGlyphs: pendingImport.unmappedGlyphs, unresolvedMarkers: pendingImport.unresolvedMarkers };
         if (pendingImport.rebuildFrom) {
           const original = pendingImport.rebuildFrom;
           next.rebuiltFrom = { id: original.id, signature: resumeSignature(original), reviewId: original.ats?.reviewId || original.rebuiltFrom?.reviewId };
@@ -1944,7 +1988,10 @@ function App() {
       sourceRebuild.current = null;
       setMessage("Original bytes retained. No AI rewrite was applied.");
     } catch (failure) {
-      if (isCurrent()) setError(failure.message);
+      if (isCurrent()) {
+        setError(failure.message);
+        if (pendingImport.reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "error", failure.message);
+      }
     } finally {
       if (task.current === currentTask) { setBusy(null); task.current = null; }
     }
@@ -3087,17 +3134,12 @@ function App() {
       {dialog === "rebuild-details" && doc.aiRebuild && <Dialog title="Rebuild details" onClose={() => setDialog(null)} actions={<button className="btn" onClick={() => setDialog(null)}>Close</button>}>
         <p>{doc.aiRebuild.summary}</p>
         <p>No new ATS check has been run by rebuilding. Choose ATS check when you want fresh results.</p>
+        {(doc.importNotes?.unmappedGlyphs > 0 || doc.importNotes?.unresolvedMarkers > 0) && <p className="rws-inline-warning">The original contains unreadable characters. Their replacement markers remain in the resume; review them against your original rather than guessing.</p>}
         {doc.aiRebuild.fixes.map(fix => <section className="rws-review-finding" key={fix.id}><h4>{fix.finding}</h4><p>{fix.status.replaceAll("-", " ")}: {fix.reason}</p></section>)}
       </Dialog>}
-      {dialog === "feedback-rebuild" && <Dialog wide title="Rebuild using ATS feedback" onClose={cancelAiReview} actions={<>
+      {!hosted && dialog === "feedback-rebuild" && <Dialog title="Rebuilding resume" onClose={cancelAiReview} actions={<>
         <button className="btn" onClick={cancelAiReview}>Cancel</button>
-        <button className="btn btn--primary" disabled={!!busy || !aiConsent || !aiConfiguration?.available || !!error} onClick={runFeedbackRebuild}>{busy === "feedback-rebuild" ? "Rebuilding..." : "Rebuild resume"}</button>
       </>}>
-        <p>Use all findings from this ATS check and the target job to rewrite the complete resume. Name, contacts, roles, dates and qualifications stay intact. Missing facts are not invented.</p>
-        <p>The rebuilt copy opens in the current editor without the old score or findings. Your previous draft and check stay in history. A new ATS check runs only when you request it.</p>
-        <p>{aiConfiguration?.available ? aiConfiguration.provider + " / " + aiConfiguration.model : "Connect AI in Studio settings to rebuild."}</p>
-        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume, target, ATS feedback and attached evidence to be sent for an AI rebuild.</label>
-        <p className="rws-muted">This is a paid writing request using your Studio configuration, not an ATS recheck.</p>
         {busy === "feedback-rebuild" && <p role="status">Rewriting the resume using all feedback. Your original is unchanged.</p>}
         {error && <p className="rws-inline-warning" role="alert">{error}</p>}
       </Dialog>}

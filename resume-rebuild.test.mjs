@@ -99,6 +99,21 @@ test('Rebuild cancellation, changed feedback and malformed output never create a
   assert.throws(() => resumeRebuildPacket(flat), /reconstruct the original/);
 });
 
+test('Entry reordering is an explicit patch: omitted unchanged groups retain all original content', async () => {
+  const document = fixture(), packet = resumeRebuildPacket(document);
+  assert.deepEqual(packet.entryGroups, packet.sections.filter(section => section.items).map(section => ({ sectionId: section.id, itemIds: section.items.map(item => item.id) })));
+  for (const retain of [[], [response(packet).entryOrder[0]]]) {
+    const next = await rebuildResumeWithAI(document, options(document, result => ({ ...result, entryOrder: retain })));
+    assert.deepEqual(next.model.sections, document.model.sections);
+  }
+  for (const change of [
+    result => ({ ...result, entryOrder: [result.entryOrder[0], result.entryOrder[0]] }),
+    result => ({ ...result, entryOrder: [{ sectionId: packet.sections.find(section => section.kind === 'skills').id, itemIds: [] }] }),
+    result => ({ ...result, entryOrder: [{ sectionId: result.entryOrder[0].sectionId, itemIds: ['unknown'] }] }),
+    result => ({ ...result, entryOrder: [{ ...result.entryOrder[0], unexpected: true }] }),
+  ]) await assert.rejects(rebuildResumeWithAI(document, options(document, change)), /Resume rebuild:/);
+});
+
 test('Rebuild accepts honest order-only changes and unresolved outcomes without inventing a content edit', async () => {
   const document = fixture();
   const next = await rebuildResumeWithAI(document, options(document, result => {

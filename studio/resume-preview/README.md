@@ -8,13 +8,21 @@ boundaries and reconnects positioned bullet markers before structuring the
 source. Unambiguous name/contact fields, summary, roles, employers, dates,
 locations and education become separate editable fields; repeated section
 headings are consolidated without dropping entries. Uncertain text and
-unmapped PDF glyphs remain explicit, not guessed or rewritten. Section anchors
+unmapped PDF glyphs remain explicit, not guessed or rewritten. Known missing
+Inter symbols can be recovered only from exact, visually verified embedded
+outline fingerprints and matching left-to-right extraction order. Different
+fonts, unknown outlines and ambiguous ordering remain marked. The shared
+reader covers review extraction, positional checks and editor import; saved
+review input and original bytes remain unchanged. Existing structured copies
+repair marked characters only against uniquely matching recovered source
+excerpts, preserving custom edits. Legacy ligature normalization remains.
+Section anchors
 and uniquely matching quotes navigate to the corresponding field; ambiguous
 and document-wide guidance never invent a text target.
 
 **Rebuild your resume** and **Rebuild to fix** now use all saved ATS feedback
 and the target job for a complete AI-assisted rewrite, not just editor
-navigation or a source import. Explicit consent uses the existing Studio AI
+navigation or a source import. The explicit Rebuild click uses the existing Studio AI
 configuration, model-capacity output policy and writing transport. The local
 experimental transport retains its priced reservation and 12,000-token output
 ceiling; it does not override production Prepare policy. Every editable field, section, entry and
@@ -25,13 +33,30 @@ inserted. Citations establish provenance, not independent semantic verification.
 Missing facts remain unresolved rather than invented. Invalid, incomplete or
 late output fails without overwriting the source draft or silently retrying.
 Sections/entries can be reordered, but the rebuild does not merge roles or
-delete achievements to force a page count.
+delete achievements to force a page count. The request includes an exact
+entry-group manifest. `entryOrder` contains reorder operations only: `[]` or
+omitted groups retain all existing entries. Supplied groups must contain every
+original item ID exactly once; unknown/duplicate groups and incomplete entries
+still fail. Editable fields, sections and feedback dispositions remain complete
+and strictly validated. This removes redundant order bookkeeping, not content
+preservation checks.
 
-An already-saved flattened import first reconstructs from retained original
-bytes and shows recognized name/contact fields and sections. **Continue to AI
-rebuild** then opens consent; no source-only intermediate is passed off as the
-completed rewrite. Missing or ambiguous originals require explicit file
-selection; an unstructured result cannot be confirmed. **Continue editing
+The reviewer stays visible with concise progress and Cancel while the rewrite
+runs. The modern editor is revealed only after the new copy is saved and its
+page is ready. There is no second confirmation checkbox or rebuild dialog.
+Failure stays on the reviewer with an explicit error; cancellation rejects late
+output. Rebuild completion never performs an ATS check.
+Reviewer **Review again** immediately shows a spinner and **Reviewing...**,
+guards duplicate invocations and disables conflicting source/rebuild actions.
+Success, failure and cancellation clear its busy state; it never retries on its
+own. Gold toolbar and contextual rebuild actions inherit shared CTA typography.
+
+An already-saved flattened import reconstructs from retained original bytes
+and continues directly when structured recovery succeeds; no source-only
+intermediate is passed off as the completed rewrite. Missing or ambiguous
+originals require explicit file selection; an unstructured result cannot be
+confirmed. These are source-recovery exceptions, not a repeated AI consent step.
+**Continue editing
 resume** reuses a unique rebuilt copy of the unchanged source without an AI
 call. **Rebuild from original** remains a separate source-only recovery action
 that creates a copy and keeps historical guidance. Neither path overwrites the

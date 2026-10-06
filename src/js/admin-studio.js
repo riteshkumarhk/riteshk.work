@@ -57,7 +57,7 @@ import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
 import { readAiAppearance, saveAiAppearance } from "./ai-appearance.mjs";
 import { notesHtml } from "./slide-rich-text.mjs";
 import { PREP_BRIEF_KEY, prepareBrief, prepareBriefWorks } from "./prepare-brief.mjs";
-import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResumeSource } from "./prepare-resume.mjs";
+import { retainResumeSource, readResumeSource, resumeSourceForSync, restoreResumeSource, matchesResumeSource } from "./prepare-resume.mjs";
 import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResponse, applyCaseProposal, importFigmaSources, caseWorkspace, protectedSection } from "./case-study-authoring.mjs";
 import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
 import { loadWorkflow } from "./workflow-loader.mjs";
@@ -68,7 +68,7 @@ import { assessmentFileType, captureAssessmentInput } from "./resume-assessment-
 import { assertAssessmentCurrent } from "./resume-assessment.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
 import { resumeReviewSections, observeResumeContext, observeResumeInfo } from "./resume-review-presentation.mjs";
-import { resumeSignature, extractResumePdfText } from "./resume-workspace.mjs";
+import { resumeSignature } from "./resume-workspace.mjs";
 import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as orderedRoleStories } from "./journey-core.mjs";
 import { WHITEBOARD_ROLES, whiteboardConversation, whiteboardConversationSystem, whiteboardSurpriseRoles, applyWhiteboardReply } from "./whiteboard-conversation.mjs";
 import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, withWhiteboardVideoFiles, whiteboardRecordingEvidence } from "./whiteboard-media.mjs";
@@ -3525,6 +3525,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   }
   var atsRbBusyCtx = null;
   async function atsRebuildOpen(ctx) {
+    if (ctx?.recheckBusy || ctx?.documentBusy) return;
     const id = ctx?.sessionId || atsvSessId;
     if (!id) { status("Open a saved ATS review first."); return; }
     openResumeStudio({ entryId: id, reviewNavigation: { ...atsvEditorNavigation(ctx), rebuild: true } });
@@ -4416,7 +4417,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       dispose() { controls?.dispose(); banner.remove(); label.removeAttribute('data-resume-state'); }
     };
   }
-  function mountResumeStudioWorkspace(workspace, leave) {
+  function mountResumeStudioWorkspace(workspace, leave, rebuilding = false) {
     const covered = [...root.querySelectorAll(':scope > .adm__main,:scope > .adm__workbar,:scope > .prep-dialog,:scope > .atsv')].filter(element => element !== workspace)
       .map(element => ({ element, inert: element.inert, visibility: element.style.visibility }));
     const chrome = [...root.querySelectorAll(':scope > .adm__bar,:scope > .adm__statusbar')].map(element => ({ element, inert: element.inert }));
@@ -4424,6 +4425,31 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     chrome.forEach(({element}) => { element.inert = false; });
     workspace.__resumeFeedback = mountResumeStorageFeedback(workspace);
     workspace.__resumeFeedback.render();
+    let rebuildProgress = null;
+    workspace.__rebuildTransition = (state, message = "") => {
+      const pending = state === "working" || state === "error";
+      workspace.style.visibility = pending ? "hidden" : "";
+      covered.forEach(({element, visibility}) => { element.style.visibility = pending ? visibility : "hidden"; });
+      if (pending && !rebuildProgress) {
+        rebuildProgress = document.createElement("div");
+        rebuildProgress.className = "resume-rebuild-progress";
+        rebuildProgress.innerHTML = '<span></span><button class="btn btn--ghost" type="button">Cancel</button>';
+        rebuildProgress.querySelector("button").addEventListener("click", async () => {
+          try { await leave(); } catch (error) { workspace.__rebuildTransition("error", error.message); }
+        });
+        root.appendChild(rebuildProgress);
+        rebuildProgress.querySelector("button").focus();
+      }
+      if (pending) {
+        rebuildProgress.setAttribute("role", state === "error" ? "alert" : "status");
+        rebuildProgress.querySelector("span").textContent = message || "Rebuilding your resume\u2026";
+        rebuildProgress.querySelector("button").textContent = state === "error" ? "Back to review" : "Cancel";
+      } else {
+        rebuildProgress?.remove(); rebuildProgress = null;
+        workspace.focus();
+      }
+    };
+    if (rebuilding) workspace.__rebuildTransition("working");
     function fit() {
       const top = root.querySelector('.adm__bar').getBoundingClientRect().bottom;
       const bottom = root.querySelector('.adm__statusbar').getBoundingClientRect().top;
@@ -4452,23 +4478,27 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     return () => {
       observer.disconnect(); window.removeEventListener('resize', fit); root.removeEventListener('click', navigate, true);
       workspace.__resumeFeedback.dispose(); delete workspace.__resumeFeedback;
+      rebuildProgress?.remove(); delete workspace.__rebuildTransition;
       covered.forEach(({element,inert,visibility}) => { element.inert = inert; element.style.visibility = visibility; element.__resumeFeedback?.render(); });
       chrome.forEach(({element,inert}) => { element.inert = inert; });
       narrate();
     };
   }
   async function atsvRecheck(ctx) {
-    if (ctx.documentBusy) return;
+    if (ctx.documentBusy || ctx.recheckBusy || ctx.lifetime.signal.aborted) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsvRecheck(ctx); }); return; }
-    var btn = ctx.modal.querySelector("[data-atsv-regen]"); if (btn) { btn.disabled = true; btn.classList.add("is-busy"); }
+    ctx.recheckBusy = true;
+    atsvReviewBusy(ctx);
     status("Re-running the ATS check\u2026");
     const signal = ctx.lifetime.signal;
     try {
       var text = ctx.review.text || "";
-      if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
+      if (ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
+      signal.throwIfAborted();
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
       var level = ctx.level || atsLevel, company = ctx.review.company || "", jd = ctx.review.jd || "";
       const checked = await atsEvaluate(text, ctx.file, level, company, jd, signal, undefined, { prepareActions: true });
+      signal.throwIfAborted();
       var { res, kw: _kw, sem: _sem } = checked;
       ctx.res = res; Object.assign(ctx.review,{res,text,kw:_kw,sem:_sem}); atsLast = ctx.review;
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
@@ -4482,7 +4512,18 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       await atsvBuild(ctx, true);
       status("Regenerated \u2014 fresh fixes.", true);
     } catch (e) { if (!signal.aborted) status("Regenerate failed: " + ((e && e.message) || e)); }
-    if (btn) { btn.disabled = false; btn.classList.remove("is-busy"); }
+    finally { ctx.recheckBusy = false; atsvReviewBusy(ctx); }
+  }
+
+  function atsvReviewBusy(ctx) {
+    const busy = !!(ctx.recheckBusy || ctx.documentBusy);
+    ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen],[data-atsv-candidate],[data-atsv-rebuild],[data-atsv-continue],[data-atsv-address],[data-atsv-edit-role]").forEach(button => { button.disabled = busy; });
+    const button = ctx.modal.querySelector("[data-atsv-regen]");
+    if (!button) return;
+    if (ctx.recheckBusy) btnBusy(button, "Reviewing\u2026");
+    else btnIdle(button, IC.refresh + "Review again");
+    button.disabled = busy;
+    button.setAttribute("aria-busy", String(!!ctx.recheckBusy));
   }
 
   async function atsOpenViewer() {
@@ -4716,10 +4757,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     ctx.infoCleanup = observeResumeInfo(ctx.modal.querySelector('[popovertarget="atsv-review-info"]'), ctx.modal.querySelector("#atsv-review-info"));
     ctx.modal.querySelector('[data-prep-storage]').__resumeFeedback = ctx.modal.__resumeFeedback;
     prepPaintStorage();
+    atsvReviewBusy(ctx);
   }
 
   async function atsvRecoverDocument(ctx, kind, selectedFile) {
-    if (ctx.documentBusy) return;
+    if (ctx.documentBusy || ctx.recheckBusy) return;
     const signal = ctx.lifetime.signal, entry = prepGet("ats", ctx.sessionId), before = JSON.stringify(entry);
     const message = ctx.modal.querySelector("[data-atsv-source-status]") || ctx.modal.querySelector("[data-atsv-source-feedback]");
     let candidatePdf = null;
@@ -4742,7 +4784,9 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       if (message) message.textContent = "Checking the PDF against this saved review...";
       const text = String(await fbExtractFile(file)).replace(/\s+/g," ").trim();
       const originalText = String(ctx.review.source?.text || ctx.review.text || "").replace(/\s+/g," ").trim();
-      if (!originalText || text !== originalText) throw new Error("This PDF's text differs from the saved review. Nothing was replaced; attach the original PDF.");
+      const matchesOriginal = ctx.review.resumeDocument ? await matchesResumeSource(file, ctx.review.resumeDocument) :
+        originalText && (text === originalText || String(await fbExtractFile(file, { recoverGlyphs: false })).replace(/\s+/g, " ").trim() === originalText);
+      if (!matchesOriginal) throw new Error("This PDF differs from the saved review's original. Nothing was replaced; attach the original PDF.");
       const pdfjs = await ensurePdfJs(), bytes = await file.arrayBuffer();
       signal.throwIfAborted();
       ctx.loadingTask = pdfjs.getDocument({data:bytes}); candidatePdf = await ctx.loadingTask.promise;
@@ -4766,7 +4810,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     } finally {
       if (candidatePdf && candidatePdf !== ctx.pdf) await candidatePdf.destroy();
       ctx.documentBusy = false;
-      ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen],[data-atsv-candidate]").forEach(button => { button.disabled = false; });
+      atsvReviewBusy(ctx);
     }
   }
 
@@ -4804,6 +4848,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       (!ctx.located[index] && finding.anchor?.quote ? '<details><summary>View passage</summary><blockquote>' + escHtml(finding.anchor.quote) + '</blockquote></details>' : '') +
       '<button type="button" class="btn btn--primary" data-atsv-address>Rebuild to fix</button>';
     stage.append(panel); ctx.contextPanel = panel;
+    atsvReviewBusy(ctx);
     ctx.contextCleanup = observeResumeContext(panel, stage, () => stage.querySelector('.atsv__hl[data-fi="' + index + '"]')?.getBoundingClientRect());
   }
   function atsvEditorNavigation(ctx) {
@@ -17775,7 +17820,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     });
     return ensureMammoth._p;
   }
-  async function fbExtractFile(f) {
+  async function fbExtractFile(f, { recoverGlyphs = true } = {}) {
     // Detect the REAL format by magic bytes FIRST: hosted PDFs are often served as
     // application/octet-stream (e.g. raw.githubusercontent), which would name the file
     // "resume.bin" and fall through to f.text() below, dumping raw PDF bytes to the AI.
@@ -17787,16 +17832,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       else if (_sig.indexOf("PK") === 0 && _nm.slice(-5) === ".docx" && !f.type) f = new File([f], _nm, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     } catch (_e) {}
     if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
-      var pdfjs = await ensurePdfJs();
-      var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
-      try {
-        var parts = [];
-        for (var p = 1; p <= pdf.numPages; p++) {
-          var page = await pdf.getPage(p);
-          parts.push(extractResumePdfText(await page.getTextContent()).text);
-        }
-        return parts.join("\n\n");
-      } finally { await pdf.destroy(); }
+      return (await readResumePdf(new Uint8Array(await f.arrayBuffer()), { recoverGlyphs })).text;
     }
     if (/\.docx$/i.test(f.name) || f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       var mammoth = await ensureMammoth();
@@ -17810,19 +17846,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   // detect columns / header-footer contact — the parse-fidelity signal lost once flattened.
   async function atsPdfPages(f) {
     if (!(/\.pdf$/i.test(f.name) || f.type === "application/pdf")) return null;
-    try {
-      var pdfjs = await ensurePdfJs();
-      var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
-      var pages = [];
-      for (var p = 1; p <= pdf.numPages; p++) {
-        var page = await pdf.getPage(p);
-        var vp = page.getViewport({ scale: 1 });
-        var content = await page.getTextContent();
-        var items = content.items.map(function (it) { var tr = it.transform; return { str: it.str, x: tr[4], y: vp.height - tr[5], w: it.width || 0, h: it.height || Math.abs(tr[3]) || 10 }; });
-        pages.push({ width: vp.width, height: vp.height, items: items });
-      }
-      return pages;
-    } catch (e) { return null; }
+    return (await readResumePdf(new Uint8Array(await f.arrayBuffer()))).pages;
   }
   function fbSystem() {
     return [
@@ -21546,9 +21570,12 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     } else {
       root.appendChild(resumeFrame);
       resumeFrameCleanup = mountResumeStudioWorkspace(resumeFrame, async () => {
-        if (!resumeLeaveHandler) { status('Resume Studio is still opening. Use Back to Studio if it cannot load.'); return false; }
+        if (!resumeLeaveHandler) {
+          if (context.reviewNavigation?.rebuild) { closeResumeStudio(resumeFrame.contentWindow); return true; }
+          status('Resume Studio is still opening. Use Back to Studio if it cannot load.'); return false;
+        }
         return resumeLeaveHandler();
-      });
+      }, !!context.reviewNavigation?.rebuild);
     }
     resumeFrame.focus();
   }
@@ -21560,6 +21587,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function resumeStudioStorageFeedback(caller, feedback, action) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !resumeFrame.__resumeFeedback) throw new Error('This Resume Studio workspace is closed.');
     resumeFrame.__resumeFeedback.paint(feedback, action);
+  }
+  function resumeStudioRebuildProgress(caller, state, message) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow) throw new Error("This Resume Studio session is closed.");
+    if (!["working", "input", "ready", "error"].includes(state) || !resumeFrame.__rebuildTransition) throw new Error("The rebuild transition is unavailable. Reopen Studio.");
+    resumeFrame.__rebuildTransition(state, String(message || ""));
   }
   async function initializeResumeStudio(caller, resumeId = null) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
@@ -21620,7 +21652,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function resumeStudioConfiguration(caller) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
     const cfg = aiCfg('txt');
-    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection', reviewResponseVersion: 1, rebuildResponseVersion: 1 };
+    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection', reviewResponseVersion: 1, rebuildResponseVersion: 2 };
   }
   async function resumeStudioAssessmentSource(document, exportId, caller, signal) {
     const config = resumeStudioConfiguration(caller);
@@ -21744,7 +21776,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   window.__RKStudio.toggleSections = id => toggleStudyContentAccess(data.work.findIndex(work => work.id === id));
   window.__RKStudio.unlockSections = id => decryptStudyForEdit(data.work.findIndex(work => work.id === id));
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
-  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, setLeaveHandler: setResumeStudioLeaveHandler, storageFeedback: resumeStudioStorageFeedback, initialize: initializeResumeStudio, candidateInput: resumeCandidateInput, request: resumeStudioRequest, recoverLegacy: recoverResumeLegacy, configuration: resumeStudioConfiguration, assess: resumeStudioAssess, complete: resumeStudioComplete };
+  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, setLeaveHandler: setResumeStudioLeaveHandler, storageFeedback: resumeStudioStorageFeedback, rebuildProgress: resumeStudioRebuildProgress, initialize: initializeResumeStudio, candidateInput: resumeCandidateInput, request: resumeStudioRequest, recoverLegacy: recoverResumeLegacy, configuration: resumeStudioConfiguration, assess: resumeStudioAssess, complete: resumeStudioComplete };
   window.__RKStudio.resume.baseline = Object.freeze({ version: 1, sourceSha256: typeof BASELINE_SOURCE_SHA256 === "string" ? BASELINE_SOURCE_SHA256 : null, prepare: resumeStudioPrepareBaseline, assess: resumeStudioAssessBounded });
   async function resumeAiConfiguration() {
     const configured = aiCfg("txt");

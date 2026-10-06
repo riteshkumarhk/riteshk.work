@@ -1968,20 +1968,31 @@ describe('Resume browser acceptance', () => {
         await page.setViewportSize({ width: 1440, height: 1000 });
       };
       await assertReviewerAction('Rebuild your resume');
+      await page.locator('.atsv__item[data-fi="0"]').press('Enter');
+      const primaryTypography = selector => page.locator(selector).evaluate(element => {
+        const css = getComputedStyle(element);
+        return [css.fontFamily, css.fontSize, css.fontWeight, css.letterSpacing, css.textTransform];
+      });
+      assert.deepEqual(await primaryTypography('[data-atsv-rebuild]'), await primaryTypography('[data-atsv-address]'));
+      await page.getByRole('region', { name: 'Finding details', exact: true }).press('Escape');
       const brokenImport = await store.create(await migrateAtsResume(review, null, [rebuildSource.id]));
       assert.equal(resumeNeedsSourceRebuild(brokenImport.document), true);
       await page.evaluate(() => {
         window.rebuildCalls = [];
+        window.deferRebuild = true;
         window.originalRebuildComplete = window.__RKStudio.resume.complete;
         window.originalRebuildConfiguration = window.__RKStudio.resume.configuration;
         window.__RKStudio.resume.configuration = caller => ({ ...window.originalRebuildConfiguration(caller), available: true, provider: 'scripted', model: 'fixture' });
         window.__RKStudio.resume.complete = async input => {
           window.rebuildCalls.push(input);
+          if (window.deferRebuild) await new Promise(resolve => { window.releaseRebuild = resolve; });
+          window.rebuildSettled = (window.rebuildSettled || 0) + 1;
+          if (window.invalidRebuild) return { text: "invalid JSON" };
           const packet = JSON.parse(input.user);
           return { text: JSON.stringify({
             fields: packet.fields.map(field => ({ id: field.id, text: field.id === 'summary' ? 'Accessible services designed through research.' : field.text, evidence: [packet.evidence.find(item => item.fieldId === field.id).id] })),
             sectionOrder: packet.sections.map(section => section.id),
-            entryOrder: packet.sections.filter(section => section.items).map(section => ({ sectionId: section.id, itemIds: section.items.map(item => item.id) })),
+            entryOrder: [],
             fixes: packet.fixes.map((fix, index) => ({ id: fix.id, status: index === 0 ? 'applied' : 'needs-fact', reason: index === 0 ? 'Clarified research approach.' : 'More source facts are needed.', fieldIds: index === 0 ? ['summary'] : [] })),
             summary: 'Rephrased the summary using existing evidence.',
           }) };
@@ -1989,13 +2000,33 @@ describe('Resume browser acceptance', () => {
       });
       await page.getByRole('button', { name: 'Rebuild your resume', exact: true }).click();
       const importReview = editor.getByRole('dialog', { name: 'Review imported source', exact: true });
-      await importReview.waitFor();
-      assert.match(await importReview.getByRole('region', { name: 'Recognized profile' }).innerText(), /Alex Example[\s\S]*alex@example.test[\s\S]*\+44 1234567890/);
-      assert.equal((await store.list()).documents.filter(row => row.document.rebuiltFrom?.id === brokenImport.document.id).length, 0, 'Opening Rebuild does not create or overwrite a draft');
-      await importReview.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await editor.getByRole('button', { name: 'Back to review', exact: true }).waitFor();
-      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.waitForFunction(() => typeof window.releaseRebuild === 'function');
+      assert.equal(await page.locator('.adm__resume-host').isVisible(), false, 'Do not reveal the old editor while rebuilding');
+      assert.equal(await page.locator('.atsv').isVisible(), true, 'Keep the reviewer visible while rewriting');
+      assert.equal(await editor.getByRole('dialog', { name: 'Rebuild using ATS feedback', exact: true }).count(), 0);
+      assert.equal(await importReview.count(), 0, 'A usable retained source needs no second confirmation');
+      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1);
+      assert.equal((await store.list()).documents.filter(row => row.document.rebuiltFrom?.id === brokenImport.document.id).length, 0);
+      await page.locator('.resume-rebuild-progress').getByRole('button', { name: 'Cancel', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.evaluate(() => window.releaseRebuild());
+      await page.waitForFunction(() => window.rebuildSettled === 1);
+      assert.deepEqual(await store.get(brokenImport.document.id), brokenImport);
+      assert.equal((await store.list()).documents.filter(row => row.document.rebuiltFrom?.id === brokenImport.document.id).length, 0, 'Cancelled late output cannot create a rebuilt copy');
+      await page.evaluate(() => { window.invalidRebuild = true; window.deferRebuild = false; });
+      await page.locator('.atsv__item[data-fi="0"]').press('Enter');
+      await page.getByRole('region', { name: 'Finding details', exact: true }).getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
+      await page.locator('.resume-rebuild-progress[role=alert]').filter({ hasText: 'invalid JSON' }).waitFor();
+      assert.equal(await page.locator('.adm__resume-host').isVisible(), false);
+      assert.equal(await page.locator('.pass:visible').count(), 0, 'No confirmation backdrop may obscure the rebuild error');
+      assert.equal(await page.locator('.resume-rebuild-progress button').evaluate(button => {
+        const box = button.getBoundingClientRect();
+        return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === button;
+      }), true, 'The visible error recovery action remains reachable');
+      assert.deepEqual(await store.get(brokenImport.document.id), brokenImport);
+      await page.locator('.resume-rebuild-progress').getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.evaluate(() => { window.invalidRebuild = false; window.deferRebuild = true; window.rebuildCalls = []; delete window.releaseRebuild; });
       const sourceMetadata = await (await bucket.get('sources/meta/' + rebuildSource.id + '.json')).text();
       await bucket.delete('sources/meta/' + rebuildSource.id + '.json');
       await page.locator('.atsv__item[data-fi="0"]').press('Enter');
@@ -2007,20 +2038,17 @@ describe('Resume browser acceptance', () => {
       assert.match(await importReview.getByRole('alert').innerText(), /no recognizable sections/);
       assert.deepEqual(await store.get(brokenImport.document.id), brokenImport);
       await importReview.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await bucket.put('sources/meta/' + rebuildSource.id + '.json', sourceMetadata);
       await page.locator('.atsv__item[data-fi="0"]').press('Enter');
       await page.getByRole('region', { name: 'Finding details', exact: true }).getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
-      await importReview.waitFor();
-      await importReview.getByRole('button', { name: 'Continue to AI rebuild', exact: true }).click();
-      await importReview.waitFor({ state: 'detached' });
-      const rebuildDialog = editor.getByRole('dialog', { name: 'Rebuild using ATS feedback', exact: true });
-      await rebuildDialog.waitFor();
-      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 0);
-      await rebuildDialog.getByRole('checkbox').check();
-      await rebuildDialog.getByRole('button', { name: 'Rebuild resume', exact: true }).click();
-      await rebuildDialog.waitFor({ state: 'detached' });
+      await page.waitForFunction(() => typeof window.releaseRebuild === 'function');
+      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1);
+      assert.equal(await page.locator('.atsv').isVisible(), true);
+      assert.equal(await page.locator('.adm__resume-host').isVisible(), false);
+      await page.evaluate(() => { window.deferRebuild = false; window.releaseRebuild(); });
+      await page.locator('.resume-rebuild-progress').waitFor({ state: 'detached' });
+      await page.locator('.adm__resume-host').waitFor({ state: 'visible' });
       const repaired = (await store.list()).documents.find(row => row.document.rebuiltFrom?.id === brokenImport.document.id).document;
       assert.equal(repaired.model.name, 'Alex Example');
       assert.equal(repaired.model.contact.email, 'alex@example.test');
@@ -2108,15 +2136,15 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry => entry.id === 'migration-review')), review);
       await reviewCard.press('Enter');
       const readOnlyFinding = page.getByRole('region', { name: 'Finding details', exact: true });
+      assert.deepEqual(await primaryTypography('[data-atsv-continue]'), await primaryTypography('[data-atsv-address]'));
       assert.equal(await readOnlyFinding.locator('input,textarea').count(), 0);
       assert.equal(await readOnlyFinding.getByRole('button', { name: 'Apply', exact: true }).count(), 0);
       await readOnlyFinding.press('Escape');
       await readOnlyFinding.waitFor({ state: 'detached' });
       await reviewCard.press('Enter');
       await readOnlyFinding.getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
-      await editor.getByRole('dialog', { name: 'Rebuild using ATS feedback', exact: true }).waitFor();
-      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.resume-rebuild-progress[role=alert]').waitFor();
+      await page.locator('.resume-rebuild-progress').getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.getByRole('button', { name: 'Continue editing resume', exact: true }).click();
       await editor.locator('[data-context-finding="0"]').waitFor();
@@ -2148,7 +2176,12 @@ describe('Resume browser acceptance', () => {
       assert.equal(rendered, renderBefore + 1);
       assert.equal(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 0);
       await editor.getByRole('button', { name: 'Print this PDF', exact: true }).click();
-      await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click();
+      try { await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click(); }
+      catch (failure) {
+        await page.screenshot({ path: join(tmpdir(), 'rk-resume-print-confirm-failure.png') });
+        console.error('Print confirmation state', await editor.locator('body').innerText(), errors);
+        throw failure;
+      }
       assert.equal(await editor.locator('.rws-pdf-print-frame').count(), 0);
       assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, false);
       await editor.getByRole('button', { name: 'Review migrated layout', exact: true }).click();
@@ -2200,6 +2233,7 @@ describe('Resume browser acceptance', () => {
           }
           window.atsMigrationCalls.push({ system, user });
           if (window.deferMigrationCheck) await new Promise(resolve => { window.releaseMigrationCheck = resolve; });
+          if (window.failReviewerCheck) throw new Error('Scripted reviewer failure');
           const value = { responseVersion: 1, score: 79, band: 'Good', summary: 'Checked the current exported resume', checks: [], fixes: [{ point: 'Clarify research impact', priority: 'high', anchor: { quote: 'Current edited summary with accessibility and research outcomes.' }, response: { kind: 'question', question: 'Which outcome can you substantiate?', reason: 'No new metric was supplied.' } }], keywords: { present: [], missing: [] } };
           return Response.json({ choices: [{ message: { content: JSON.stringify(value) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
         };
@@ -2347,6 +2381,41 @@ describe('Resume browser acceptance', () => {
       assert.equal(await page.locator('.atsv').isVisible(), true);
       assert.equal(await page.locator('.atsv').evaluate(element => element.inert), false);
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), ownerDraft);
+      const beforeReviewerCheck = await page.evaluate(() => localStorage.getItem('rk:prep:hist'));
+      await page.evaluate(() => { window.deferMigrationCheck = true; window.failReviewerCheck = true; window.atsMigrationCalls = []; delete window.releaseMigrationCheck; });
+      const reviewAgain = page.locator('[data-atsv-regen]');
+      await reviewAgain.click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      assert.equal(await reviewAgain.innerText(), 'Reviewing\u2026');
+      assert.equal(await reviewAgain.isDisabled(), true);
+      assert.equal(await reviewAgain.getAttribute('aria-busy'), 'true');
+      assert.equal(await page.locator('[data-atsv-continue]').isDisabled(), true);
+      assert.notEqual(await reviewAgain.evaluate(button => getComputedStyle(button, '::before').animationName), 'none');
+      await reviewAgain.evaluate(button => { button.click(); button.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+      assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), 1);
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => !document.querySelector('[data-atsv-regen]').disabled);
+      assert.match(await page.locator('.adm__status').innerText(), /Scripted reviewer failure/);
+      assert.equal(await reviewAgain.innerText(), 'Review again');
+      assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), beforeReviewerCheck);
+      await page.evaluate(() => { window.deferMigrationCheck = true; window.failReviewerCheck = false; window.atsMigrationCalls = []; delete window.releaseMigrationCheck; });
+      await reviewAgain.click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      await page.locator('.atsv__bar [data-atsv-close]').click();
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
+      assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), beforeReviewerCheck, 'Closing the reviewer discards a late check');
+      await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
+      await reviewAgain.waitFor();
+      await page.evaluate(() => { window.deferMigrationCheck = true; window.failReviewerCheck = false; window.atsMigrationCalls = []; delete window.releaseMigrationCheck; });
+      await reviewAgain.click();
+      await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
+      await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
+      await page.waitForFunction(() => !document.querySelector('[data-atsv-regen]').disabled && document.querySelector('.adm__status').textContent.includes('fresh fixes'));
+      assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), 1);
+      assert.equal(await page.locator('[data-atsv-regen]').innerText(), 'Review again');
+      assert.equal(await page.locator('[data-atsv-regen]').getAttribute('aria-busy'), 'false');
+      assert.deepEqual(await store.get(migratedId), beforeClose, 'Reviewer recheck must not change the editable resume');
       await page.locator('.adm__tab[data-tab="ai"]').click();
       await page.locator('.atsv').waitFor({state:'detached'});
       assert.equal(await page.locator('.prep-dialog').count(), 0);

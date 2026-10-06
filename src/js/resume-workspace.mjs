@@ -51,7 +51,7 @@ export function extractResumePdfText(content, { separateDistantRuns = false, cap
   for (const item of items) {
     if (markerSet.has(item)) continue;
     if (item.str) {
-      const text = item.str.replace(/\u0000/g, () => { unmappedGlyphs++; return '\ufffd'; });
+      const text = item.str.replace(/[\u0000\ufffd]/g, () => { unmappedGlyphs++; return '\ufffd'; });
       if (current && (!atBaseline(current, item) || item.transform[4] < current.right - 2 ||
           (separateDistantRuns && item.transform[4] - current.right > resumePdfRunGap(current.height, item.height)))) flush();
       if (!current) current = { text: '', transform: item.transform, height: item.height || 10, right: item.transform[4], ...(capturePositions ? { spans: [] } : {}) };
@@ -85,6 +85,7 @@ export function extractResumePdfText(content, { separateDistantRuns = false, cap
 
 export function structureResumeText(text) {
   if (typeof text !== 'string' || !text.trim() || text.length > 120000) throw new Error('Choose readable source text within the import limit.');
+  text = text.normalize('NFKC');
   const headingKinds = new Map([
     ['experience', 'experience'], ['work experience', 'experience'], ['professional experience', 'experience'], ['employment history', 'experience'],
     ['education', 'education'], ['qualifications', 'education'], ['skills', 'skills'], ['technical skills', 'skills'], ['core competencies', 'skills'],
