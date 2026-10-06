@@ -17,6 +17,7 @@ concurrency:
 jobs:
   verify-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -75,6 +76,7 @@ jobs:
   browser-checks:
     needs: verify-build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +111,7 @@ jobs:
           BROWSER_SHARD_REPORT: browser-timings-${{ matrix.shard }}.json
           TMPDIR: ${{ runner.temp }}
         run: |
-          python3 -m http.server 5510 --bind 127.0.0.1 > "$RUNNER_TEMP/site-test.log" 2>&1 &
+          python3 -u serve.py > "$RUNNER_TEMP/site-test.log" 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
           export SLIDE_LAB_URL=http://127.0.0.1:5510

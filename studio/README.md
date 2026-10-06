@@ -47,8 +47,13 @@ validate that final tree, including content-dependent backup/restore checks.
 Never force-push over admin publications. Full CI still runs every required test,
 regardless of the local selection, and deploys only its verified artifact after
 every job succeeds. Inventory tests protect browser-shard coverage and partitioning.
-The Resume shard includes candidate UI, PDF structure, Studio-bridge and baseline
-accounting browser tests; none runs in CI's browser-free root job.
+The Resume shard includes candidate UI, PDF structure, Studio-bridge, baseline
+accounting and assessment-probe tests. The probe indirectly launches Chromium
+through real PDF rendering, so it must not run in CI's browser-free root job.
+Inventory checks cover both direct launches and preview/PDF-render helpers.
+CI bounds the browser-free build job to 15 minutes and each browser shard to
+45 minutes; timeouts fail the release rather than leaving it running indefinitely.
+CI uses the same persistent Python preview server as local validation.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
 
 Isolated editor, storage and presenter hosts use the shared
