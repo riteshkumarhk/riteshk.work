@@ -161,7 +161,9 @@ for (const denyAutomatic of [false,true]) test(`owner case-study Present floats 
     await pad.locator('[data-pp-jump="0"]').click();
     assert.equal(await audience.locator('[data-pjp-count]').textContent(), '1 / 2');
     const ended = audience.waitForEvent('close');
-    await pad.getByRole('button', {name:'End presentation', exact:true}).click();
+    await pad.getByRole('button', {name:'End presentation', exact:true}).click().catch(error => {
+      if (!pad.isClosed() || !/Target page, context or browser has been closed/.test(error.message)) throw error;
+    });
     await ended;
     await page.locator('.pjp-tab').waitFor({state:'detached'});
     await page.waitForFunction(() => document.activeElement?.matches('[data-pj="present"]'));

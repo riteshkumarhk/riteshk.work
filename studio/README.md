@@ -54,6 +54,11 @@ Inventory checks cover both direct launches and preview/PDF-render helpers.
 CI bounds the browser-free build job to 15 minutes and each browser shard to
 45 minutes; timeouts fail the release rather than leaving it running indefinitely.
 CI uses the same persistent Python preview server as local validation.
+Cross-frame inline-edit tests await the matching save response after composition
+ends before inspecting Saved/outbox state; a previous Saved badge can still be
+visible before the parent receives the iframe message. Presenter exit tests
+retain real clicks and closure/focus assertions, while accepting only the
+specific target-closed click error when the clicked DJ window actually closed.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
 
 Isolated editor, storage and presenter hosts use the shared

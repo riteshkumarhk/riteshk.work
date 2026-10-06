@@ -1035,7 +1035,13 @@ describe('Resume browser acceptance', () => {
       });
       await page.waitForTimeout(650);
       assert.equal(preview.store.get(document.id).document.model.sections[0].text, text);
+      const composedSave = page.waitForResponse(response => {
+        const request = response.request();
+        return request.method() === 'PUT' && new URL(response.url()).pathname === '/__resume/api/resumes/' + document.id
+          && request.postDataJSON()?.document?.model?.sections?.[0]?.text === text + ' Composed text.';
+      });
       await input.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      assert.equal((await composedSave).ok(), true, 'The composed value is persisted before checking Saved');
       await saved(page);
       assert.equal(preview.store.get(document.id).document.model.sections[0].text, text + ' Composed text.');
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
