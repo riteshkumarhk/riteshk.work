@@ -68,7 +68,7 @@ import { assessmentFileType, captureAssessmentInput } from "./resume-assessment-
 import { assertAssessmentCurrent } from "./resume-assessment.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
 import { resumeReviewSections, observeResumeContext, observeResumeInfo } from "./resume-review-presentation.mjs";
-import { resumeSignature } from "./resume-workspace.mjs";
+import { resumeSignature, extractResumePdfText } from "./resume-workspace.mjs";
 import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as orderedRoleStories } from "./journey-core.mjs";
 import { WHITEBOARD_ROLES, whiteboardConversation, whiteboardConversationSystem, whiteboardSurpriseRoles, applyWhiteboardReply } from "./whiteboard-conversation.mjs";
 import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, withWhiteboardVideoFiles, whiteboardRecordingEvidence } from "./whiteboard-media.mjs";
@@ -4802,7 +4802,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       '<h3>' + escHtml(finding.point || "Review finding") + '</h3>' +
       '<p>' + escHtml(finding.how || "Review this recommendation in the context of your experience.") + '</p>' +
       (!ctx.located[index] && finding.anchor?.quote ? '<details><summary>View passage</summary><blockquote>' + escHtml(finding.anchor.quote) + '</blockquote></details>' : '') +
-      '<button type="button" class="btn btn--primary" data-atsv-address>Address in editor</button>';
+      '<button type="button" class="btn btn--primary" data-atsv-address>Rebuild to fix</button>';
     stage.append(panel); ctx.contextPanel = panel;
     ctx.contextCleanup = observeResumeContext(panel, stage, () => stage.querySelector('.atsv__hl[data-fi="' + index + '"]')?.getBoundingClientRect());
   }
@@ -4818,6 +4818,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     };
     ctx.lifetime.signal.addEventListener("abort", () => { atsvCloseContext(ctx); ctx.infoCleanup?.(); }, { once: true });
     modal.addEventListener("click", event => {
+      if (event.target.closest("[data-atsv-continue]")) { openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: atsvEditorNavigation(ctx) }); return; }
+      if (event.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       if (event.target.closest("[data-atsv-regen]")) atsvRecheck(ctx);
       if (event.target.closest("[data-atsv-edit-role]")) {
         modal.querySelector("#atsv-review-info")?.hidePopover();
@@ -4853,8 +4855,6 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     }, { capture: true, signal: ctx.lifetime.signal });
     rail.addEventListener("click", function (e) {
       if (e.target.closest("[data-prep-retry]")) { prepRetryStorage(); return; }
-      if (e.target.closest("[data-atsv-continue]")) { openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: atsvEditorNavigation(ctx) }); return; }
-      if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
       var item = e.target.closest(".atsv__item"); if (item && item.dataset.fi) atsvFocusPin(ctx, item.dataset.fi);
     });
     rail.addEventListener("keydown", function (event) {
@@ -17789,13 +17789,14 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") {
       var pdfjs = await ensurePdfJs();
       var pdf = await pdfjs.getDocument({ data: await f.arrayBuffer() }).promise;
-      var parts = [];
-      for (var p = 1; p <= pdf.numPages; p++) {
-        var page = await pdf.getPage(p);
-        var content = await page.getTextContent();
-        parts.push(content.items.map(function (it) { return it.str; }).join(" "));
-      }
-      return parts.join("\n\n");
+      try {
+        var parts = [];
+        for (var p = 1; p <= pdf.numPages; p++) {
+          var page = await pdf.getPage(p);
+          parts.push(extractResumePdfText(await page.getTextContent()).text);
+        }
+        return parts.join("\n\n");
+      } finally { await pdf.destroy(); }
     }
     if (/\.docx$/i.test(f.name) || f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       var mammoth = await ensureMammoth();
@@ -21586,7 +21587,15 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       try { original.payload.resumeDocument = await resumeSourceForSync(original.payload.resumeDocument); }
       catch (error) { if (!error.message.includes('not available on this device')) throw error; }
     }
-    const response = await resumeStudioRequest('migrate', { method: 'POST', body: JSON.stringify({ entry, review }) }, caller);
+    let importSource = null;
+    if (entry.kind === 'review' && original?.payload?.resumeDocument?.data) {
+      const saved = original.payload.resumeDocument;
+      const bytes = Uint8Array.from(atob(saved.data), character => character.charCodeAt(0));
+      const file = new File([bytes], saved.name, { type: saved.type });
+      importSource = { sha256: saved.sha256, text: await fbExtractFile(file) };
+      if (context !== resumeContext) throw new Error('This editor session changed. Reopen ATS history.');
+    }
+    const response = await resumeStudioRequest('migrate', { method: 'POST', body: JSON.stringify({ entry, review, importSource }) }, caller);
     const result = await response.json();
     if (!response.ok && result.code === 'legacy-conflict' && result.resumeId) { context.recovery = { entry, review }; return { resumeId: result.resumeId, legacyConflict: true }; }
     if (!response.ok) throw new Error(result.error || 'Migration failed. Existing records are retained.');

@@ -2,6 +2,27 @@
 
 Studio has one resume workflow: Prepare > Resume ATS Check > review > Rebuild your resume / Continue editing > Review again > checked PDF. Saved resumes remain in ATS history; there is no separate Resumes tab or legacy editable canvas. The editor uses dedicated private storage and the authenticated parent bridge. The separate local preview uses a filesystem store and its experimental evidence rubric; it is not a second production workflow. Automated hosted tests use synthetic authentication and Miniflare, not real account or device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
 
+The reviewer toolbar's Rebuild/Continue actions and each finding's **Rebuild to
+fix** action use the same hosted editor. PDF extraction retains actual line
+boundaries and reconnects positioned bullet markers before structuring the
+source. Unambiguous name/contact fields, summary, roles, employers, dates,
+locations and education become separate editable fields; repeated section
+headings are consolidated without dropping entries. Uncertain text and
+unmapped PDF glyphs remain explicit, not guessed or rewritten. Section anchors
+and uniquely matching quotes navigate to the corresponding field; ambiguous
+and document-wide guidance never invent a text target.
+
+For an already-saved flattened import, **Rebuild from original** is available
+under source options (and Resume options when there is one original). It opens
+the import review and creates a separate rebuilt copy, retaining the target and
+historical ATS guidance. It does not overwrite the draft, original bytes,
+exports or history, approve findings or invoke a paid model. Reconstruction is
+not an automatic AI rewrite or regrade. New migrations can re-extract retained
+original bytes without modifying the legacy review snapshot or its identity.
+Every supported section's authored bullet text, including education/custom
+entries, prints and remains subject to strict PDF text verification. Original
+page count is not imposed on recovery copies by shrinking or omitting content.
+
 New reviews prepare proposed revisions, focused missing-fact questions, or manual
 layout guidance in their assessment response. Opening an editor finding shows
 that result without a separate **Suggest a revision** request or any AI call.

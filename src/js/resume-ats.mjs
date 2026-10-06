@@ -20,13 +20,18 @@ export async function assessAtsResume({ text, jd = '', level = 'staff', company 
 }
 
 export function atsEditorReview(document, assessment, { historical = false, sources = [] } = {}) {
-  const fields = resumeFields(document.model).filter(field => field.id !== 'name' && field.group !== 'Contact');
+  const fields = resumeFields(document.model);
+  const words = value => String(value).replace(/\u0000/g, '\ufffd').replace(/\s+/g, ' ').trim();
   const fixes = Array.isArray(assessment.res?.fixes) ? assessment.res.fixes : [];
   const prepared = assessment.res?.responseVersion === 1 && !historical;
   if (assessment.res?.responseVersion !== undefined && assessment.res.responseVersion !== 1) throw new Error('The ATS review uses an unsupported suggestion format.');
   const excerpts = prepared ? reviewPacket(document).excerpts : [];
   const findings = fixes.map((fix, index) => {
-    const quote = fix.anchor?.quote || '', matches = quote ? fields.filter(field => field.value.includes(quote)) : [];
+    const quote = fix.anchor?.quote || '';
+    const section = String(fix.anchor?.section || '').trim().toLowerCase();
+    const matches = words(quote) ? fields.filter(field => words(field.value).includes(words(quote))) :
+      section ? fields.filter(field => field.id.endsWith('.heading') && field.value.trim().toLowerCase() === section ||
+        field.id === 'summary' && ['summary', 'profile', 'professional summary', 'about'].includes(section)) : [];
     let response = prepared ? structuredClone(fix.response) : undefined;
     if (response?.kind === 'revision') {
       if (Object.keys(response).some(key => !['kind', 'text', 'reason', 'evidence'].includes(key)) || typeof response.text !== 'string' || !response.text.trim() || response.evidence !== undefined && (!Array.isArray(response.evidence) || response.evidence.some(id => typeof id !== 'string' || !id.startsWith('source-')))) throw new Error('The ATS review returned an invalid proposed revision.');
@@ -56,13 +61,15 @@ export async function atsMigrationIdentity(entry) {
   return { id: 'ats-' + await digest(entry.kind + ':' + entry.id), fingerprint: await digest(JSON.stringify(atsMigrationSnapshot(entry))) };
 }
 
-export async function migrateAtsResume(entry, review = null, sourceIds = []) {
+export async function migrateAtsResume(entry, review = null, sourceIds = [], importText = null) {
   const identity = await atsMigrationIdentity(entry), payload = entry.payload || {};
   if (entry.kind === 'workspace' && !payload.rb) throw new Error('The saved editable resume is missing. Nothing was replaced.');
   if (entry.kind === 'review') review = entry;
   if (review && (review.kind !== 'review' || review.tool !== 'ats' || (entry.kind === 'workspace' && payload.reviewId !== review.id))) throw new Error('This review does not belong to the saved workspace.');
   const original = review?.payload || {}, warnings = [], savedDesign = payload.design || {};
-  const model = payload.rb ? structuredClone(payload.rb) : structureResumeText(original.importText || original.source?.text || original.text || '').model;
+  const imported = payload.rb ? null : structureResumeText(importText ?? (original.importText || original.source?.text || original.text || ''));
+  const model = payload.rb ? structuredClone(payload.rb) : imported.model;
+  if (imported) warnings.push(...imported.warnings);
   let serial = 0;
   const stableId = () => 'ats-field-' + ++serial;
   model.contact = { ...model.contact, links: (model.contact?.links || []).map(link => ({ ...link, id: stableId() })) };

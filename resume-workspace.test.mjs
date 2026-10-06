@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { reviewPacket, validateRequirements, validateReview, reviewResumeWithAI, inventoryResumeWithAI, reviseResumeWithAI, boundedResumeCompletion, decideResumeFinding, resumeFindingDecision, resumeReviewFindings } from './src/js/resume-review.mjs';
-import { verifyResumePdf } from './src/js/resume-pdf.mjs';
+import { readResumePdf, verifyResumePdf } from './src/js/resume-pdf.mjs';
 import { createHostedResumeClient, resumeSaveFailureFeedback } from './src/js/resume-hosted.mjs';
 import { extractResumePdfText, structureResumeText } from './src/js/resume-workspace.mjs';
 import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorReview } from './src/js/resume-ats.mjs';
@@ -192,6 +192,51 @@ test('Structured import preserves clear roles, dates, bullets and uncertain sour
   assert.equal(uncertain.model.sections[0].text, 'Designer, 2010\nNo clear achievement boundary.');
   assert.equal(structureResumeText('Entire unfamiliar source.').model.sections[0].text, 'Entire unfamiliar source.');
   assert.throws(() => structureResumeText(''), /readable/);
+});
+
+const rebuildSourceText = 'Alex Example\nSenior Product Designer\nalex@example.test\n+44 1234567890\nexample.test\nLondon, UK\n\nSUMMARY\nDesigning accessible services\nwith research evidence.\n\nEXPERIENCE\nSenior Designer\nExample Studio\n03/2022 - Present\nLondon, UK\n- Led accessible product\nresearch and prototyping.\n\nEXPERIENCE\nProduct Designer\nEarlier Studio\n01/2018 - 02/2022\nRemote, UK\n- Built useful workflows.\n\nEDUCATION\nBachelor in Design\nExample University\n2014 - 2018\n- Communication Design\n\nPROJECTS\nPortfolio project\nIndependent work\n- Shipped an accessible demo.';
+
+test('ATS source reconstruction fills header and typed sections, merges repeated headings and anchors guidance', async () => {
+  const entry = { id: 'line-rebuild', tool: 'ats', kind: 'review', at: 42, payload: { text: rebuildSourceText.replace(/\s+/g, ' '), res: { score: 63, fixes: [
+    { point: 'Review work history', anchor: { type: 'section', section: 'Experience' } },
+    { point: 'Clarify research', anchor: { type: 'quote', quote: 'accessible product research and prototyping.' } },
+    { point: 'Review profile', anchor: { type: 'section', section: 'Summary' } },
+    { point: 'Check email', anchor: { type: 'quote', quote: 'alex@example.test' } },
+    { point: 'Ambiguous employer', anchor: { type: 'quote', quote: 'Studio' } },
+    { point: 'Document-wide layout', anchor: { type: 'global' } },
+  ] } } };
+  const before = structuredClone(entry);
+  const document = await migrateAtsResume(entry, null, [], rebuildSourceText);
+  assert.deepEqual(entry, before);
+  assert.deepEqual(document.ats.legacy.entry, before);
+  assert.equal(document.model.name, 'Alex Example');
+  assert.equal(document.model.title, 'Senior Product Designer');
+  assert.equal(document.model.contact.email, 'alex@example.test');
+  assert.equal(document.model.contact.phone, '+44 1234567890');
+  assert.equal(document.model.contact.location, 'London, UK');
+  assert.equal(document.model.contact.links[0].url, 'https://example.test');
+  assert.equal(document.model.summary, 'Designing accessible services with research evidence.');
+  const experience = document.model.sections.filter(section => section.kind === 'experience');
+  assert.equal(experience.length, 1); assert.equal(experience[0].items.length, 2);
+  assert.equal(experience[0].items[1].dates, '01/2018 - 02/2022');
+  assert.equal(experience[0].items[0].org, 'Example Studio');
+  assert.equal(experience[0].items[0].location, 'London, UK');
+  const education = document.model.sections.find(section => section.kind === 'education');
+  assert.equal(education.items[0].school, 'Example University');
+  assert.equal(education.items[0].credential, 'Bachelor in Design');
+  assert.equal(education.items[0].bullets[0].text, 'Communication Design');
+  assert.deepEqual(document.aiReview.findings.map(finding => finding.fieldIds.length), [1, 1, 1, 1, 0, 0]);
+  assert.equal(document.aiReview.signature, '', 'Reconstruction never silently regrades or approves the old review');
+  const html = resumeBody(document);
+  assert.match(html, /Communication Design/); assert.match(html, /Shipped an accessible demo/);
+  const unknown = structureResumeText(rebuildSourceText.replace('+44', '\ufffd44'));
+  assert.equal(unknown.model.contact.phone, '\ufffd44 1234567890');
+  assert.ok(unknown.warnings.some(warning => /glyphs/.test(warning)));
+  const skills = structureResumeText('Skills\nResearch\nPrototyping\nAccessibility\n\nTools: Figma, HTML').model.sections[0];
+  assert.deepEqual(skills.groups.map(group => ({ label: group.label, items: group.items })), [
+    { label: '', items: ['Research', 'Prototyping', 'Accessibility'] },
+    { label: 'Tools', items: ['Figma', 'HTML'] },
+  ]);
 });
 
 function reviewFixture() {
@@ -653,6 +698,46 @@ describe('Resume browser acceptance', () => {
     assert.equal(response.status, 200, JSON.stringify(result));
     return result;
   }
+  test('Rebuilding an imported original creates a structured copy, preserves the old draft and exports every field', async () => {
+    const bytes = Buffer.from(rebuildSourceText);
+    const source = preview.store.source({ name: 'original-rebuild.txt', type: 'text/plain', text: rebuildSourceText }, bytes);
+    const entry = { id: 'flat-recovery', tool: 'ats', kind: 'review', at: 1, payload: { text: rebuildSourceText.replace(/\s+/g, ' '), state: { jd: 'Accessible product design', mode: 'job' }, res: { score: 63, fixes: [{ point: 'Work history', anchor: { type: 'section', section: 'Experience' } }] } } };
+    const document = await migrateAtsResume(entry, null, [source.id]);
+    preview.store.create(document);
+    const before = structuredClone(preview.store.get(document.id));
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await resumeOption(page, 'Rebuild from original');
+      const dialog = page.getByRole('dialog', { name: 'Review imported source' });
+      await dialog.waitFor();
+      assert.match(await dialog.innerText(), /current resume, edits and history stay unchanged/);
+      assert.equal(await dialog.getByRole('button', { name: 'Attach original', exact: true }).count(), 0);
+      await dialog.getByRole('button', { name: 'Create rebuilt copy', exact: true }).click();
+      await dialog.waitFor({ state: 'detached' }); await saved(page);
+      const rebuilt = preview.store.list().documents.find(row => row.document.rebuiltFrom?.id === document.id).document;
+      assert.equal(rebuilt.model.name, 'Alex Example');
+      assert.deepEqual(rebuilt.target, document.target);
+      assert.equal(rebuilt.aiReview.findings[0].fieldIds.length, 1);
+      assert.deepEqual(preview.store.get(document.id), before);
+      assert.deepEqual(preview.store.sourceFile(source.id).bytes, bytes);
+      const rendered = page.waitForResponse(response => response.url().endsWith('/resumes/' + rebuilt.id + '/export') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await page.locator('.textLayer').first().waitFor();
+      const output = await (await rendered).json();
+      assert.equal(output.verification.complete, true);
+      assert.equal(output.verification.fields, resumeFields(rebuilt.model).filter(field => !field.id.endsWith('.url') && field.value.trim()).length);
+      assert.match(output.extractedText.replace(/\s+/g, ' '), /Communication Design/); assert.match(output.extractedText.replace(/\s+/g, ' '), /Shipped an accessible demo/);
+      const download = page.waitForEvent('download');
+      await page.getByRole('link', { name: 'Download this PDF', exact: true }).click();
+      const downloaded = await download;
+      assert.equal(await downloaded.failure(), null);
+      const actual = await readResumePdf(new Uint8Array(readFileSync(await downloaded.path())), { loadPdf: () => import('pdfjs-dist/legacy/build/pdf.mjs') });
+      assert.equal(verifyResumePdf(rebuilt, actual.pages, actual.links, output.pages).verification.complete, true);
+      assert.equal(preview.store.get(rebuilt.id).versions.at(-1).checkpoint, 'export');
+      assert.deepEqual(preview.store.get(document.id), before);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
   async function openSample(id, width = 1440, sampleTools = true) {
     const context = await browser.newContext({ viewport: { width, height: width < 760 ? 844 : 1000 }, hasTouch: width < 760, isMobile: width < 760 });
     await context.route('**/*', route => {
@@ -1874,11 +1959,19 @@ describe('Resume browser acceptance', () => {
         await page.setViewportSize({ width: 1440, height: 1000 });
       };
       await assertReviewerAction('Rebuild your resume');
+      await page.getByRole('button', { name: 'Rebuild your resume', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.locator('.atsv__bar [data-atsv-close]').click();
       await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
       await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
       await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
       await assertReviewerAction('Continue editing resume');
+      await page.getByRole('button', { name: 'Continue editing resume', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       const reviewCard = page.locator('.atsv__item[data-fi="0"]');
       assert.equal(await reviewCard.evaluate(node => node.closest('details') === null), true, 'Concrete reviewer suggestions are not hidden in an accordion');
       assert.doesNotMatch(await page.locator('[data-atsv-rail]').innerText(), /About this review|Heuristic assessment|Historical semantic/);
@@ -1920,7 +2013,7 @@ describe('Resume browser acceptance', () => {
       await readOnlyFinding.press('Escape');
       await readOnlyFinding.waitFor({ state: 'detached' });
       await reviewCard.press('Enter');
-      await readOnlyFinding.getByRole('button', { name: 'Address in editor', exact: true }).click();
+      await readOnlyFinding.getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
       await editor.locator('[data-context-finding="0"]').waitFor();
       assert.equal(await editor.locator('[data-ats-migration]').count(), 0);
       await editor.getByRole('button', { name: 'Review information', exact: true }).click();
@@ -3816,5 +3909,13 @@ test('ATS migration storage verifies originals, retries without duplication and 
     const count = (await store.list()).documents.length;
     await store.recoverLegacy(edited.id, recovered.version + 1, { entry: local, review });
     assert.equal((await store.list()).documents.length, count);
+    const fresh = { ...review, id: 'line-preserving-review', payload: { ...review.payload, text: rebuildSourceText.replace(/\s+/g, ' ') } };
+    await legacy.put('prep/ats/' + fresh.id + '.json', JSON.stringify(fresh));
+    await assert.rejects(store.migrate(fresh, null, 0, { sha256: '0'.repeat(64), text: rebuildSourceText }), /does not identify/);
+    const rebuilt = await store.migrate(fresh, null, 0, { sha256, text: rebuildSourceText });
+    assert.equal(rebuilt.document.model.name, 'Alex Example');
+    assert.equal(rebuilt.document.ats.legacy.entry.payload.text, fresh.payload.text);
+    assert.deepEqual(await store.migrate(fresh, null, 0, { sha256, text: rebuildSourceText }), rebuilt);
+    assert.deepEqual(new Uint8Array((await store.sourceFile(sha256)).bytes), bytes);
   } finally { await runtime.dispose(); }
 });

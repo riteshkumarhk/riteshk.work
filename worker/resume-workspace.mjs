@@ -67,7 +67,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
     return found;
   }
   return {
-    async migrate(entry, review = null, attempt = 0) {
+    async migrate(entry, review = null, attempt = 0, importSource = null) {
       if (!legacyBucket) throw fault('ATS migration storage is not available.', 503);
       const identity = await atsMigrationIdentity(entry);
       if (entry.kind === 'workspace' && entry.payload?.reviewId && !review) {
@@ -83,7 +83,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
         if (remote && (await atsMigrationIdentity(remote)).fingerprint !== (await atsMigrationIdentity(snapshot)).fingerprint) {
           if (!await bucket.head(documentKey(identity.id))) {
             if (attempt >= 2) throw fault('The ATS record is still changing. Close the older editor and retry; no copy was replaced.', 409);
-            await this.migrate(snapshot.id === entry.id ? remote : entry, snapshot.id === review?.id ? remote : review, attempt + 1);
+            await this.migrate(snapshot.id === entry.id ? remote : entry, snapshot.id === review?.id ? remote : review, attempt + 1, importSource);
           }
           throw Object.assign(fault('The saved ATS record changed. Recover both copies before continuing.', 409), { code: 'legacy-conflict', resumeId: identity.id });
         }
@@ -109,6 +109,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
         return finish(record);
       }
       const saved = remoteOriginal?.payload?.resumeDocument || original?.payload?.resumeDocument;
+      if (importSource !== null && (entry.kind !== 'review' || importSource.sha256 !== saved?.sha256 || typeof importSource.text !== 'string' || !importSource.text.trim() || importSource.text.length > 120000)) throw fault('The reconstructed text does not identify this original resume.', 422);
       const sourceIds = [];
       if (saved?.data) {
         const bytes = Uint8Array.from(atob(saved.data), character => character.charCodeAt(0));
@@ -116,7 +117,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
         const source = await this.source({ name: saved.name, type: saved.type, text: original.payload.source?.text || original.payload.text || '' }, bytes);
         sourceIds.push(source.id);
       } else if (saved?.sha256 && await bucket.head('sources/meta/' + saved.sha256 + '.json')) sourceIds.push(saved.sha256);
-      const document = await migrateAtsResume(entry, review, sourceIds);
+      const document = await migrateAtsResume(entry, review, sourceIds, importSource?.text);
       const record = await this.create(document).catch(async error => {
         if (error.status !== 409) throw error;
         const current = await this.get(identity.id);
@@ -265,7 +266,7 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
       try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw fault('Invalid JSON.'); }
     };
     if (request.method === 'GET' && parts.join('/') === 'library') return reply(await store.list());
-    if (request.method === 'POST' && parts.join('/') === 'migrate') { const input = await body(); return reply(await store.migrate(input.entry, input.review)); }
+    if (request.method === 'POST' && parts.join('/') === 'migrate') { const input = await body(); return reply(await store.migrate(input.entry, input.review, 0, input.importSource)); }
     if (request.method === 'POST' && parts.join('/') === 'resumes') return reply(await store.create((await body()).document));
     if (request.method === 'POST' && parts.join('/') === 'sources') {
       const input = await body();

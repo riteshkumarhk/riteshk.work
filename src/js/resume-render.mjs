@@ -4,7 +4,7 @@ import { resumeContactItems, resumeSectionColumn } from './resume-document.mjs';
 import { installResumeInlineEditor } from './resume-inline-editor.mjs';
 import { resumeIcon } from './resume-icons.mjs';
 
-export const RESUME_RENDER_VERSION = 13;
+export const RESUME_RENDER_VERSION = 14;
 export const escapeResumeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 export function resumeHref(value) {
@@ -25,10 +25,11 @@ export function resumeBody(document, interactive = false) {
   }).join('<span class="contact-separator" aria-hidden="true"> / </span>');
   const header = `<header class="resume-header">${field('name', model.name, 'h1')}${field('title', model.title, 'p', 'resume-title')}<div class="resume-contact">${links}</div></header>`;
   const summary = model.summary || interactive ? `<section class="resume-summary"><h2>Profile</h2>${field('summary', model.summary, 'p')}</section>` : '';
+  const bullets = item => (item.bullets || []).length ? `<ul class="resume-import-list">${item.bullets.map(bullet => `<li><span class="resume-import-marker" aria-hidden="true">&#8226; </span>${field(bullet.id, bullet.text)}</li>`).join('')}</ul>` : '';
   const sectionHtml = section => {
     let body = '';
     if (section.kind === 'experience') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.role', item.role, 'h3')}${detail('cal', item.id + '.dates', item.dates, 'dates')}</div><div class="entry-meta">${field(item.id + '.org', item.org)}${item.location || interactive ? ' / ' + detail('loc', item.id + '.location', item.location) : ''}</div><ul class="resume-import-list">${item.bullets.map(bullet => `<li><span class="resume-import-marker" aria-hidden="true">&#8226; </span>${field(bullet.id, bullet.text)}</li>`).join('')}</ul></article>`).join('');
-    else if (section.kind === 'education') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.school', item.school, 'h3')}${detail('cal', item.id + '.dates', item.dates, 'dates')}</div><p class="education-description">${field(item.id + '.credential', item.credential)}${item.note || interactive ? ' ' + field(item.id + '.note', item.note) : ''}</p></article>`).join('');
+    else if (section.kind === 'education') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.school', item.school, 'h3')}${detail('cal', item.id + '.dates', item.dates, 'dates')}</div><p class="education-description">${field(item.id + '.credential', item.credential)}${item.note || interactive ? ' ' + field(item.id + '.note', item.note) : ''}</p>${bullets(item)}</article>`).join('');
     else if (section.kind === 'skills') body = section.groups.map(group => `<p class="skill-group">${field(group.id + '.label', group.label, 'strong')}${group.label ? ': ' : ''}${field(group.id + '.items', group.items.join(', '))}</p>`).join('');
     else if (section.kind === 'text') {
       body = section.text.split(/\n\s*\n/).map(paragraph => {
@@ -50,7 +51,7 @@ export function resumeBody(document, interactive = false) {
       body = '<div data-field="' + escape(section.id + '.text') + '">' + body + '</div>';
     }
     else {
-      const entries = (section.items || []).map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.title', item.title, 'h3')}${item.dates || interactive ? field(item.id + '.dates', item.dates, 'span', 'dates') : ''}</div>${section.kind === 'links' && resumeHref(item.meta) ? `<a href="${escape(resumeHref(item.meta))}">${field(item.id + '.meta', item.meta)}</a>` : field(item.id + '.meta', item.meta, 'p')}</article>`);
+      const entries = (section.items || []).map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.title', item.title, 'h3')}${item.dates || interactive ? field(item.id + '.dates', item.dates, 'span', 'dates') : ''}</div>${section.kind === 'links' && resumeHref(item.meta) ? `<a href="${escape(resumeHref(item.meta))}">${field(item.id + '.meta', item.meta)}</a>` : field(item.id + '.meta', item.meta, 'p')}${bullets(item)}</article>`);
       const columns = document.design.layout === 'hybrid' && [2, 3].includes(section.columns) ? section.columns : 1;
       for (let index = 0; index < entries.length; index += columns) body += columns > 1 ? `<div class="resume-entry-row" style="--entry-columns:${columns}">${entries.slice(index, index + columns).join('')}</div>` : entries[index];
     }

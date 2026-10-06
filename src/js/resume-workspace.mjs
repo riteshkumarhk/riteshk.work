@@ -83,7 +83,7 @@ export function structureResumeText(text) {
     ['experience', 'experience'], ['work experience', 'experience'], ['professional experience', 'experience'], ['employment history', 'experience'],
     ['education', 'education'], ['qualifications', 'education'], ['skills', 'skills'], ['technical skills', 'skills'], ['core competencies', 'skills'],
     ['summary', 'text'], ['professional summary', 'text'], ['profile', 'text'], ['about', 'text'],
-    ['projects', 'custom'], ['awards', 'custom'], ['certifications', 'custom'], ['achievements', 'custom'], ['key achievements', 'custom'], ['publications', 'custom'], ['interests', 'text'], ['languages', 'text'], ['contact', 'text'],
+    ['projects', 'custom'], ['awards', 'custom'], ['certifications', 'custom'], ['achievements', 'custom'], ['key achievements', 'custom'], ['publications', 'custom'], ['interests', 'text'], ['languages', 'text'], ['contact', 'text'], ['find me online', 'custom'],
   ]);
   const lines = text.replace(/\r\n?/g, '\n').split('\n'), blocks = [], preamble = [];
   let block = null, serial = 0;
@@ -91,7 +91,11 @@ export function structureResumeText(text) {
   for (const line of lines) {
     const heading = line.trim().replace(/^#{1,6}\s+/, '').replace(/:$/, '');
     const kind = headingKinds.get(heading.toLowerCase());
-    if (kind) { block = { id: id(), heading, kind, lines: [] }; blocks.push(block); }
+    if (kind) {
+      block = blocks.find(candidate => candidate.heading.toLowerCase() === heading.toLowerCase());
+      if (block) block.lines.push('');
+      else { block = { id: id(), heading, kind, lines: [] }; blocks.push(block); }
+    }
     else (block ? block.lines : preamble).push(line);
   }
   const model = { name: '', title: '', summary: '', contact: { links: [] }, sections: [] }, warnings = [];
@@ -99,23 +103,47 @@ export function structureResumeText(text) {
     model.sections.push({ id: id(), kind: 'text', heading: 'Imported content', text });
     return { model, warnings: ['No unambiguous section headings found; all text was retained together.'], method: 'Source-preserving section import v1' };
   }
-  const header = preamble.join('\n').trim();
-  if (header) model.sections.push({ id: id(), kind: 'text', heading: 'Profile', text: header });
+  const headerLines = preamble.map(line => line.trim()).filter(Boolean), remainder = [];
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phonePattern = /^(?:\+|\ufffd)?\d[\d ()-]{6,}\d$/;
+  const linkPattern = /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/\S*)?$/i;
+  const contactLine = line => emailPattern.test(line) || phonePattern.test(line) || linkPattern.test(line);
+  if (headerLines.length > 1 && /^[\p{L}\p{M}][\p{L}\p{M} .'-]{1,79}$/u.test(headerLines[0]) && headerLines.slice(1).some(contactLine)) {
+    model.name = headerLines.shift();
+    if (headerLines.length && !contactLine(headerLines[0]) && !headerLines[0].includes(',') && headerLines[0].length <= 160) model.title = headerLines.shift();
+    else if (headerLines.length && !contactLine(headerLines[0]) && /designer|engineer|manager|director|consultant|architect|analyst|researcher|lead|strategist/i.test(headerLines[0])) model.title = headerLines.shift();
+  }
+  for (const line of headerLines) {
+    if (emailPattern.test(line) && !model.contact.email) model.contact.email = line;
+    else if (phonePattern.test(line) && !model.contact.phone) model.contact.phone = line;
+    else if (linkPattern.test(line)) model.contact.links.push({ id: id(), label: line, url: /^https?:\/\//i.test(line) ? line : 'https://' + line });
+    else if (model.name && !model.contact.location && /^[\p{L}\p{M} .'-]+,\s*[\p{L}\p{M} .,'-]+$/u.test(line)) model.contact.location = line;
+    else remainder.push(line);
+  }
+  if (remainder.length) {
+    model.sections.push({ id: id(), kind: 'text', heading: 'Profile', text: remainder.join('\n') });
+    warnings.push('Unclassified profile lines are retained; confirm their fields before export.');
+  }
+  if (text.includes('\ufffd') || text.includes('\u0000')) warnings.push('Some source glyphs have no readable mapping. Compare the marked characters with the original; none were guessed.');
   const bulletPattern = /^\s*(?:[\u2022\u25e6\u25aa\u2023*+-]|\d+[.)])\s+(.+)$/;
-  const datePattern = /^(?:(?:[A-Za-z]{3,9}\s+)?(?:19|20)\d{2}|\d{1,2}[/.](?:19|20)\d{2})\s*[-\u2013\u2014]\s*(?:(?:[A-Za-z]{3,9}\s+)?(?:19|20)\d{2}|present|current|now)$/i;
+  const datePattern = /^(?:(?:[A-Za-z]{3,9}\s+)?(?:19|20)\d{2}|\d{1,2}[/.](?:19|20)\d{2})\s*[-\u2013\u2014]\s*(?:(?:[A-Za-z]{3,9}\s+)?(?:19|20)\d{2}|\d{1,2}[/.](?:19|20)\d{2}|present|current|now)$/i;
   for (const source of blocks) {
     const value = source.lines.join('\n').trim(), section = { id: source.id, heading: source.heading, kind: source.kind };
+    if (['summary', 'professional summary', 'profile', 'about'].includes(source.heading.toLowerCase()) && !model.summary) { model.summary = value.replace(/([^\n])\n(?=[^\n])/g, '$1 '); continue; }
     if (source.kind === 'skills') {
-      section.groups = source.lines.filter(line => line.trim()).map(line => {
-        const separator = line.indexOf(':');
-        return { id: id(), label: separator > 0 ? line.slice(0, separator).trim() : '', items: (separator > 0 ? line.slice(separator + 1) : line).split(',').map(item => item.trim()).filter(Boolean) };
-      });
+      section.groups = []; let group = null;
+      for (const line of source.lines) {
+        if (!line.trim()) { group = null; continue; }
+        const separator = line.indexOf(':'), items = (separator > 0 ? line.slice(separator + 1) : line).split(',').map(item => item.trim()).filter(Boolean);
+        if (!group || separator > 0) { group = { id: id(), label: separator > 0 ? line.slice(0, separator).trim() : '', items: [] }; section.groups.push(group); }
+        group.items.push(...items);
+      }
     } else if (source.kind !== 'text') {
       const entries = []; let entry = null;
       for (const line of source.lines) {
         if (!line.trim()) { if (entry) entry.break = true; continue; }
         const bullet = line.match(bulletPattern);
-        if (!entry || (!bullet && entry.bullets.length && entry.break)) { entry = { header: [], bullets: [], break: false }; entries.push(entry); }
+        if (!entry || (!bullet && entry.break && (entry.bullets.length || source.kind === 'custom' || entry.header.some(line => datePattern.test(line))))) { entry = { header: [], bullets: [], break: false }; entries.push(entry); }
         if (bullet) entry.bullets.push({ id: id(), text: bullet[1] });
         else if (entry.bullets.length) entry.bullets.at(-1).text += ' ' + line.trim();
         else entry.header.push(line.trim());
@@ -127,8 +155,11 @@ export function structureResumeText(text) {
           const heading = entry.header[0], detail = entry.header.slice(1), dateIndex = detail.findIndex(line => datePattern.test(line));
           const dates = dateIndex < 0 ? '' : detail.splice(dateIndex, 1)[0];
           const item = { id: id(), dates, bullets: entry.bullets };
-          if (source.kind === 'experience') return { ...item, role: heading, org: detail.join('\n'), location: '' };
-          if (source.kind === 'education') return { ...item, school: heading, credential: detail.join('\n'), note: '' };
+          if (source.kind === 'experience') return { ...item, role: heading, org: detail[0] || '', location: detail.slice(1).join('\n') };
+          if (source.kind === 'education') {
+            const credentialFirst = /^(?:bachelor|master|doctor|diploma|b\.|m\.|ph\.?d|cisce|a[- ]?levels)/i.test(heading) && detail.length;
+            return { ...item, school: credentialFirst ? detail.shift() : heading, credential: credentialFirst ? heading : detail.join('\n'), note: credentialFirst ? detail.join('\n') : '' };
+          }
           return { ...item, title: heading, meta: detail.join('\n') };
         });
       } else {
@@ -138,8 +169,8 @@ export function structureResumeText(text) {
     } else section.text = value;
     model.sections.push(section);
   }
-  if (header) warnings.push('Profile text is retained together; confirm name and contact fields before export.');
-  return { model, warnings, method: 'Source-preserving section import v1' };
+  warnings.push('Check the imported layout against the original before exporting. Original wording and unresolved characters are retained.');
+  return { model, warnings, method: 'Source-preserving section import v2' };
 }
 
 export function resumeFields(model) {

@@ -1688,7 +1688,7 @@ function App() {
       return { left: outer.left + inner.left * ratio, right: outer.left + inner.right * ratio, top: outer.top + inner.top * ratio, bottom: outer.top + inner.bottom * ratio };
     }, frame.current?.contentDocument);
   }, [!!contactEdit, contactEdit?.fieldId, rendering, zoom, pageInfo, availableWidth, availableHeight]);
-  const importFile = async (file) => {
+  const importFile = async (file, rebuildFrom = null) => {
     if (!file) return;
     const currentTask = createResumeTask(live.current.document), generation = navigation.current;
     task.current?.cancel(); task.current = currentTask;
@@ -1745,7 +1745,7 @@ function App() {
         throw new Error(
           "The extracted text exceeds the sample limit. Nothing was silently truncated.",
         );
-      setImported({ file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation });
+      setImported({ file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation, rebuildFrom });
       setDialog("import");
     } catch (failure) {
       if (isCurrent()) setError(failure.message);
@@ -1754,6 +1754,29 @@ function App() {
         setBusy(null); task.current = null;
         if (fileInput.current) fileInput.current.value = "";
       }
+    }
+  };
+  const rebuildOriginal = async (source) => {
+    if (busy || !source) return;
+    document.getElementById("resume-review-info")?.hidePopover();
+    const currentTask = createResumeTask(live.current.document), generation = navigation.current;
+    task.current?.cancel(); task.current = currentTask;
+    setBusy("rebuild-source"); setError("");
+    try {
+      await persist();
+      let blob;
+      if (hosted) blob = await hostedClient.file("sources/" + source.id, source.type, { signal: currentTask.signal });
+      else {
+        const response = await fetch("/__resume/sources/" + source.id, { signal: currentTask.signal });
+        if (!response.ok) throw new Error("The original file could not be read. Your current resume is unchanged.");
+        blob = await response.blob();
+      }
+      if (task.current !== currentTask || currentTask.signal.aborted || navigation.current !== generation || !currentTask.accept(live.current.document, true)) return;
+      await importFile(new File([blob], source.name, { type: source.type }), structuredClone(live.current.document));
+    } catch (failure) {
+      if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message);
+    } finally {
+      if (task.current === currentTask) { setBusy(null); task.current = null; }
     }
   };
   const cancelImport = () => {
@@ -1785,12 +1808,18 @@ function App() {
         await persist();
         if (!isCurrent()) return;
         const next = createResume({
-          name: pendingImport.file.name.replace(/\.[^.]+$/, ""),
+          name: pendingImport.rebuildFrom ? pendingImport.rebuildFrom.name + " / rebuilt" : pendingImport.file.name.replace(/\.[^.]+$/, ""),
+          target: pendingImport.rebuildFrom?.target,
           sourceIds: [source.id],
-          design: pendingImport.pages ? { pageLimit: pendingImport.pages } : {},
+          design: pendingImport.rebuildFrom ? {} : pendingImport.pages ? { pageLimit: pendingImport.pages } : {},
           model: pendingImport.structure.model,
         });
         next.importNotes = { sourcePages: pendingImport.pages, sourceId: source.id, method: pendingImport.structure.method, warnings: pendingImport.structure.warnings };
+        if (pendingImport.rebuildFrom) {
+          const original = pendingImport.rebuildFrom;
+          next.rebuiltFrom = { id: original.id, signature: resumeSignature(original) };
+          if (original.aiReview?.kind === "ats") next.aiReview = atsEditorReview(next, original.aiReview.signals || { res: original.aiReview.result, at: original.aiReview.at }, { historical: true });
+        }
         const record = await api("resumes", {
           method: "POST",
           signal: currentTask.signal,
@@ -1911,6 +1940,7 @@ function App() {
     <div className="rws-inline-actions">
       <button className="rws-text-button" onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); setSourceId(source.id); setMode("source"); setSheetOpen(false); setLibraryOpen(false); }}>View original<ExternalLink size={13} /></button>
       <button className="rws-text-button" disabled={!!busy} onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); fileInput.current.click(); }}>Reupload source<Upload size={13} /></button>
+      <button className="rws-text-button" disabled={!!busy} onClick={() => rebuildOriginal(source)}>Rebuild from original<RefreshCw size={13} /></button>
       <a className="rws-text-button" href={fileHref("sources/" + source.id, true)} onClick={event => downloadOriginal(event, source)} download>Download<Download size={13} /></a>
     </div>
   </article>;
@@ -2169,6 +2199,7 @@ function App() {
             { label: "Download PDF", icon: FileDown, action: () => renderPdf(true) },
             { label: "Rename resume", icon: TextCursorInput, action: () => openDialog("rename", doc.name) },
             { label: "Duplicate resume", icon: Copy, action: () => openDialog("duplicate", doc.name + " / copy") },
+            ...(originalFiles.length === 1 ? [{ label: "Rebuild from original", icon: RefreshCw, action: () => rebuildOriginal(originalFiles[0]) }] : []),
             { label: doc.archived ? "Restore from archive" : "Archive this resume", icon: Archive, action: () => setDialog("archive") },
             { label: "View version history", icon: History, action: showVersions },
           ]} />
@@ -3087,15 +3118,15 @@ function App() {
                 Cancel
               </button>
               <button className="btn" disabled={!!busy} onClick={() => saveSource(true)}>
-                Create resume from text
+                {imported.rebuildFrom ? "Create rebuilt copy" : "Create resume from text"}
               </button>
-              <button
+              {!imported.rebuildFrom && <button
                 className="btn btn--primary"
                 disabled={!!busy}
                 onClick={() => saveSource(false)}
               >
                 Attach original
-              </button>
+              </button>}
             </>
           }
         >
@@ -3115,6 +3146,7 @@ function App() {
             The original file stays byte-for-byte. Creating a resume imports
             editable text, not the original document's design.
           </p>
+          {imported.rebuildFrom && <p>Your current resume, edits and history stay unchanged. The rebuilt copy retains your target role and original review as historical guidance, with findings matched to the new fields.</p>}
           <p>Attaching adds a source without replacing your draft or earlier files. Existing reviews stay tied to their original inputs; review again after attaching a different file.</p>
           {!!imported.unmappedGlyphs && <p className="rws-error" role="alert">{imported.unmappedGlyphs} characters have no readable mapping in this PDF. They remain marked in the extracted text and need comparison with the original.</p>}
           {!!imported.unresolvedMarkers && <p className="rws-error" role="alert">{imported.unresolvedMarkers} bullet markers could not be matched to a line. Check their positions against the original.</p>}
