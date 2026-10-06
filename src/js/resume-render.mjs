@@ -4,7 +4,7 @@ import { resumeContactItems, resumeSectionColumn } from './resume-document.mjs';
 import { installResumeInlineEditor } from './resume-inline-editor.mjs';
 import { resumeIcon } from './resume-icons.mjs';
 
-export const RESUME_RENDER_VERSION = 15;
+export const RESUME_RENDER_VERSION = 16;
 export const escapeResumeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 export function resumeHref(value) {
@@ -81,7 +81,7 @@ export function renderResumeHtml(document, { interactive = false, base = '', sou
 .resume-entry-row{display:grid;grid-template-columns:repeat(var(--entry-columns),minmax(0,1fr));gap:14px;break-inside:avoid}.resume-entry-row .resume-entry{min-width:0;break-inside:avoid}
 .entry-heading{flex-wrap:wrap;column-gap:12px;row-gap:2px;break-after:avoid}.entry-heading h3{min-width:0;flex:1 1 120px}.entry-heading .dates{max-width:100%;margin-left:auto;text-align:right;white-space:normal;overflow-wrap:anywhere}.education-description,.resume-entry>p,.skill-group{white-space:normal}
 ${design.density === 'compact' ? 'body{line-height:1.25}h2{margin:10px 0 6px;padding-bottom:3px}.resume-header{padding-bottom:8px}.resume-title{margin-top:3px}.resume-contact{margin-top:6px}.entry-meta{margin:2px 0 3px}.resume-entry{margin-bottom:8px}li{margin-bottom:2px}.skill-group{margin-bottom:4px}.resume-import-paragraph+.resume-import-paragraph{margin-top:6px}' : ''}
-body{font-size:${bodySize}pt;line-height:${lineHeight}}
+body{font-size:${bodySize}pt;line-height:${lineHeight};font-feature-settings:"calt" 0}
 ${interactive ? '[data-field]{cursor:text;border-radius:2px}[data-field]:hover,[data-field]:focus,.rws-active-field{outline:1px solid #ba863c;outline-offset:3px;background:#d8a65712}' : ''}`;
   if (sourceOnly) return { body: resumeBody(document), css: style };
   const signature = JSON.stringify([document.id, document.name, document.target, document.model, document.design, document.sourceIds]);

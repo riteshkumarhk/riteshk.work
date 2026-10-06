@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createResume, resumeFields, validatePdfText, normalizeResumePdfText } from './src/js/resume-workspace.mjs';
 import { inspectAuthoredPdf, inspectPdfReadingOrder } from './src/js/resume-pdf-structure.mjs';
-import { verifyResumePdf } from './src/js/resume-pdf.mjs';
+import { readResumePdf, verifyResumePdf } from './src/js/resume-pdf.mjs';
+import { renderResumeHtml, RESUME_RENDER_VERSION } from './src/js/resume-render.mjs';
 import { createAssessmentSnapshot, createCandidateAssessment, validateCandidateAssessment } from './src/js/resume-assessment.mjs';
 import { captureAssessmentInput, extractAssessmentArtifact } from './src/js/resume-assessment-input.mjs';
 
@@ -211,6 +212,23 @@ test('Structure inspection is opt-in, snapshot-bound and revalidated rather than
   await assert.rejects(createAssessmentSnapshot({ target: input.target, artifact: { ...input.artifact, inspectStructure: 'authored-pdf-order-v1' } }), /bound rendered PDF/);
 });
 
+test('Preview and export disable contextual alternates without changing authored punctuation or PDF verification', () => {
+  const document = fixture(), before = structuredClone(document);
+  for (const options of [{}, { interactive: true }, { sourceOnly: true }]) {
+    const rendered = renderResumeHtml(document, options);
+    const css = options.sourceOnly ? rendered.css : rendered;
+    assert.match(css, /font-feature-settings:"calt" 0/);
+  }
+  assert.equal(RESUME_RENDER_VERSION, 16);
+  assert.deepEqual(document, before);
+  const complete = text(positions(document));
+  assert.equal(validatePdfText(document, complete).complete, true);
+  for (const symbol of ['+', '-']) {
+    assert.equal(validatePdfText(document, complete.replaceAll(symbol, '\u0000')).complete, false);
+    assert.equal(validatePdfText(document, complete.replaceAll(symbol, '')).complete, false);
+  }
+});
+
 test('Invisible line-break controls do not mimic missing summary or phone digits; visible omissions still fail', () => {
   const document = fixture();
   document.model.summary = 'I lead cross\u00adfunctional work and user\u200bcentred research.';
@@ -233,6 +251,29 @@ describe('Authored PDF real-rendering checks', () => {
     preview = await startPreview({ port: 5565, directory });
   });
   after(async () => { await preview?.close(); if (directory) rmSync(directory, { recursive: true, force: true }); });
+  test('Real PDFs retain raw phone, date and achievement punctuation without glyph recovery', async () => {
+    for (const font of ['inter', 'gelasio', 'gambetta', 'mono']) {
+      const document = fixture('punctuation-' + font), before = structuredClone(document.model);
+      document.design.font = font;
+      document.design.density = 'compact';
+      document.model.sections[0].items[0].dates = '03/2024 - Present';
+      document.model.sections[0].items[0].bullets[0].text = 'AI \u2013 Growth: Supported 175K+ enrollments, 250M+ users and 80+ fixes (FRE).';
+      document.model.sections[0].items[1].role = 'AI-enabled Product Designer';
+      document.model.sections[0].items[1].dates = '05/2019 - 02/2024';
+      const expected = structuredClone(document);
+      preview.store.create(document);
+      const response = await fetch(preview.origin + '/__resume/api/resumes/' + document.id + '/export', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': '1' }, body: '{}' });
+      const entry = await response.json(); assert.equal(response.status, 200, JSON.stringify(entry));
+      const bytes = new Uint8Array(preview.store.exportFile(document.id, entry.id).bytes);
+      const raw = await readResumePdf(bytes, { recoverGlyphs: false, loadPdf: () => import('pdfjs-dist/legacy/build/pdf.mjs') });
+      assert.doesNotMatch(raw.text, /[\u0000\ufffd]/);
+      assert.equal(raw.recoveredGlyphs, 0);
+      assert.equal(verifyResumePdf(document, raw.pages, raw.links, entry.pages).verification.complete, true);
+      assert.deepEqual(preview.store.get(document.id).document.model, expected.model);
+      assert.equal(preview.store.get(document.id).version, 1);
+      assert.equal(document.model.contact.phone, before.contact.phone);
+    }
+  });
   test('A real original two-column PDF exposes alternate orders without borrowing an edited document', async () => {
     const { chromium } = await import('playwright-core');
     const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', headless: true });

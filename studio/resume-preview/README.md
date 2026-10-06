@@ -1,5 +1,14 @@
 # Resume Studio
 
+PDF renderer 16 disables contextual font alternates (`calt`) consistently in
+the editor and exports. Cloudflare's Chromium can draw Inter's alternate
+punctuation as Type3 glyphs without Unicode mappings, making visible phone
+pluses, date hyphens and parentheses unreadable to PDF text extraction. Keep
+the selected font, source wording and strict verification; do not substitute
+source text for missing PDF text or merely recover glyphs to approve a broken
+download. Real-export coverage checks raw punctuation without glyph recovery.
+Renderer changes require the matching Worker and frontend deployment.
+
 Studio has one resume workflow: Prepare > Resume ATS Check > review > Rebuild your resume > clean editable resume > explicit ATS check > further refinement. Saved resumes remain in ATS history; there is no separate Resumes tab or legacy editable canvas. The editor uses dedicated private storage and the authenticated parent bridge. The separate local preview uses a filesystem store and its experimental evidence rubric; it is not a second production workflow. Automated hosted tests use synthetic authentication and Miniflare, not real account or device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
 
 The reviewer toolbar's Rebuild/Continue actions and each finding's **Rebuild to
