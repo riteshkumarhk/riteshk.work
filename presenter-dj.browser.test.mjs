@@ -1079,7 +1079,7 @@ test('unpublished font faces are authored choices and rich notes survive the web
     });
     await page.goto(base+'/studio/slide-merge-lab/');
     await waitForSlideEditor(page);
-    await page.waitForFunction(()=>[...document.fonts].some(font=>font.family==='Draft Display'&&font.status==='loaded'));
+    await page.waitForFunction(()=>[...document.fonts].some(font=>font.family.replace(/^['"]|['"]$/g,'')==='Draft Display'&&font.status==='loaded'));
     const point=await page.evaluate(()=>{const api=window.__slideMerge.api,state=api.getAppState(),text=api.getSceneElements().find(element=>element.id==='title'),box=document.querySelector('.lab-canvas').getBoundingClientRect();return {x:box.left+(text.x+text.width/2+state.scrollX)*state.zoom.value,y:box.top+(text.y+text.height/2+state.scrollY)*state.zoom.value};});
     await page.mouse.click(point.x,point.y);
     await page.getByRole('button',{name:'Show font picker',exact:true}).click();

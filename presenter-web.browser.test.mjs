@@ -388,6 +388,8 @@ for (const capture of [false, true]) test(`DJ input reaches native section contr
       await popup.locator("[data-pp-live]").click();
       await popup.locator("[data-pp-now] canvas").waitFor();
     }
+    await popup.evaluate(() => document.fonts.ready);
+    await popup.getByLabel("Audience slide controls", { exact: true }).click({ trial: true });
     const audience = await page.locator("[data-pjp-frame]").boundingBox();
     const preview = await popup.locator("[data-pp-now]").boundingBox();
     const previewPoint = bounds => ({ x: preview.x + (bounds.x + bounds.width / 2 - audience.x) / audience.width * preview.width, y: preview.y + (bounds.y + bounds.height / 2 - audience.y) / audience.height * preview.height });
@@ -396,10 +398,12 @@ for (const capture of [false, true]) test(`DJ input reaches native section contr
     assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser", "An iframe's noninteractive text is still laser content");
     const grip = previewPoint(await section.locator("[data-cmp]").boundingBox());
     await popup.mouse.move(grip.x, grip.y);
+    await page.waitForFunction(() => document.querySelector(".pjp")?.dataset.pointer === "control");
     assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "control");
     await popup.mouse.down(); await popup.mouse.move(grip.x + preview.width * 0.15, grip.y, { steps: 8 }); await popup.mouse.up();
     assert.ok(await section.locator(".pjb__cmp").evaluate(element => parseFloat(element.style.getPropertyValue("--pos"))) > 60, "DJ drag must change the actual audience comparison");
     await popup.mouse.move(heading.x, heading.y);
+    await page.waitForFunction(() => document.querySelector(".pjp")?.dataset.pointer === "laser");
     assert.equal(await page.locator(".pjp").getAttribute("data-pointer"), "laser");
     assert.doesNotMatch(await popup.locator("[data-pp-status]").textContent(), /use its controls directly/);
     await section.locator(".pjb__h").hover();

@@ -86,6 +86,13 @@ The exact element edge is the band's excluded inner boundary and can start a
 move instead. Keep the real pointer gesture, verify its horizontal resize cursor,
 and assert width reduction without moving the text or scaling its font.
 
+Presenter font assertions normalize optional CSS family quotes, as the runtime
+font loader does, while still requiring the real face to be loaded. Native
+section input tests wait for the DJ preview's fonts and stable hit area before
+mapping coordinates, then await the actual cross-window pointer mode before
+asserting it. Keep real pointer gestures and comparison-drag outcomes; do not
+replace them with synthetic state changes or longer blanket timeouts.
+
 The Python preview server uses `PreviewHTTPServer` with a 128-connection listen
 backlog and HTTP/1.1 persistent connections. Python's default five-slot backlog can refuse simultaneous module
 requests from native preview frames, even though the files exist and the server
