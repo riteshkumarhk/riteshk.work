@@ -121,6 +121,13 @@ Browser coverage keeps optional-metadata assertions in the dedicated
 `optional-layout` fixture, which owns the award entry and canvas locator.
 Run it together with the inline-editing case when changing either fixture.
 
+Inline Tab navigation must survive edit-start and edit-end messages queued
+before React commits the editing flag. A navigation tick triggers the pending
+field transition even when the document and final editing flag are unchanged.
+The immediate-Tab regression deliberately queues both messages; retain the
+separate real-keyboard, composition, Undo and contact-card checks without
+adding sleeps or weakening focus assertions.
+
 The prompt supplies each field's numeric tokens and original skill list;
 numeric magnitude suffixes and plus signs must remain intact.
 Visible versions remain export/manual checkpoints only.

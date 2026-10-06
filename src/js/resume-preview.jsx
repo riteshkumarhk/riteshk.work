@@ -445,6 +445,7 @@ function App() {
   const [leftPane, setLeftPane] = useState("review");
   const [returnToReview, setReturnToReview] = useState(false);
   const [inlineEditing, setInlineEditing] = useState(false);
+  const [inlineNavigationTick, setInlineNavigationTick] = useState(0);
   const inlineSession = useRef(null), renderedSignature = useRef(""), inlineNext = useRef(null), pendingInlineEdit = useRef(null);
   const [contactEdit, setContactEdit] = useState(null);
   const contactPanel = useRef(null), contactReturn = useRef(null);
@@ -708,6 +709,8 @@ function App() {
     }
     if (data.type === "resume-edit-end") {
       inlineSession.current = null; inlineNext.current = data.nextField || null;
+      // Start/end messages can be batched without committing the editing flag.
+      if (inlineNext.current) setInlineNavigationTick(value => value + 1);
       setInlineEditing(false);
     }
   };
@@ -1028,7 +1031,7 @@ function App() {
       300,
     );
     return () => clearTimeout(timer);
-  }, [signature, inlineEditing]);
+  }, [signature, inlineEditing, inlineNavigationTick]);
   useEffect(() => {
     const receive = (event) => {
       if (

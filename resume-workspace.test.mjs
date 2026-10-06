@@ -1108,6 +1108,25 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
+  test('Immediate inline Tab navigation survives queued edit-start and edit-end messages', async () => {
+    const document = fixture(); document.id = 'inline-immediate-tab';
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await page.locator('.rws-page-count[aria-busy="false"]').waitFor();
+      const paper = page.frameLocator('.rws-paper');
+      await paper.locator('.pagedjs_page [data-field="name"]').first().evaluate(element => {
+        element.click();
+        const input = element.ownerDocument.querySelector('[data-inline-field="name"]');
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+      });
+      await paper.locator('[data-inline-field="title"]:focus').waitFor();
+      await paper.locator('[data-inline-field="title"]').press('Shift+Tab');
+      await paper.locator('[data-inline-field="name"]:focus').waitFor();
+      assert.deepEqual(preview.store.get(document.id).document.model, document.model);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
   test('Inline split-page fields, composition, keyboard navigation and contact cards retain complete values', { timeout: 90000 }, async () => {
     const document = fixture(); document.id = 'inline-composition'; document.design.keepWhole = false;
     const text = Array.from({ length: 95 }, (_, index) => `Contribution ${index}: Retained the complete research and engineering account without changing attribution.`).join(' ');
