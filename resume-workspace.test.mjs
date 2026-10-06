@@ -1,16 +1,58 @@
 import test, { describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createResume, resumeFields, resumeSignature, editResumeField, resumeText, createResumeTask, createResumeHistory, applyResumeProposal, projectResumeProposal, assessResume, validatePdfText } from './src/js/resume-workspace.mjs';
+import { createResume, resumeFields, resumeSignature, editResumeField, resumeText, createResumeTask, createResumeHistory, resumeHistoryCheckpoints, validateResumeCheckpoint, applyResumeProposal, projectResumeProposal, assessResume, validatePdfText } from './src/js/resume-workspace.mjs';
 import { resumeBody, renderResumeHtml, resumeHref, RESUME_RENDER_VERSION } from './src/js/resume-render.mjs';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { reviewPacket, validateRequirements, validateReview, reviewResumeWithAI, inventoryResumeWithAI, reviseResumeWithAI, boundedResumeCompletion, decideResumeFinding, resumeFindingDecision, resumeReviewFindings } from './src/js/resume-review.mjs';
 import { verifyResumePdf } from './src/js/resume-pdf.mjs';
-import { createHostedResumeClient } from './src/js/resume-hosted.mjs';
+import { createHostedResumeClient, resumeSaveFailureFeedback } from './src/js/resume-hosted.mjs';
 import { extractResumePdfText, structureResumeText } from './src/js/resume-workspace.mjs';
 import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorReview } from './src/js/resume-ats.mjs';
+import { AI_TEXT_REQUEST_ATTEMPTS } from './src/js/ai-request-limits.mjs';
+import { assertStudioToolbar, assertResumeViewTools } from './tools/studio-toolbar-assertions.mjs';
+
+test('Resume save feedback gives evidence-based causes and recovery without ineffective auth retry', () => {
+  assert.deepEqual(resumeSaveFailureFeedback(), {message:'Save not confirmed. Try again.',actionLabel:'Retry'});
+  assert.equal(resumeSaveFailureFeedback({offline:true}).message,"You're offline. Reconnect to save.");
+  assert.equal(resumeSaveFailureFeedback({status:503}).message,"Changes weren't saved. Try again later.");
+  assert.equal(resumeSaveFailureFeedback({status:429}).message,"Changes weren't saved. Try again shortly.");
+  for (const status of [401,403]) {
+    const feedback=resumeSaveFailureFeedback({status,offline:true});
+    assert.equal(feedback.actionLabel,'');
+    assert.match(feedback.message,/Sign in again|permission/);
+    assert.doesNotMatch(feedback.message,/offline/);
+  }
+  assert.equal(resumeSaveFailureFeedback({status:400}).message,'Save not confirmed. Try again.');
+  for (const input of [{}, {offline:true}, {status:401}, {status:403}, {status:429}, {status:503}]) {
+    assert.ok(resumeSaveFailureFeedback(input).message.length<=60,'Keep save feedback concise');
+  }
+});
+
+test('Visible history contains exports and named checkpoints, not routine or internal saves', () => {
+  const document = fixture(), changed = editResumeField(document, 'summary', 'Changed wording.');
+  const record = { exports: [{ version: 2 }], versions: [
+    { number: 1, label: 'Created resume', document },
+    { number: 2, label: 'Edited summary', document: changed },
+    { number: 3, label: 'Before suggestion: Clarify', document: changed },
+    { number: 4, label: 'Interview copy', document: { ...changed, updatedAt: 99 } },
+    { number: 5, label: 'Before candidate revision: fixture', document: changed },
+    { number: 6, label: 'PDF exported', document: changed },
+    { number: 7, label: 'Edited resume', checkpoint: 'manual', document: changed },
+    { number: 8, label: 'PDF exported', checkpoint: null, document: changed },
+    { number: 9, label: 'Download', checkpoint: 'export', document: changed },
+    { number: 10, label: 'Another ordinary save', checkpoint: null, document: changed }
+  ] };
+  const before = structuredClone(record);
+  assert.deepEqual(resumeHistoryCheckpoints(record).map(entry => [entry.number, entry.checkpoint]), [[2, 'export'], [4, 'manual'], [6, 'export'], [7, 'manual'], [9, 'export']]);
+  assert.deepEqual(record, before);
+  assert.deepEqual(resumeHistoryCheckpoints({ versions: record.versions.slice(0, 1), exports: [] }), []);
+  assert.equal(validateResumeCheckpoint(), null);
+  assert.throws(() => validateResumeCheckpoint('autosave'), { status: 400 });
+  assert.throws(() => resumeHistoryCheckpoints({ versions: [{ ...record.versions[0], checkpoint: 'invalid' }] }), /Invalid resume checkpoint/);
+});
 
 test('Unified ATS assessment uses current PDF inputs and preserves citation-checked selective revisions', async () => {
   const document = fixture(), calls = [], controller = new AbortController();
@@ -62,6 +104,75 @@ test('ATS migration preserves edited structure and original snapshots with repea
   assert.ok(resumeText(imported).includes('Original wording'));
   assert.ok(imported.ats.warnings.some(warning => warning.includes('original file')));
   assert.deepEqual(imported.ats.legacy.entry.payload.resumeDocument, original.payload.resumeDocument);
+});
+
+test('Prepared review responses validate revisions and questions in the assessment request without applying them', async () => {
+  const { document, packet, manifest, response } = reviewFixture();
+  document.sourceIds = [];
+  const before = structuredClone(document), calls = [];
+  const answer = { ...response, findings: [
+    { criterionId: 'req-0', priority: 'high', action: 'Clarify the existing contribution.', response: { kind: 'revision', fieldId: 'bullet-0', after: 'Authored achievement 1, clarified.', reason: 'Preserves the existing contribution.', evidence: [packet.excerpts.find(item => item.fieldId === 'bullet-0').id] } },
+    { criterionId: 'req-1', priority: 'medium', action: 'Clarify SQL experience.', response: { kind: 'question', question: 'Have you used SQL in your work?', reason: 'The resume does not establish this fact.' } },
+    { criterionId: 'clarity', priority: 'low', action: 'Check the page balance.', response: { kind: 'guidance', reason: 'Keep the experience heading with its first entry.' } }
+  ] };
+  const options = { manifest, prepareActions: true, getCurrent: () => document, provider: 'mock', model: 'fixture', complete: async request => { calls.push(request); return JSON.stringify(answer); } };
+  const review = await reviewResumeWithAI(document, options);
+  assert.equal(review.promptVersion, 3);
+  assert.deepEqual(calls.map(call => call.stage), ['assessment']);
+  assert.match(calls[0].system, /EVERY finding/);
+  assert.deepEqual(review.actions.map(action => action.kind), ['revision', 'question', 'guidance']);
+  assert.equal(review.actions[1].reviewAt, review.at);
+  assert.equal(review.actions[1].findingIndex, 1);
+  assert.deepEqual(document, before);
+  assert.equal(applyResumeProposal(document, review.actions[0].proposal, []).model.sections[0].items[0].bullets[0].text, 'Authored achievement 1, clarified.');
+  assert.throws(() => applyResumeProposal(editResumeField(document, 'summary', 'Later wording.'), review.actions[0].proposal, []), /changed/);
+  answer.findings[0].response.after = 'Delivered 9000 projects.';
+  await assert.rejects(reviewResumeWithAI(document, options), /number not supported/);
+  delete answer.findings[0].response;
+  await assert.rejects(reviewResumeWithAI(document, options), /missing its prepared response/);
+});
+
+test('Prepared ATS responses require exact passages and never promote legacy replacement strings', () => {
+  const document = fixture(); document.sourceIds = [];
+  const before = structuredClone(document);
+  const res = { responseVersion: 1, score: 72, fixes: [
+    { point: 'Clarify the summary', anchor: { quote: 'Product designer.' }, response: { kind: 'revision', text: 'Designer of products.', reason: 'Clarifies existing wording.', evidence: [] } },
+    { point: 'Clarify ownership', response: { kind: 'question', question: 'Which part did you own?', reason: 'Ownership needs confirmation.' } }
+  ] };
+  const review = atsEditorReview(document, { res, at: 200 });
+  assert.equal(review.actions[0].proposal.after, 'Designer of products.');
+  assert.equal(review.actions[1].signature, resumeSignature(document));
+  assert.deepEqual(document, before);
+  assert.equal(atsEditorReview(document, { res, at: 200 }, { historical: true }).actions, undefined);
+  const legacy = { score: 72, fixes: [{ ...res.fixes[0], anchor: { quote: 'Product designer.', replacement: 'Unsupported 9000 projects.' } }] };
+  assert.equal(atsEditorReview(document, { res: legacy }).actions, undefined);
+  res.fixes[0].response.text = 'Designer of 9000 products.';
+  assert.throws(() => atsEditorReview(document, { res }), /number not supported/);
+  res.fixes[0].response.text = 'Designer of products.';
+  document.model.summary = 'Product designer. Product designer.';
+  assert.throws(() => atsEditorReview(document, { res }), /one exact passage/);
+  document.model.summary = before.model.summary;
+  res.fixes[0].response.evidence = ['source-invented'];
+  assert.throws(() => atsEditorReview(document, { res }), /unknown revision evidence/);
+  res.fixes[0].response = undefined;
+  assert.throws(() => atsEditorReview(document, { res }), /missing its prepared response/);
+});
+
+test('Prepared reviews use author sources for revisions without adding them to scored resume excerpts', async () => {
+  const { document, manifest, response } = reviewFixture();
+  const sources = [{ id: 'source', name: 'Author answer.txt', text: 'Delivered 24 accessible screens.' }];
+  const result = { ...response, findings: [{ criterionId: 'req-0', priority: 'high', action: 'Include the confirmed contribution.', response: { kind: 'revision', fieldId: 'bullet-0', after: sources[0].text, reason: 'Uses the author-provided fact.', evidence: ['source-0'] } }] };
+  const calls = [];
+  const options = { manifest, prepareActions: true, sources, getCurrent: () => document, provider: 'mock', model: 'fixture', complete: async request => { calls.push(request); return result; } };
+  const review = await reviewResumeWithAI(document, options);
+  const input = JSON.parse(calls[0].user);
+  assert.equal(input.supportingEvidence[0].text, sources[0].text);
+  assert.ok(input.excerpts.every(excerpt => excerpt.text !== sources[0].text));
+  assert.equal(review.score, 100);
+  assert.equal(review.actions[0].proposal.evidence[0].sourceId, 'source');
+  assert.equal(applyResumeProposal(document, review.actions[0].proposal, sources).model.sections[0].items[0].bullets[0].text, sources[0].text);
+  await assert.rejects(reviewResumeWithAI(document, { ...options, sources: [] }), /supporting source is unavailable/);
+  assert.equal(calls.length, 1);
 });
 
 test('Structured import preserves clear roles, dates, bullets and uncertain source text without inference', () => {
@@ -266,7 +377,7 @@ test('Studio single-attempt review disables temperature retries without changing
   const source = readFileSync(new URL('./src/js/admin-studio.js', import.meta.url), 'utf8');
   const start = source.indexOf('  const aiNoTemperature = new Set();'), end = source.indexOf('  function aiProviderFailure', start);
   let calls = 0;
-  const request = runInNewContext(source.slice(start, end) + '\naiTextRequest', { fetch: async () => { calls++; return { status: 400, clone: () => ({ json: async () => ({ error: { message: 'temperature is unsupported' } }) }) }; } });
+  const request = runInNewContext(source.slice(start, end) + '\naiTextRequest', { AI_TEXT_REQUEST_ATTEMPTS, fetch: async () => { calls++; return { status: 400, clone: () => ({ json: async () => ({ error: { message: 'temperature is unsupported' } }) }) }; } });
   await request({ provider: 'openai', base: 'https://example.test' }, 'first', '/mock', {}, { temperature: 0 }, undefined, { singleAttempt: true }); assert.equal(calls, 1);
   await request({ provider: 'openai', base: 'https://example.test' }, 'second', '/mock', {}, { temperature: 0 }); assert.equal(calls, 3);
 });
@@ -468,6 +579,22 @@ test('Preview storage rejects stale writes and restores a version as a new revis
     assert.equal(restored.version, 3);
     assert.equal(restored.document.model.summary, original.document.model.summary);
     assert.equal(store.get(original.document.id).versions.length, 3);
+    const invalid = structuredClone(restored.document);
+    invalid.model.contact.order = ['unknown'];
+    assert.throws(() => store.save(invalid.id, invalid, 3), { status: 400, message: 'Invalid contact order.' });
+    invalid.id = 'invalid-order';
+    assert.throws(() => store.create(invalid), { status: 400, message: 'Invalid contact order.' });
+    delete invalid.model.contact.order;
+    invalid.model.sections[0].column = 'unknown';
+    assert.throws(() => store.create(invalid), { status: 400, message: 'Invalid section column.' });
+    assert.deepEqual(store.get(original.document.id), restored, 'Invalid ordering never writes a new version');
+    assert.throws(() => store.save(restored.document.id, restored.document, 3, 'Invalid', 'autosave'), { status: 400 });
+    assert.deepEqual(store.get(original.document.id), restored, 'Invalid checkpoint never writes a new version');
+    const named = store.save(restored.document.id, restored.document, 3, 'Edited for interview', 'manual');
+    const exported = store.save(restored.document.id, restored.document, 4, 'PDF exported', 'export');
+    assert.equal(named.versions.at(-1).checkpoint, 'manual');
+    assert.equal(exported.versions.at(-1).checkpoint, 'export');
+    assert.deepEqual(resumeHistoryCheckpoints(exported).map(entry => entry.number), [4, 5]);
     const source = store.list().sources[0];
     assert.equal(store.sourceFile(source.id).bytes.length, source.size);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -526,7 +653,7 @@ describe('Resume browser acceptance', () => {
     assert.equal(response.status, 200, JSON.stringify(result));
     return result;
   }
-  async function openSample(id, width = 1440) {
+  async function openSample(id, width = 1440, sampleTools = true) {
     const context = await browser.newContext({ viewport: { width, height: width < 760 ? 844 : 1000 }, hasTouch: width < 760, isMobile: width < 760 });
     await context.route('**/*', route => {
       const url = route.request().url();
@@ -536,14 +663,641 @@ describe('Resume browser acceptance', () => {
     await context.addInitScript(id => { if (!localStorage.getItem('rk:resume-preview:selected')) localStorage.setItem('rk:resume-preview:selected', id); }, id);
     const page = await context.newPage(); page.setDefaultTimeout(15000);
     const errors = []; page.on('pageerror', error => errors.push(error.stack || error.message));
-    await page.goto(preview.origin + '/studio/resume-preview/');
+    await page.goto(preview.origin + '/studio/resume-preview/' + (sampleTools ? '?sampleTools=1' : ''));
     await page.locator('.rws-status.is-saved').waitFor();
     return { page, context, errors };
   }
+  async function resumeOption(page, name) {
+    await page.getByRole('button', { name: 'Resume options', exact: true }).click();
+    await page.getByRole('menuitem', { name, exact: true }).click();
+  }
+  test('Normal preview hides sample authoring controls and empty proposed changes without removing saved proposals', async () => {
+    const document = fixture(); document.id = 'normal-preview-controls'; preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id, 1440, false);
+    try {
+      assert.equal(await page.getByRole('heading', { name: 'Proposed changes', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Add revision', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Load sample', exact: true }).count(), 0);
+      assert.equal(await page.locator('[data-archived-suggestions]').count(), 1);
+      assert.deepEqual(preview.store.get(document.id).document, document);
+      const next = { ...document, proposals: [{ id: 'retained-manual', title: 'Retained authored proposal', fieldId: 'summary', before: document.model.summary, after: 'An existing proposed summary.', signature: resumeSignature(document), evidence: [] }] };
+      preview.store.save(document.id, next, 1);
+      await page.reload(); await saved(page);
+      assert.equal(await page.getByRole('heading', { name: 'Retained authored proposal', exact: true }).count(), 1);
+      assert.equal(await page.getByRole('button', { name: 'Add revision', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Load sample', exact: true }).count(), 0);
+      assert.deepEqual(preview.store.get(document.id).document.proposals, next.proposals);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Combined resume menu and snapshot history regenerate PDFs without storing or restoring them', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'snapshot-menu';
+    preview.store.create(document);
+    preview.store.save(document.id, document, 1, 'Original resume', 'manual');
+    const next = structuredClone(document); next.model.summary = 'A later authored summary.';
+    preview.store.save(document.id, next, 2, 'Edited summary');
+    const legacy = await exportPdf(document), oldBytes = preview.store.exportFile(document.id, legacy.id).bytes;
+    const files = readdirSync(directory).filter(name => name.endsWith('.pdf'));
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      const options = page.getByRole('button', { name: 'Resume options', exact: true });
+      assert.equal(await page.getByRole('button', { name: 'Version history', exact: true }).count(), 0);
+      await options.click();
+      const menu = page.getByRole('menu', { name: 'Resume options' });
+      assert.deepEqual(await menu.getByRole('menuitem').allTextContents(), ['Download PDF', 'Rename resume', 'Duplicate resume', 'Archive this resume', 'View version history']);
+      await menu.getByRole('menuitem').first().press('End');
+      assert.equal(await menu.getByRole('menuitem').last().evaluate(el => el === document.activeElement), true);
+      await menu.getByRole('menuitem').last().press('Escape');
+      assert.equal(await options.evaluate(el => el === document.activeElement), true);
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await options.click();
+        const bounds = await menu.boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= 900);
+        await page.screenshot({ path: join(tmpdir(), `rk-resume-combined-menu-${width}.png`) });
+        await menu.getByRole('menuitem').first().press('Escape');
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      const downloaded = page.waitForEvent('download');
+      await resumeOption(page, 'Download PDF');
+      assert.ok((await (await downloaded).path()));
+      await saved(page);
+      const record = preview.store.get(document.id);
+      assert.equal(record.versions.at(-1).label, 'PDF exported');
+      assert.equal(record.versions.at(-1).checkpoint, 'export');
+      assert.deepEqual(record.document.model, next.model);
+      assert.equal(record.exports.length, 1);
+      assert.deepEqual(readdirSync(directory).filter(name => name.endsWith('.pdf')), files);
+      await page.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      await resumeOption(page, 'View version history');
+      const history = page.getByRole('dialog', { name: 'Version history' });
+      assert.equal(await history.getByRole('button', { name: 'Preview OFF', exact: true }).getAttribute('aria-pressed'), 'true');
+      assert.equal(await history.locator('.resume-export-history').count(), 0);
+      const before = JSON.stringify(preview.store.get(document.id));
+      assert.equal(await history.locator('.rws-version-list button').count(), 3);
+      assert.equal(await history.getByRole('button', { name: /Created resume|Verified PDF/ }).count(), 0);
+      await history.getByRole('button', { name: /^v2 \/ Original resume/ }).click();
+      await history.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await history.getByRole('region', { name: 'Version 2 PDF preview' }).locator('.textLayer').waitFor();
+      assert.equal(await history.locator('.rws-history-note').innerText(), 'Saved content and design from version 2. Your current draft is unchanged until you choose Restore.');
+      assert.match((await history.locator('.rws-version-preview').innerText()).replace(/\s/g, ''), /Productdesigner\./);
+      assert.doesNotMatch((await history.locator('.rws-version-preview').innerText()).replace(/\s/g, ''), /Alaterauthoredsummary/);
+      const historicalDownload = page.waitForEvent('download');
+      await history.getByRole('button', { name: 'Download PDF', exact: true }).click();
+      const historicalBytes = readFileSync(await (await historicalDownload).path());
+      const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const parsed = await getDocument({ data: new Uint8Array(historicalBytes) }).promise;
+      try { assert.match((await (await parsed.getPage(1)).getTextContent()).items.map(item => item.str).join('').replace(/\s/g, ''), /Productdesigner\./); }
+      finally { await parsed.destroy(); }
+      assert.equal(JSON.stringify(preview.store.get(document.id)), before);
+      assert.deepEqual(preview.store.exportFile(document.id, legacy.id).bytes, oldBytes);
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        assert.equal(await history.locator('.pass__box').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+        const close = await history.getByRole('button', { name: 'Close', exact: true }).boundingBox();
+        assert.ok(close.y >= 0 && close.y + close.height <= 900, 'History actions remain visible while content scrolls');
+      }
+      await page.screenshot({ path: join(tmpdir(), 'rk-resume-snapshot-history-mobile.png') });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      assert.ok((await history.locator('.pass__box').boundingBox()).width >= 1000, 'Preview uses the full two-column dialog, not the old narrow modal');
+      await page.screenshot({ path: join(tmpdir(), 'rk-resume-snapshot-history-desktop.png') });
+      await history.getByRole('button', { name: 'Restore v2', exact: true }).click(); await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model, document.model);
+      assert.equal(preview.store.get(document.id).versions.at(-1).label, 'Restored version 2');
+      await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model, next.model);
+      assert.equal(resumeHistoryCheckpoints(preview.store.get(document.id)).length, 3);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Version history handles failed and cancelled previews without stale content or saved changes', { timeout: 60000 }, async () => {
+    const document = fixture(); document.id = 'history-cancellation'; preview.store.create(document);
+    preview.store.save(document.id, document, 1, 'Original resume', 'manual');
+    const next = structuredClone(document); next.model.summary = 'Latest snapshot content.';
+    preview.store.save(document.id, next, 2, 'Latest restore point', 'manual');
+    const before = JSON.stringify(preview.store.get(document.id));
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await resumeOption(page, 'View version history');
+      const history = page.getByRole('dialog', { name: 'Version history' });
+      const route = '**/__resume/api/resumes/history-cancellation/export';
+      await page.route(route, handler => handler.fulfill({ status: 503, json: { error: 'Synthetic snapshot failure' } }));
+      await history.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await history.getByRole('alert').filter({ hasText: 'Synthetic snapshot failure' }).waitFor();
+      await history.getByRole('button', { name: 'Preview OFF', exact: true }).click();
+      await page.unroute(route);
+      await page.evaluate(() => {
+        window.pdfUrls = []; window.revokedPdfUrls = [];
+        const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL);
+        URL.createObjectURL = blob => { const url = create(blob); if (blob.type === 'application/pdf') window.pdfUrls.push(url); return url; };
+        URL.revokeObjectURL = url => { window.revokedPdfUrls.push(url); revoke(url); };
+      });
+      await history.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await history.locator('.textLayer').waitFor();
+      const firstUrl = await page.evaluate(() => window.pdfUrls[0]);
+      await history.getByRole('button', { name: 'Preview OFF', exact: true }).click();
+      assert.equal(await page.evaluate(url => window.revokedPdfUrls.includes(url), firstUrl), true);
+      let release, arrived, finished;
+      const held = new Promise(resolve => { release = resolve; }), started = new Promise(resolve => { arrived = resolve; }), completed = new Promise(resolve => { finished = resolve; });
+      await page.route(route, async handler => { arrived(); await held; if (!handler.request().failure()) await handler.fulfill({ status: 503, json: { error: 'Late cancelled snapshot' } }); finished(); });
+      await history.getByRole('button', { name: 'Preview ON', exact: true }).click(); await started;
+      const cancelled = page.waitForEvent('requestfailed', request => request.url().endsWith('/history-cancellation/export'));
+      await history.getByRole('button', { name: 'Close', exact: true }).click();
+      await cancelled; release(); await completed; await page.unroute(route);
+      await resumeOption(page, 'View version history');
+      await history.getByRole('button', { name: /^v2 \/ Original resume/ }).click();
+      await history.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await history.locator('.textLayer').waitFor();
+      assert.doesNotMatch((await history.locator('.rws-version-preview').innerText()).replace(/\s/g, ''), /Latestsnapshotcontent/);
+      assert.equal(await history.getByRole('alert').count(), 0);
+      assert.equal(JSON.stringify(preview.store.get(document.id)), before);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Named checkpoint failures retain their kind through outbox recovery without exposing edits as history', async () => {
+    const document = fixture(); document.id = 'checkpoint-recovery'; preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await resumeOption(page, 'View version history');
+      const history = page.getByRole('dialog', { name: 'Version history' });
+      assert.equal(await history.locator('.rws-version-list button').count(), 0);
+      assert.equal(await history.getByRole('button', { name: 'Preview ON', exact: true }).isDisabled(), true);
+      const before = structuredClone(preview.store.get(document.id));
+      assert.equal(await page.evaluate(async document => (await fetch('/__resume/api/resumes/' + document.id, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': '1' }, body: JSON.stringify({ document, checkpoint: 'invalid' })
+      })).status, document), 400);
+      assert.deepEqual(preview.store.get(document.id), before);
+      const route = '**/__resume/api/resumes/checkpoint-recovery';
+      await page.route(route, handler => handler.request().method() === 'PUT'
+        ? handler.fulfill({ status: 503, json: { error: 'Synthetic checkpoint save failure' } }) : handler.continue());
+      await history.getByLabel('Restore point name', { exact: true }).fill('Edited for interview');
+      await history.getByRole('button', { name: 'Save restore point', exact: true }).click();
+      await page.getByRole('alert').filter({ hasText: 'Synthetic checkpoint save failure' }).first().waitFor();
+      const pending = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:resume-preview:pending:checkpoint-recovery')));
+      assert.equal(pending.checkpoint, 'manual'); assert.equal(pending.label, 'Edited for interview');
+      assert.deepEqual(preview.store.get(document.id), before);
+      await page.unroute(route); await page.reload();
+      await page.getByText('Recovered unsaved edits from this browser.', { exact: true }).waitFor();
+      await saved(page);
+      await resumeOption(page, 'View version history');
+      await history.getByRole('button', { name: /^v2 \/ Edited for interview/ }).waitFor();
+      assert.equal(preview.store.get(document.id).versions.at(-1).checkpoint, 'manual');
+      assert.equal(await history.locator('.rws-version-list button').count(), 1);
+      assert.deepEqual(preview.store.get(document.id).document.model, document.model);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
   async function saved(page) {
     await page.locator('.rws-status.is-saved').waitFor();
     assert.equal(await page.evaluate(() => Object.keys(localStorage).some(key => key.startsWith('rk:resume-preview:pending:'))), false);
   }
+  async function openSources(page) {
+    const review = page.getByRole('tab', { name: 'Review', exact: true });
+    if (await review.isVisible()) await review.click();
+    else if (!await page.getByRole('button', { name: 'Review information', exact: true }).isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
+    if (!await page.locator('#resume-review-info').evaluate(element => element.matches(':popover-open'))) await page.getByRole('button', { name: 'Review information', exact: true }).click();
+    const details = page.locator('.resume-source-options');
+    if (!await details.evaluate(element => element.open)) await details.locator('summary').first().click();
+  }
+  async function openReviewPanel(page) {
+    if (!await page.locator('.rws-review-panel').isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
+  }
+  async function inlineField(page, id) {
+    await page.locator('.rws-page-count[aria-busy="false"]').waitFor();
+    const paper = page.frameLocator('.rws-paper');
+    const input = paper.locator('[data-inline-field="' + id + '"]');
+    if (!await input.count()) await paper.locator('.pagedjs_page [data-field="' + id + '"]').first().click();
+    await input.waitFor();
+    return input;
+  }
+  async function fillInline(page, id, value) {
+    const input = await inlineField(page, id);
+    await input.fill(value);
+    await input.press('Control+Enter');
+    await input.waitFor({ state: 'detached' });
+  }
+  test('Inline document editing preserves typing, undo, contacts and document ordering', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'inline-builder';
+    document.model.sections.push({ id: 'capabilities', heading: 'Capabilities', kind: 'skills', groups: [{ id: 'practice', label: 'Practice', items: ['Research', 'Design'] }] });
+    document.model.contact.phone = '+1 415 555 0142';
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      assert.equal(await page.getByRole('tab', { name: 'Content', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('tab', { name: 'Document outline', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('region', { name: 'Document structure', exact: true }).isVisible(), true);
+      const reviewHeader = await page.locator('.rws-review-heading').boundingBox(), documentHeader = await page.locator('.rws-document-builder > .rws-panel-heading').boundingBox();
+      const properties = await page.getByRole('complementary', { name: 'Resume properties', exact: true }).boundingBox();
+      assert.equal(reviewHeader.y, properties.y);
+      assert.ok(documentHeader.y >= properties.y && documentHeader.y + documentHeader.height <= properties.y + properties.height);
+      assert.ok((await page.getByRole('tablist', { name: 'Workspace panels' }).boundingBox()).y < documentHeader.y);
+      const input = await inlineField(page, 'summary');
+      await input.fill('');
+      await input.pressSequentially('Typing on the page.\nNo lost caret.', { delay: 15 });
+      await page.waitForTimeout(700);
+      assert.equal(await input.inputValue(), 'Typing on the page.\nNo lost caret.');
+      assert.equal(await input.evaluate(node => node === node.ownerDocument.activeElement), true);
+      await input.press('Control+Enter'); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, 'Typing on the page.\nNo lost caret.');
+      await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, document.model.summary);
+      await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, 'Typing on the page.\nNo lost caret.');
+      const cancelled = await inlineField(page, 'summary');
+      await cancelled.fill('Discard this edit'); await cancelled.press('Escape'); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, 'Typing on the page.\nNo lost caret.');
+      await page.frameLocator('.rws-paper').locator('[data-field="contact.email"]').first().click();
+      const card = page.getByRole('dialog', { name: 'Contact detail', exact: true });
+      await card.getByLabel('Email address').fill('updated@example.test'); await card.getByRole('button', { name: 'Done', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.contact.email, 'updated@example.test');
+      await page.getByRole('button', { name: 'Move Phone up', exact: true }).click(); await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model.contact.order.slice(0, 2), ['contact.phone', 'contact.email']);
+      const sections = document.model.sections;
+      const before = await page.getByRole('button', { name: 'Drag ' + sections[1].heading, exact: true }).boundingBox();
+      const after = await page.getByRole('button', { name: 'Drag ' + sections[0].heading, exact: true }).boundingBox();
+      await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2); await page.mouse.down();
+      await page.mouse.move(after.x + after.width / 2, after.y + after.height / 2, { steps: 12 }); await page.mouse.up(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[0].id, sections[1].id);
+      const builder = page.getByRole('region', { name: 'Document structure', exact: true });
+      await builder.getByRole('button', { name: 'Experience', exact: true }).click();
+      await builder.getByRole('button', { name: 'Example', exact: true }).click();
+      await builder.getByRole('button', { name: 'Move Authored achievement 2 up', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[1].items[0].bullets[0].id, 'bullet-1');
+      await builder.getByRole('button', { name: 'Duplicate', exact: true }).click(); await saved(page);
+      const duplicate = preview.store.get(document.id).document.model.sections[1].items[1];
+      assert.notEqual(duplicate.id, 'role');
+      assert.equal(new Set(resumeFields(preview.store.get(document.id).document.model).map(field => field.id)).size, resumeFields(preview.store.get(document.id).document.model).length);
+      await builder.locator('[data-document-item="role"]').getByRole('button', { name: 'Move Example down', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[1].items[0].id, duplicate.id);
+      await builder.locator(`[data-document-item="${duplicate.id}"]`).getByRole('button', { name: 'Example', exact: true }).click();
+      await builder.getByRole('button', { name: 'Remove', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[1].items.length, 1);
+      await page.reload(); await saved(page);
+      await page.frameLocator('.rws-paper').locator('[data-field="contact.email"]').first().waitFor();
+      const output = await exportPdf(preview.store.get(document.id).document);
+      const compact = output.extractedText.replace(/\s/g, '');
+      assert.match(compact, /updated@example\.test/);
+      assert.ok(compact.indexOf('+1415') < compact.indexOf('updated@example.test'));
+      assert.ok(output.extractedText.indexOf(sections[1].heading.toUpperCase()) < output.extractedText.indexOf(sections[0].heading.toUpperCase()));
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Resume document icons remain visible, editable and present in verified PDFs', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'document-icons';
+    Object.assign(document.model.contact, { phone: '+1 415 555 0142', location: 'London' });
+    document.model.contact.links.push({ id: 'linkedin', label: 'LinkedIn', url: 'https://www.linkedin.com/in/example' });
+    document.model.sections[0].items[0].location = 'Remote';
+    document.model.sections.push({ id: 'education', kind: 'education', heading: 'Education', items: [{ id: 'school', school: 'Example University', credential: 'Design degree', dates: '2018', note: '' }] });
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await page.locator('.rws-page-count[aria-busy="false"]').waitFor();
+      const paper = page.frameLocator('.rws-paper');
+      const icons = paper.locator('.pagedjs_page [data-resume-icon]');
+      assert.equal(await icons.count(), 8);
+      for (const icon of await icons.all()) {
+        assert.equal(await icon.getAttribute('aria-hidden'), 'true');
+        const box = await icon.boundingBox(); assert.ok(box.width > 3 && box.height > 3);
+      }
+      const emailAlignment = await paper.locator('.pagedjs_page .resume-contact').evaluate(async contact => {
+        const originalFont = contact.style.fontFamily, results = [];
+        const detail = contact.querySelector('[data-detail-field="contact.email"]');
+        const marker = document.createElement('span');
+        marker.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline';
+        detail.append(marker);
+        try {
+          for (const font of ['Inter', 'Gelasio', 'Gambetta', 'JetBrains Mono']) {
+            await document.fonts.load(`400 12px "${font}"`);
+            contact.style.fontFamily = `"${font}"`;
+            const text = detail.querySelector('[data-field]'), style = getComputedStyle(text);
+            const canvas = document.createElement('canvas').getContext('2d');
+            canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+            const ink = canvas.measureText(text.textContent);
+            const textCenter = marker.getBoundingClientRect().top - (ink.actualBoundingBoxAscent - ink.actualBoundingBoxDescent) / 2;
+            const icon = detail.querySelector('svg').getBoundingClientRect();
+            results.push({ font, offset: Math.abs(icon.top + icon.height / 2 - textCenter), size: parseFloat(style.fontSize) });
+          }
+        } finally { marker.remove(); contact.style.fontFamily = originalFont; }
+        return results;
+      });
+      for (const { font, offset, size } of emailAlignment) {
+        assert.ok(offset <= size * .08, `${font}: email icon must align with visible text ink, offset ${offset}px`);
+      }
+      await paper.locator('.resume-contact [data-resume-icon="email"]').click();
+      const card = page.getByRole('dialog', { name: 'Contact detail', exact: true });
+      assert.equal(await card.getByLabel('Email address').inputValue(), document.model.contact.email);
+      await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await paper.locator('[data-detail-field="role.dates"] [data-resume-icon="cal"]').click();
+      const input = paper.locator('[data-inline-field="role.dates"]');
+      assert.equal(await input.inputValue(), '2019 to 2024');
+      assert.equal(await paper.locator('[data-detail-field="role.dates"] [data-resume-icon="cal"]').isVisible(), true);
+      await input.press('Escape');
+      assert.deepEqual(preview.store.get(document.id).document, document);
+      await paper.locator('[data-detail-field="school.dates"] [data-resume-icon="cal"]').click();
+      const educationDates = paper.locator('[data-inline-field="school.dates"]');
+      assert.equal(await educationDates.inputValue(), '2018');
+      await educationDates.fill('2012 - 2016');
+      await educationDates.press('Enter'); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[1].items[0].dates, '2012 - 2016');
+      const output = await exportPdf(document);
+      assert.equal(output.verification.complete, true);
+      assert.equal(output.layoutBoundsVerified, true);
+      for (const value of ['test@example.test', '+1 415 555 0142', 'London', '2019 to 2024', 'Remote', 'Example University', '2012 - 2016']) assert.ok(output.extractedText.replace(/\s/g, '').includes(value.replace(/\s/g, '')), value);
+      const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const parsed = await getDocument({ data: new Uint8Array(preview.store.exportFile(document.id, output.id).bytes) }).promise;
+      try {
+        const operators = await (await parsed.getPage(1)).getOperatorList();
+        assert.ok(operators.fnArray.filter(op => op === OPS.constructPath).length >= 8, 'Decorative icons are drawn as PDF vectors, not substituted text');
+      } finally { await parsed.destroy(); }
+      await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await page.locator('.rws-pdf-reader .page canvas').first().waitFor();
+      await page.screenshot({ path: join(tmpdir(), 'rk-resume-document-icons-pdf.png') });
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Inline split-page fields, composition, keyboard navigation and contact cards retain complete values', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'inline-composition'; document.design.keepWhole = false;
+    const text = Array.from({ length: 95 }, (_, index) => `Contribution ${index}: Retained the complete research and engineering account without changing attribution.`).join(' ');
+    document.model.sections = [{ id: 'long', kind: 'text', heading: 'Experience', text }];
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      await page.locator('.rws-page-count[aria-busy="false"]').waitFor();
+      const paper = page.frameLocator('.rws-paper'), pieces = paper.locator('.pagedjs_page [data-field="long.text"]');
+      assert.ok(await pieces.count() > 1);
+      await pieces.last().click();
+      const input = paper.locator('[data-inline-field="long.text"]');
+      assert.equal(await input.inputValue(), text, 'A split fragment edits the complete logical field');
+      await input.evaluate(node => {
+        node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+        node.value += ' Composed text.';
+        node.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true, inputType: 'insertCompositionText' }));
+      });
+      await page.waitForTimeout(650);
+      assert.equal(preview.store.get(document.id).document.model.sections[0].text, text);
+      await input.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+      await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[0].text, text + ' Composed text.');
+      await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections[0].text, text, 'Toolbar Undo also works while typing');
+      const name = await inlineField(page, 'name');
+      await name.press('Tab');
+      await paper.locator('[data-inline-field="title"]:focus').waitFor();
+      await paper.locator('[data-inline-field="title"]').press('Escape');
+      await (await inlineField(page, 'long.text')).press('Tab');
+      await page.getByRole('tab', { name: 'Document', exact: true }).locator(':scope:focus').waitFor();
+      await (await inlineField(page, 'name')).press('Shift+Tab');
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).locator(':scope:focus').waitFor();
+      await page.getByRole('button', { name: 'Add contact detail', exact: true }).click();
+      let card = page.getByRole('dialog', { name: 'Contact detail', exact: true });
+      await card.getByLabel('Contact type', { exact: true }).selectOption('link');
+      await card.getByLabel('Display label').fill('Case study');
+      await card.getByLabel('Website address').fill('example.test/case');
+      await card.getByRole('button', { name: 'Done', exact: true }).click(); await saved(page);
+      const link = preview.store.get(document.id).document.model.contact.links.at(-1);
+      assert.equal(link.url, 'https://example.test/case');
+      for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.frameLocator('.rws-paper').locator(`[data-field="${link.id}.label"]`).first().click();
+        card = page.getByRole('dialog', { name: 'Contact detail', exact: true });
+        const bounds = await card.boundingBox();
+        assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width);
+        await card.getByLabel('Website address').fill('not a url');
+        await card.getByRole('button', { name: 'Done', exact: true }).click();
+        assert.equal(await card.isVisible(), true);
+        assert.equal(preview.store.get(document.id).document.model.contact.links.at(-1).url, link.url);
+        await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await page.getByRole('button', { name: 'Dismiss message', exact: true }).click();
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.frameLocator('.rws-paper').locator(`[data-field="${link.id}.label"]`).first().click();
+      await card.getByRole('button', { name: 'Remove', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.contact.links.some(item => item.id === link.id), false);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  async function assertReviewTargetLayout(panel) {
+    const geometry = await panel.locator('.resume-review-target').evaluate(element => {
+      const copy = element.firstElementChild.getBoundingClientRect(), action = element.querySelector('button').getBoundingClientRect(), bounds = element.getBoundingClientRect();
+      return { copyRight: copy.right, actionLeft: action.left, actionRight: action.right, right: bounds.right, copyCentre: copy.top + copy.height / 2, actionCentre: action.top + action.height / 2, scrollWidth: element.scrollWidth, width: element.clientWidth };
+    });
+    assert.ok(geometry.actionLeft >= geometry.copyRight + 15, 'Edit role sits beside, not below, the target details');
+    assert.ok(Math.abs(geometry.actionCentre - geometry.copyCentre) < 1, 'Edit role is vertically centred against the role and company');
+    assert.ok(geometry.actionRight <= geometry.right + 1 && geometry.scrollWidth <= geometry.width + 1, 'Target details and action stay within the popover');
+  }
+  test('Review information keeps role sources and document utilities out of feedback', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'review-info';
+    document.target.company = 'Meridian';
+    const bytes = Buffer.from('Original resume source.');
+    const source = preview.store.source({ name: 'original.txt', type: 'text/plain', text: bytes.toString() }, bytes);
+    document.sourceIds = [source.id];
+    document.aiReview = atsEditorReview(document, { at: 101, res: { score: 72, band: 'Good', fixes: [
+      { category: 'readability', point: 'Clarify your summary', how: 'Make the introduction direct.', priority: 'high', anchor: { quote: document.model.summary } }
+    ] } });
+    preview.store.create(document);
+    const original = structuredClone(document), { page, context, errors } = await openSample(document.id);
+    try {
+      const rail = page.locator('.rws-review-panel');
+      assert.doesNotMatch(await rail.innerText(), /About this review|Document review|Measured diagnostics|Role coverage|Files & evidence|Migration and original record|Capture original source check|Export history|Archive this resume/);
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
+      assert.equal(await page.locator('.resume-source-options').evaluate(element => element.open), false, 'Source options starts collapsed');
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 800 });
+        await openSources(page);
+        const panel = page.locator('#resume-review-info');
+        await page.waitForFunction(() => {
+          const r = document.querySelector('#resume-review-info').getBoundingClientRect();
+          return r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight;
+        });
+        assert.equal(await panel.getByRole('button', { name: 'Reupload source', exact: true }).count(), 1);
+        assert.equal(await panel.getByRole('link', { name: 'Download', exact: true }).count(), 1);
+        assert.equal(await panel.locator('input[type=checkbox],.rws-source-provenance').count(), 0);
+        await assertReviewTargetLayout(panel);
+        await panel.getByRole('button', { name: 'Edit role', exact: true }).focus();
+        await page.keyboard.press('Escape');
+        assert.equal(await panel.isVisible(), false);
+        assert.equal(await page.getByRole('button', { name: 'Review information', exact: true }).evaluate(n => n === document.activeElement), true);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.getByRole('button', { name: 'Review information', exact: true }).press('Enter');
+      await page.getByRole('button', { name: 'Edit role', exact: true }).click();
+      await page.getByLabel('Company', { exact: true }).fill('New company');
+      await page.getByRole('button', { name: 'Save target', exact: true }).click(); await saved(page);
+      assert.match(await page.locator('.resume-score-context').innerText(), /Meridian/i);
+      assert.match(await rail.innerText(), /historical/);
+      assert.deepEqual(preview.store.get(document.id).document.aiReview, original.aiReview);
+      await openSources(page);
+      const chooser = page.waitForEvent('filechooser');
+      await page.getByRole('button', { name: 'Reupload source', exact: true }).click();
+      await (await chooser).setFiles({ name: 'new.txt', mimeType: 'text/plain', buffer: Buffer.from('A different source with additional context.') });
+      await page.getByRole('button', { name: 'Attach original', exact: true }).click();
+      await page.getByRole('dialog').waitFor({ state: 'hidden' }); await saved(page);
+      const next = preview.store.get(document.id).document;
+      assert.equal(next.sourceIds.length, 2);
+      assert.deepEqual(next.model, original.model);
+      assert.deepEqual(next.aiReview, original.aiReview);
+      assert.deepEqual(preview.store.sourceFile(source.id).bytes, bytes);
+      await page.getByRole('button', { name: 'Resume options', exact: true }).click();
+      assert.equal(await page.getByRole('menuitem', { name: 'Archive this resume', exact: true }).isVisible(), true);
+      await page.getByRole('menuitem', { name: 'Archive this resume', exact: true }).press('Escape');
+      await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+      await page.locator('.rws[data-view="pdf"]').waitFor();
+      await page.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      await resumeOption(page, 'View version history');
+      assert.equal(await page.locator('.resume-export-history').count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Preview ON', exact: true }).isDisabled(), true);
+      await page.getByLabel('Restore point name', { exact: true }).fill('Source review checkpoint');
+      await page.getByRole('button', { name: 'Save restore point', exact: true }).click();
+      await page.locator('.rws-version-list button').waitFor();
+      assert.equal(preview.store.get(document.id).versions.at(-1).checkpoint, 'manual');
+      await page.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await page.locator('.rws-version-preview .textLayer').waitFor();
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Document Design toggle lives before Preview PDF and switches panels without changing the resume', async () => {
+    const document = fixture(); document.id = 'panel-toggle'; preview.store.create(document);
+    const before = structuredClone(preview.store.get(document.id));
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      const toggle = page.getByRole('tablist', { name: 'Workspace panels', exact: true });
+      const documentTab = toggle.getByRole('tab', { name: 'Document', exact: true });
+      const designTab = toggle.getByRole('tab', { name: 'Design', exact: true });
+      assert.equal(await documentTab.getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('.rws-inspector [role=tablist]').count(), 0);
+      for (const width of [1440, 1024, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        assert.equal(await toggle.evaluate(node => node.nextElementSibling.matches('.rws-preview-pdf')), true);
+        const boxes = await page.locator('.rws-workbar button').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect()).filter(box => box.width && box.height).map(({ left, right, top, bottom }) => ({ left, right, top, bottom })));
+        assert.ok(boxes.every(box => box.left >= 0 && box.right <= width), `Toolbar fits ${width}px`);
+        for (const [index, first] of boxes.entries()) for (const second of boxes.slice(index + 1)) assert.ok(first.right <= second.left || second.right <= first.left || first.bottom <= second.top || second.bottom <= first.top);
+        const position = await toggle.evaluate(node => { const a = node.getBoundingClientRect(), b = node.nextElementSibling.getBoundingClientRect(); return { height: a.height, aligned: Math.abs(a.top - b.top) < 1, before: a.right < b.left }; });
+        assert.deepEqual(position, { height: 34, aligned: true, before: true });
+        await designTab.click();
+        assert.equal(await page.getByRole('tabpanel', { name: 'Design', exact: true }).isVisible(), true);
+        assert.equal(await page.getByLabel('Body size (pt)', { exact: true }).isVisible(), true);
+        await designTab.press('ArrowLeft');
+        assert.equal(await documentTab.getAttribute('aria-selected'), 'true');
+        assert.equal(await documentTab.evaluate(node => node === document.activeElement), true);
+        assert.equal(await page.getByRole('region', { name: 'Document structure', exact: true }).isVisible(), true);
+        await documentTab.press('End');
+        assert.equal(await designTab.getAttribute('aria-selected'), 'true');
+        await designTab.press('Home');
+        assert.equal(await documentTab.getAttribute('aria-selected'), 'true');
+        if (width < 760) await page.getByRole('button', { name: 'Close properties', exact: true }).click();
+      }
+      await page.reload(); await saved(page);
+      assert.equal(await documentTab.getAttribute('aria-selected'), 'true');
+      assert.deepEqual(preview.store.get(document.id), before);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Resume editor removes redundant chrome while retaining document navigation save state and contextual evidence', async () => {
+    const before = structuredClone(preview.store.get('avery-meridian'));
+    const { page, context, errors } = await openSample('avery-meridian');
+    try {
+      for (const name of ['Resumes', 'Sections', 'Original', 'PDF', 'Sources', 'Canvas']) assert.equal(await page.getByRole('tab', { name, exact: true }).count(), 0);
+      for (const name of ['Resume library', 'Back to Studio']) assert.equal(await page.getByRole('button', { name, exact: true }).count(), 0);
+      assert.equal(await page.locator('footer, .rws-private, .rws-status-version, .rws-status-end').count(), 0);
+      assert.equal(await page.getByRole('region', { name: 'Document structure' }).isVisible(), true);
+      assert.equal(await page.locator('.rws-document-heading .rws-save-status').innerText(), 'Saved');
+      assert.equal(await page.getByRole('button', { name: 'Preview PDF', exact: true }).isVisible(), true);
+      const tools = page.getByRole('group', { name: 'Document view', exact: true });
+      await page.waitForFunction(()=>Boolean(document.querySelector('.rws-paper')?.contentWindow.resumeReady));
+      assert.equal(await tools.locator('.rws-page-count').innerText(),'Page 1 / 1');
+      assert.equal(await tools.locator('.rws-page-count svg').count(),0);
+      for (const width of [1440, 1024, 390, 320]) {
+        await page.setViewportSize({ width, height: width < 760 ? 844 : 1000 });
+        await assertResumeViewTools(tools);
+        const geometry = await page.locator('.rws-workspace').evaluate(workspace => {
+          const stage=workspace.querySelector('.rws-document-stage'), canvas=workspace.querySelector('.rws-canvas');
+          return {top:stage.getBoundingClientRect().top-workspace.getBoundingClientRect().top,
+            canvasTop:canvas.getBoundingClientRect().top-stage.getBoundingClientRect().top,
+            height:stage.getBoundingClientRect().height-canvas.getBoundingClientRect().height,
+            padding:getComputedStyle(canvas).padding};
+        });
+        assert.equal(geometry.top,0,'No document toolbar row');
+        assert.equal(geometry.canvasTop,0); assert.equal(geometry.height,0,'No reserved floaty space');
+        assert.equal(geometry.padding,width<760?'18px 16px 30px':'25px 24px 40px');
+        const beforeScroll = await tools.boundingBox();
+        await page.locator('.rws-canvas').evaluate(canvas=>{canvas.scrollTop=canvas.scrollHeight;});
+        assert.deepEqual(await tools.boundingBox(),beforeScroll,'Controls stay anchored while the document scrolls');
+      }
+      await tools.getByRole('button',{name:'Zoom in',exact:true}).focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await tools.getAttribute('data-fit-mode'),'custom');
+      assert.equal(await tools.locator('.rws-zoom-value').count(),0);
+      assert.equal(await tools.getByRole('button',{name:'Zoom in',exact:true}).evaluate(button=>button===document.activeElement),true);
+      await tools.locator('[data-view-fit]').click();
+      assert.equal(await tools.getAttribute('data-fit-mode'),'page');
+      await tools.getByRole('button',{name:'Zoom out',exact:true}).click();
+      await tools.locator('[data-view-fit]').click();
+      assert.equal(await tools.getAttribute('data-fit-mode'),'page');
+      await page.setViewportSize({ width:1440, height:1000 });
+      await openSources(page);
+      assert.equal(await page.getByRole('region', { name: 'Original files', exact: true }).isVisible(), true);
+      assert.equal(await page.getByRole('button', { name: 'View original', exact: true }).count() > 0, true);
+      await page.keyboard.press('Escape');
+      await page.setViewportSize({ width: 1024, height: 800 });
+      await page.locator('.rws-outline-toggle').click();
+      await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
+      assert.equal(await page.getByRole('region', { name: 'Document structure' }).isVisible(), true);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
+      await page.locator('.rws[data-view="library"]').waitFor();
+      await page.locator('.rws-library-row').filter({ hasText: before.document.name }).click();
+      await page.locator('.rws[data-view="edit"]').waitFor();
+      assert.deepEqual(preview.store.get(before.document.id), before);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Editor page counter follows paginated content through scrolling zoom and viewport changes', async () => {
+    const document = fixture(); document.id = 'page-counter';
+    document.model.sections[0].items[0].bullets = Array.from({length:40},(_,index)=>({id:'page-'+index,text:'Contribution '+index+': Researched complex workflows with product and engineering teams, delivered accessible interfaces, and retained every original detail for review.'}));
+    preview.store.create(document);
+    const before = structuredClone(preview.store.get(document.id));
+    const {page,context,errors} = await openSample(document.id);
+    try {
+      await page.waitForFunction(()=>document.querySelector('.rws-paper')?.contentWindow.resumeReady?.pages>1);
+      const total=await page.locator('.rws-paper').evaluate(frame=>frame.contentWindow.resumeReady.pages);
+      const tools=page.locator('.resume-view-tools'), counter=tools.locator('.rws-page-count');
+      for(const width of [1440,390,320]) {
+        await page.setViewportSize({width,height:width<760?844:1000});
+        await assertResumeViewTools(tools);
+        const checkFit = async mode => {
+          await page.waitForFunction(mode=>{
+            const tools=document.querySelector('.resume-view-tools'), frame=document.querySelector('.rws-paper'), canvas=document.querySelector('.rws-canvas');
+            const paper=frame.contentDocument.querySelector('.pagedjs_page'), style=getComputedStyle(canvas), pageStyle=frame.contentWindow.getComputedStyle(paper.parentElement);
+            const width=canvas.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight);
+            const height=canvas.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+            const pageHeight=paper.getBoundingClientRect().height+parseFloat(pageStyle.paddingTop)+parseFloat(pageStyle.paddingBottom);
+            const expected=Math.min(1,width/frame.clientWidth,mode==='page'?height/pageHeight:Infinity);
+            return tools.dataset.fitMode===mode && Math.abs(frame.getBoundingClientRect().width/frame.clientWidth-expected)<.002;
+          },mode);
+          assert.equal(await tools.locator('[data-view-fit]').getAttribute('title'),mode==='page'?'Fit width':'Fit page');
+          assert.equal(await tools.locator('.rws-zoom-value').count(),0);
+        };
+        await tools.locator('[data-view-fit]').click(); await checkFit('page');
+        await tools.locator('[data-view-fit]').focus(); await page.keyboard.press('Enter'); await checkFit('width');
+        assert.equal(await tools.locator('[data-view-fit]').evaluate(button=>button===document.activeElement),true);
+        await tools.locator('[data-view-fit]').click(); await checkFit('page');
+        await tools.locator('[data-view-fit]').click(); await checkFit('width');
+        for(let step=0;step<6;step++) await tools.getByRole('button',{name:'Zoom in',exact:true}).click();
+        await page.locator('.rws-canvas').evaluate(canvas=>{canvas.scrollTop=0;});
+        await page.waitForFunction(total=>document.querySelector('.rws-page-count').textContent==='Page 1 / '+total,total);
+        await page.locator('.rws-canvas').evaluate(canvas=>{canvas.scrollTop=canvas.scrollHeight;});
+        await page.waitForFunction(total=>document.querySelector('.rws-page-count').textContent==='Page '+total+' / '+total,total);
+        await tools.getByRole('button',{name:'Zoom out',exact:true}).click();
+        await page.locator('.rws-canvas').evaluate(canvas=>{canvas.scrollTop=canvas.scrollHeight;});
+        await page.waitForFunction(total=>document.querySelector('.rws-page-count').textContent==='Page '+total+' / '+total,total);
+        assert.equal(await counter.locator('svg').count(),0);
+        await page.screenshot({path:join(tmpdir(),`rk-editor-page-counter-${width}.png`)});
+      }
+      assert.deepEqual(preview.store.get(document.id),before);
+      assert.deepEqual(errors,[]);
+    } finally { await context.close(); }
+  });
   test('Hosted Resume entry refuses absent and cross-origin bridges without a blank page or API calls', { timeout: 90000 }, async () => {
     const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -559,12 +1313,321 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(requests, []); assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
+  test('Review stays left while cited fields edit on the page without changing the ATS result', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'coherent-review';
+    document.model.sections[0].items[0].bullets[0].text = 'Distinct authored contribution.';
+    const result = { score: 72, band: 'Good', summary: 'Recorded synthetic assessment.', fixes: [{ point: 'Clarify contribution', how: 'Keep the authored evidence.', priority: 'high', anchor: { quote: 'Distinct authored contribution.', replacement: 'Distinct authored contribution, clarified.' } }] };
+    document.aiReview = atsEditorReview(document, { res: result, at: 100 });
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    let aiCalls = 0;
+    await page.route('**/__resume/api/ai/complete', route => { aiCalls++; return route.abort(); });
+    try {
+      const left = page.getByRole('complementary', { name: 'Resume review', exact: true });
+      const right = page.getByRole('complementary', { name: 'Resume properties', exact: true });
+      const dial = left.getByRole('img', { name: 'ATS score 72 out of 100', exact: true });
+      assert.equal(await dial.innerText(), '72');
+      assert.equal(await dial.evaluate(element => element.style.getPropertyValue('--p')), '72');
+      assert.equal(await left.locator('.resume-score-copy h2').innerText(), result.band);
+      assert.equal(await left.locator('.resume-score-copy p').innerText(), result.summary);
+      assert.equal(await left.locator('.rws-review-context').count(), 0);
+      assert.equal(await left.locator('#resume-review-info').evaluate(element => element.matches(':popover-open')), false);
+      assert.equal(await left.getByRole('heading', { name: 'Review', exact: true }).count(), 1);
+      assert.deepEqual(await page.getByRole('tablist', { name: 'Workspace panels' }).getByRole('tab').allTextContents(), ['Document', 'Design']);
+      assert.equal(await right.getByRole('tab').count(), 0);
+      assert.equal(await page.getByRole('tab', { name: 'Canvas', exact: true }).count(), 0);
+      for (const width of [1440, 1024, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        if (!await left.isVisible()) {
+          if (await page.getByRole('button', { name: 'Close properties', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close properties', exact: true }).click();
+          await page.locator('.rws-outline-toggle').click();
+        }
+        const geometry = await left.locator('.resume-score-summary').evaluate(element => {
+          const ring = element.querySelector('.resume-score-dial').getBoundingClientRect(), copy = element.querySelector('.resume-score-copy').getBoundingClientRect(), block = element.getBoundingClientRect();
+          return { ring: ring.toJSON(), copy: copy.toJSON(), block: block.toJSON(), overflow: element.scrollWidth > element.clientWidth };
+        });
+        assert.equal(geometry.ring.width, 66); assert.equal(geometry.ring.height, 66);
+        assert.ok(geometry.copy.left > geometry.ring.right && geometry.copy.right <= geometry.block.right + 1);
+        assert.equal(geometry.overflow, false);
+        await left.locator('.rws-finding-target').first().click();
+        await page.frameLocator('.rws-paper').locator('[data-field="bullet-0"]').first().click();
+        const field = page.frameLocator('.rws-paper').locator('[data-inline-field="bullet-0"]');
+        await field.waitFor();
+        assert.equal(await field.inputValue(), 'Distinct authored contribution.');
+        if (width > 1100) {
+          const l = await left.boundingBox(), c = await page.locator('.rws-workspace').boundingBox(), r = await right.boundingBox();
+          assert.equal(await left.isVisible(), true);
+          assert.ok(l.x + l.width <= c.x + 1 && c.x + c.width <= r.x + 1 && c.width >= 400);
+          assert.equal(await field.evaluate(node => node === node.ownerDocument.activeElement), true);
+        } else assert.equal(await left.isVisible(), false);
+        if (!await left.isVisible()) {
+          if (await page.getByRole('button', { name: 'Close properties', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close properties', exact: true }).click();
+          await page.locator('.rws-outline-toggle').click();
+        }
+        assert.equal(await left.isVisible(), true);
+        assert.equal(await left.locator('[data-review-finding="0"]').evaluate(element => element.classList.contains('is-active')), true);
+        assert.equal(await left.isVisible(), true);
+        assert.deepEqual(preview.store.get(document.id).document.aiReview.result, result);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await left.locator('.rws-finding-target').first().click();
+      await page.frameLocator('.rws-paper').locator('[data-field="bullet-0"]').first().click();
+      await fillInline(page, 'bullet-0', 'Authored achievement 1, clarified by the author.');
+      await saved(page);
+      assert.equal(await left.isVisible(), true);
+      assert.match(await left.innerText(), /This review is historical/);
+      assert.deepEqual(preview.store.get(document.id).document.aiReview.result, result);
+      assert.equal(aiCalls, 0); assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('ATS suggestion cards retain direct editing and skill chips without duplicate context or revision requests', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'ats-suggestion-cards';
+    document.model.sections[0].items[0].bullets[0].text = 'Distinct authored contribution.';
+    const result = { score: 72, fixes: [
+      { point: 'Clarify contribution', how: 'Keep the authored evidence visible.', priority: 'high', anchor: { type: 'quote', quote: 'Distinct authored contribution.', replacement: 'Earlier wording using only verified evidence. '.repeat(8) } },
+      { point: 'Check overall scope', how: 'Compare the role with existing experience.', priority: 'low', anchor: { type: 'none' } },
+      { point: 'Check ambiguous passage', how: 'Choose the correct passage.', priority: 'medium', anchor: { type: 'quote', quote: 'Not a unique existing passage' } }
+    ], keywords: { missing: ['Accessibility', 'SQL'], present: ['Research'] } };
+    document.aiReview = atsEditorReview(document, { res: result, at: 100 });
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    let aiCalls = 0;
+    await page.route('**/__resume/api/ai/complete', route => { aiCalls++; return route.abort(); });
+    try {
+      const card = page.locator('[data-review-finding="0"]');
+      const overall = page.locator('[data-review-finding="1"]');
+      const surfaces = await page.evaluate(() => {
+        const reference = document.createElement('div');
+        reference.className = 'adm is-casestage';
+        reference.style.visibility = 'hidden';
+        reference.innerHTML = '<div class="adm__workbar"></div><div class="adm__editor"><div class="story__item"></div></div><div class="adm__casestage"></div><div data-canvas-reference></div>';
+        reference.querySelector('[data-canvas-reference]').style.background = 'radial-gradient(85% 55% at 50% 4%, rgba(216, 166, 87, .06), transparent 55%), radial-gradient(135% 110% at 50% 116%, var(--bg-elev), var(--bg-2) 46%, var(--bg) 100%)';
+        document.body.append(reference);
+        try {
+          const pairs = [
+            ['.rws-workbar', '.adm__workbar', 'backgroundColor'],
+            ['.rws-review-panel', null, 'backgroundColor'],
+            ['.rws-review-panel', '.adm__editor', 'borderRightColor'],
+            ['.rws-inspector', '.adm__casestage', 'backgroundColor'],
+            ['.rws-inspector', '.adm__casestage', 'borderLeftColor'],
+            ['.rws-panel-toggle', '.adm__workbar', 'borderBottomColor'],
+            ['.rws .resume-finding', '.story__item', 'backgroundColor'],
+            ['.rws-canvas', '[data-canvas-reference]', 'backgroundImage']
+          ];
+          return pairs.map(([selector, target, property]) => ({selector, property,
+            actual:getComputedStyle(document.querySelector(selector))[property],
+            expected:getComputedStyle(target ? reference.querySelector(target) : reference)[property]}));
+        } finally { reference.remove(); }
+      });
+      for (const surface of surfaces) assert.equal(surface.actual, surface.expected, `${surface.selector} ${surface.property} matches its reference`);
+      assert.equal(await card.getByText(result.fixes[0].point, { exact: true }).count(), 1);
+      assert.equal(await card.locator('.atsv__how').textContent(), result.fixes[0].how);
+      assert.equal(await card.locator('.atsv__pri').innerText(), 'HIGH');
+      assert.equal(await card.locator('.atsv__num').count(), 0);
+      assert.equal(await overall.locator('.rws-inline-warning').count(), 0);
+      assert.match(await overall.locator('.rws-finding-scope').last().innerText(), /Whole-resume guidance/);
+      await page.locator('[data-review-finding="2"] .rws-finding-target').click();
+      const popup = page.getByRole('region', { name: 'Finding details', exact: true });
+      assert.match(await popup.locator('.rws-inline-warning').innerText(), /No unique field match/);
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        if (!await card.isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
+        assert.equal(await card.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+        assert.deepEqual(await card.evaluate(element => {
+          const style = getComputedStyle(element);
+          return { border: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth], radius: style.borderRadius, padding: style.padding, gap: style.marginBottom, distinctSurface: style.backgroundColor !== getComputedStyle(element.closest('.rws-review-panel')).backgroundColor };
+        }), { border: ['1px', '1px', '1px', '1px'], radius: '12px', padding: '12px', gap: '12px', distinctSurface: true });
+        assert.deepEqual(await card.evaluate(element => ['.atsv__point', '.atsv__how'].map(selector => getComputedStyle(element.querySelector(selector)).fontSize)), ['12px', '12px']);
+        assert.equal(await card.locator('.resume-finding-wording, .atsv__rep').count(), 0);
+        assert.equal(await card.getByRole('button', { name: 'Copy', exact: true }).count(), 0);
+        assert.doesNotMatch(await card.innerText(), /Earlier wording using only verified evidence|Earlier suggested wording/);
+        assert.equal(await card.getByRole('button', { name: 'Edit affected field', exact: true }).count(), 0);
+        await page.locator('.rws-canvas').evaluate(canvas=>{canvas.scrollTop=canvas.scrollHeight;});
+        await card.locator('.atsv__how').click();
+        assert.equal(await popup.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+        assert.equal(await popup.getByRole('button', { name: 'Archive suggestion', exact: true }).isEnabled(), true);
+        assert.equal(await popup.getByText('View context', { exact: true }).count(), 0);
+        const keywords = page.locator('[data-review-keywords]');
+        assert.deepEqual(await keywords.locator('.atsv__chip--miss').allTextContents(), ['Accessibility', 'SQL']);
+        assert.deepEqual(await keywords.locator('.atsv__chip:not(.atsv__chip--miss)').allTextContents(), ['Research']);
+        assert.equal(await keywords.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+        const bounds = await popup.boundingBox(), stage = await page.locator('.rws-document-stage').boundingBox();
+        assert.ok(bounds.x >= stage.x && bounds.x + bounds.width <= stage.x + stage.width + 1);
+        assert.ok(bounds.y >= stage.y && bounds.y + bounds.height <= stage.y + stage.height - 60);
+        const passage=page.frameLocator('.rws-paper').locator('[data-field="bullet-0"].rws-active-field').first();
+        await passage.waitFor();
+        const paperBounds=await passage.boundingBox(), canvasBounds=await page.locator('.rws-canvas').boundingBox();
+        assert.ok(paperBounds.y>=canvasBounds.y-1 && paperBounds.y+paperBounds.height<=canvasBounds.y+canvasBounds.height+1,'Clicking the card locates the PDF passage');
+        assert.equal(await page.frameLocator('.rws-paper').locator('[data-inline-field]').count(),0,'Card selection does not open an input');
+        assert.equal(await page.locator('.rws-proposal-return-bar').count(),0,'Passive navigation does not enter an editing flow');
+        await page.screenshot({ path: join(tmpdir(), 'rk-resume-skill-chips-' + width + '.png') });
+        assert.deepEqual(preview.store.get(document.id).document.model,document.model);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await card.locator('.rws-finding-target').focus(); await page.keyboard.press('Enter');
+      assert.equal(await popup.evaluate(panel=>panel===document.activeElement),true);
+      await popup.press('Escape');
+      assert.equal(await popup.count(), 0);
+      await card.locator('.rws-finding-target:focus').waitFor();
+      const beforeOverall=await page.locator('.rws-canvas').evaluate(canvas=>canvas.scrollTop);
+      await overall.locator('.atsv__how').click();
+      assert.equal(await page.locator('.rws-canvas').evaluate(canvas=>canvas.scrollTop),beforeOverall,'Overall findings do not invent a PDF target');
+      assert.equal(await page.frameLocator('.rws-paper').locator('.rws-active-field').count(),0);
+      await card.locator('.rws-finding-target').click();
+      assert.equal(await popup.locator('.rws-finding-context').count(), 0);
+      assert.equal(await popup.locator('.rws-review-meta').count(), 0);
+      const titleLeft = (await card.locator('.atsv__point').boundingBox()).x;
+      await page.frameLocator('.rws-paper').locator('[data-field="bullet-0"]').first().click();
+      await page.frameLocator('.rws-paper').locator('[data-inline-field="bullet-0"]').waitFor();
+      await page.frameLocator('.rws-paper').locator('[data-inline-field="bullet-0"]').press('Escape');
+      await card.locator('.rws-finding-target').click();
+      assert.equal((await card.locator('.atsv__point').boundingBox()).x, titleLeft);
+      assert.equal(await page.locator('.rws-document-bar button').filter({ hasText: 'Back' }).count(), 0);
+      await popup.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
+      const decision = page.getByRole('dialog', { name: 'Archive suggestion', exact: true });
+      await decision.getByLabel('Existing evidence', { exact: true }).selectOption('bullet-0');
+      await decision.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
+      await decision.waitFor({ state: 'hidden' }); await saved(page);
+      await openReviewPanel(page);
+      await page.locator('.rws-set-aside[open]').waitFor();
+      assert.equal(await card.locator('.atsv__how').textContent(), result.fixes[0].how);
+      assert.equal(preview.store.get(document.id).document.reviewDecisions[0].evidence.text, 'Distinct authored contribution.');
+      assert.equal(await popup.count(), 0);
+      assert.match(await page.locator('[data-archived-suggestions]').innerText(), /Restore suggestion/);
+      await page.locator('[data-archived-suggestions]').getByRole('button', { name: 'Restore suggestion', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.reviewDecisions.length, 0);
+      assert.deepEqual(preview.store.get(document.id).document.aiReview.result, result);
+      assert.deepEqual(preview.store.get(document.id).document.model, document.model);
+      assert.equal(aiCalls, 0); assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  async function assertReviewDisclosures(rail) {
+    const rows = rail.locator('.resume-review-category:not([data-archived-suggestions])');
+    await rows.evaluateAll(nodes => nodes.forEach(node => { node.open = false; }));
+    const geometry = await rows.evaluateAll(nodes => nodes.map(node => {
+      const summary = node.querySelector('summary'), box = node.getBoundingClientRect(), heading = summary.getBoundingClientRect(), style = getComputedStyle(node), icon = getComputedStyle(summary, '::after');
+      return { top: box.top, bottom: box.bottom, height: heading.height, padding: style.paddingBottom, margin: style.marginBottom, border: style.borderBottomWidth, icon: { width: icon.width, height: icon.height, content: icon.content, mask: icon.maskImage, transform: icon.transform } };
+    }));
+    assert.equal(geometry.length, 3);
+    for (const [index, row] of geometry.entries()) {
+      assert.equal(row.height, 52);
+      assert.equal(row.padding, '0px'); assert.equal(row.margin, '0px'); assert.equal(row.border, '1px');
+      assert.equal(row.icon.width, '16px'); assert.equal(row.icon.height, '16px'); assert.equal(row.icon.content, '""');
+      assert.match(row.icon.mask, /M6 9l6 6 6-6/);
+      if (index) assert.ok(Math.abs(row.top - geometry[index - 1].bottom) < 1, 'Adjacent disclosures have one divider and no extra gap');
+    }
+    const summary = rows.last().locator('summary');
+    await summary.focus(); await summary.press('Enter');
+    assert.equal(await rows.last().evaluate(node => node.open), true);
+    assert.equal(await summary.evaluate(node => getComputedStyle(node, '::after').transform), 'none');
+    await summary.press('Space');
+    assert.equal(await rows.last().evaluate(node => node.open), false);
+  }
+  test('Review disclosure spacing and chevrons remain consistent through essentials', async () => {
+    const document = fixture(); document.id = 'review-disclosures';
+    document.aiReview = atsEditorReview(document, { at: 102, res: { score: 72, fixes: [
+      { category: 'story', point: 'Explain the role transition', priority: 'low', anchor: { type: 'none' } },
+      { category: 'interview', point: 'Prepare for scrutiny', priority: 'low', anchor: { type: 'none' } },
+    ], checks: [{ status: 'pass', label: 'Contact details', note: 'Email present.' }] } });
+    document.proposals = [{ id: 'standalone-disclosure', fieldId: 'summary', title: 'Manual revision',
+      before: document.model.summary, after: 'A synthetic revision.', signature: resumeSignature(document), evidence: [] }];
+    preview.store.create(document);
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      const rail = page.getByRole('complementary', { name: 'Resume review', exact: true });
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await openReviewPanel(page);
+        assert.equal(await rail.locator('.resume-review-category').count(), 4);
+        const archive = rail.locator('[data-archived-suggestions]');
+        assert.equal(await archive.evaluate(element => element === element.parentElement.lastElementChild), true);
+        assert.equal(await archive.locator('summary').evaluate(element => element.getBoundingClientRect().height), 52);
+        await assertReviewDisclosures(rail);
+        const boundary = await rail.locator('.rws-ai-review').evaluate(node => {
+          const next = node.nextElementSibling, last = node.lastElementChild;
+          return { gap: next.getBoundingClientRect().top - last.getBoundingClientRect().bottom, topBorder: getComputedStyle(next).borderTopWidth };
+        });
+        assert.equal(boundary.gap, 0); assert.equal(boundary.topBorder, '0px', 'No second separator before Proposed changes');
+      }
+      assert.deepEqual(preview.store.get(document.id).document, document);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Contextual revision keeps the original until Apply and exports the revised draft', { timeout: 90000 }, async () => {
+    const document = fixture(); document.id = 'contextual-revision'; document.sourceIds = [];
+    document.model.summary = 'I am a product designer who designs accessible workflows.';
+    document.aiReview = atsEditorReview(document, { at: 101, res: { score: 72, fixes: [
+      { category: 'readability', point: 'Make the summary direct', how: 'Keep the work and remove the introduction.', priority: 'high', anchor: { quote: document.model.summary } },
+      { category: 'story', point: 'Explain the role transition', how: 'Check the timeline; add context only if needed.', priority: 'low', anchor: { type: 'none' } },
+    ] } });
+    document.proposals = [{ id: 'context-proposal', signature: resumeSignature(document), before: document.model.summary,
+      after: 'Product designer designing accessible workflows.', fieldId: 'summary', title: 'Make the summary direct',
+      reason: 'A fictional wording example using only the existing statement.', evidence: [{ fieldId: 'summary', quote: document.model.summary }],
+      origin: 'sample', findingIndex: 0, reviewAt: 101 }];
+    preview.store.create(document);
+    const original = structuredClone(document), { page, context, errors } = await openSample(document.id);
+    let aiCalls = 0;
+    await page.route('**/__resume/api/ai/complete', route => { aiCalls++; return route.abort(); });
+    try {
+      assert.deepEqual(await page.locator('[data-review-category]').evaluateAll(nodes => nodes.map(node => node.dataset.reviewCategory)), ['readability', 'story']);
+      assert.equal(await page.locator('[data-review-finding="0"]').evaluate(node => node.closest('details') === null), true);
+      assert.equal(await page.locator('[data-review-category="story"]').evaluate(node => node.open), false);
+      assert.deepEqual(await page.locator('[data-review-finding]').evaluateAll(nodes => nodes.map(node => Number(node.dataset.reviewFinding)).sort()), [0, 1]);
+      assert.equal(await page.getByRole('heading', { name: 'Proposed changes', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Add revision', exact: true }).count(), 0);
+      await page.locator('[data-review-category="story"] > summary').click();
+      await page.locator('[data-review-finding="1"] .rws-finding-target').click();
+      assert.match(await page.getByRole('region', { name: 'Finding details', exact: true }).innerText(), /Overall recommendation/);
+      assert.equal(await page.getByRole('heading', { name: 'Proposed changes', exact: true }).count(), 0);
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+      const panel = page.getByRole('region', { name: 'Finding details', exact: true });
+      assert.equal(await panel.locator('.rws-diff p').first().innerText(), original.model.summary);
+      assert.equal(await panel.locator('.rws-diff p').last().innerText(), original.proposals[0].after);
+      assert.equal(await page.locator('[data-proposal-id="context-proposal"]').count(), 1);
+      assert.doesNotMatch(await panel.innerText(), /Review this passage|Supporting evidence|Revision evidence|Fictional example|Suggest a revision/);
+      assert.equal(await panel.getByRole('button', { name: 'Archive suggestion', exact: true }).innerText(), '');
+      assert.deepEqual(preview.store.get(document.id).document, original);
+      await panel.getByRole('button', { name: 'Keep original', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, original.model.summary);
+      await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
+      await panel.getByRole('button', { name: 'Apply', exact: true }).click(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.summary, original.proposals[0].after);
+      assert.deepEqual(preview.store.get(document.id).document.aiReview, original.aiReview);
+      assert.match(await panel.innerText(), /historical/);
+      assert.equal(await panel.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+      await page.reload(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.proposals.length, 0);
+      const exported = await exportPdf(document);
+      assert.ok(exported.verification.complete);
+      assert.match(exported.extractedText.replace(/\s+/g, ' '), /Product designer designing accessible workflows/);
+      assert.equal(aiCalls, 0); assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('ATS dial distinguishes zero, full and unavailable scores without clipping long summaries', { timeout: 90000 }, async () => {
+    for (const score of [0, 100, null]) {
+      const document = fixture(); document.id = 'dial-' + String(score);
+      const summary = 'Preserve the complete recorded explanation, including context and limitations. '.repeat(6);
+      document.aiReview = atsEditorReview(document, { res: { score, band: score === null ? 'Not assessed' : 'Recorded band', summary, fixes: [] } });
+      preview.store.create(document);
+      const { page, context, errors } = await openSample(document.id, 320);
+      try {
+        await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
+        const dial = page.getByRole('img', { name: score === null ? 'ATS score unavailable' : `ATS score ${score} out of 100`, exact: true });
+        assert.equal(await dial.innerText(), score === null ? '--' : String(score));
+        assert.equal(await dial.evaluate(element => element.style.getPropertyValue('--p')), String(score ?? 0));
+        assert.equal(await page.locator('.resume-score-copy p').textContent(), summary);
+        assert.equal(await page.locator('.resume-score-summary').evaluate(element => element.scrollWidth > element.clientWidth), false);
+        assert.equal(preview.store.get(document.id).document.aiReview.score, score);
+        assert.deepEqual(errors, []);
+      } finally { await context.close(); }
+    }
+  });
   test('Hosted Studio bridge saves private resumes, verifies PDFs and keeps failed-close edits', { timeout: 120000 }, async () => {
     const { Miniflare } = await import('miniflare');
     const { resumeWorkspaceRoute, createHostedResumeStore } = await import('./worker/resume-workspace.mjs');
     const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES', 'VAULT'] });
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-    const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1.25 });
+    const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.stack || error.message));
     let failedSave = false, expireFirstRender = true, rendered = 0, calls = 0;
     let holdSave = false, saveStarted, releaseSave;
     try {
@@ -643,15 +1706,50 @@ describe('Resume browser acceptance', () => {
       await editor.getByText('No active resumes', { exact: true }).waitFor();
       assert.equal((await store.list()).documents.length, 0);
       await editor.getByRole('button', { name: 'Create resume', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
-      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
-      await editor.getByLabel('Summary', { exact: true }).fill('A truthful fictional product-design summary.');
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
+      const checkStudioFrame = async () => {
+        await assertStudioToolbar(editor.locator('.rws-workbar'));
+        if (await editor.getByRole('button',{name:'Dismiss message',exact:true}).isVisible()) await editor.getByRole('button',{name:'Dismiss message',exact:true}).click();
+        await assertResumeViewTools(editor.locator('.resume-view-tools'));
+        assert.equal(await editor.locator('.rws-header').count(), 0);
+        assert.equal(await page.locator('.adm > .adm__bar').evaluate(element => element.inert), false);
+        assert.equal(await page.locator('.adm > .adm__statusbar').evaluate(element => element.inert), false);
+        assert.equal(await page.locator('.adm > .adm__statusbar').evaluate(element => {
+          const style = getComputedStyle(element), workspace = getComputedStyle(document.querySelector('.adm__resume-host'));
+          return Number(style.zIndex) > Number(workspace.zIndex) && style.borderTopStyle === 'solid' && parseFloat(style.borderTopWidth) > 0 && style.boxShadow === 'none';
+        }), true);
+        const header = await page.locator('.adm > .adm__bar').boundingBox(), footer = await page.locator('.adm > .adm__statusbar').boundingBox(), frame = await page.locator('.adm__resume-host').boundingBox();
+        assert.ok(Math.abs(frame.y - header.y - header.height) <= 1);
+        assert.ok(Math.abs(frame.y + frame.height - footer.y) <= 1);
+        const palette = await page.locator('.adm').evaluate(element => ({
+          base:getComputedStyle(element).backgroundColor,
+          bar:getComputedStyle(element.querySelector('.adm__bar')).backgroundColor,
+          line:getComputedStyle(element.querySelector('.adm__bar')).borderBottomColor
+        }));
+        assert.deepEqual(await editor.locator('.rws').evaluate(element => ({
+          base:getComputedStyle(element.querySelector('.rws-review-panel')).backgroundColor,
+          bar:getComputedStyle(element.querySelector('.rws-workbar')).backgroundColor,
+          line:getComputedStyle(element.querySelector('.rws-panel-toggle')).borderBottomColor
+        })), palette);
+      };
+      await checkStudioFrame();
+      await page.getByRole('button', {name:'Settings',exact:true}).click();
+      await page.getByRole('button', {name:'Close settings',exact:true}).click();
+      assert.equal(await page.locator('.adm__resume-host').count(), 1);
+      await page.getByRole('button', {name:'Settings',exact:true}).focus();
+      await page.keyboard.press('Tab');
+      assert.equal(await page.evaluate(() => document.activeElement.matches('[data-exit]')), true);
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('.prep-dialog').count(), 1);
+      assert.equal(await page.locator('.adm__resume-host').count(), 1);
+      await page.locator('.adm__settings').waitFor({ state: 'hidden' });
+      await fillInline(editor, 'summary', 'A truthful fictional product-design summary.');
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       const bytes = Buffer.from('Immutable fictional career source.');
       await editor.locator('input[type=file]').setInputFiles({ name: 'original.txt', mimeType: 'text/plain', buffer: bytes });
       await editor.getByRole('button', { name: 'Attach original', exact: true }).click();
-      await editor.getByRole('dialog').waitFor({ state: 'hidden' });
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await editor.locator('dialog.rws-dialog').waitFor({ state: 'hidden' });
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       const row = (await store.list()).documents[0], id = row.document.id;
       assert.deepEqual(Buffer.from((await store.sourceFile(row.document.sourceIds[0])).bytes), bytes);
       await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
@@ -663,57 +1761,165 @@ describe('Resume browser acceptance', () => {
       await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
       await editor.locator('.rws[data-view="pdf"], .rws-flash.is-error').waitFor();
       assert.equal(await editor.locator('.rws[data-view="pdf"]').count(), 1, await editor.locator('.rws-flash').textContent().catch(() => JSON.stringify(errors)));
-      const artifact = (await store.get(id)).exports[0];
-      assert.equal(artifact.verification.complete, true); assert.equal(artifact.layoutBoundsVerified, true); assert.equal(rendered, 2);
+      assert.equal((await store.get(id)).exports.length, 0);
+      assert.equal((await bucket.list({ prefix: 'exports/' })).objects.length, 0);
+      assert.equal((await bucket.list({ prefix: 'pending/' })).objects.length, 0);
+      assert.equal(rendered, 2);
       assert.match(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).getAttribute('href'), /^blob:/);
       const hostedText = editor.getByRole('region', { name: 'Verified exported PDF', exact: true }).locator('.textLayer').first();
       await hostedText.waitFor();
       assert.ok((await hostedText.textContent()).replace(/\s/g, '').includes('Atruthfulfictionalproduct-designsummary.'));
-      assert.equal(await editor.getByRole('button', { name: 'Back to Studio', exact: true }).isVisible(), true);
+      assert.equal(await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).count(), 0);
+      assert.equal(await editor.locator('.rws-workbar').count(), 0);
+      assert.equal(await editor.getByRole('button', { name: 'Close PDF preview', exact: true }).count(), 1);
+      await editor.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      assert.equal(await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).isVisible(), true);
       await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.getByRole('button', { name: 'Saved resumes', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
-      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
+      await openReviewPanel(editor);
       assert.equal(await editor.getByRole('button', { name: 'Review with AI', exact: true }).count(), 0);
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
+      await editor.getByRole('button', { name: 'Review resume', exact: true }).click();
       assert.equal(await editor.getByRole('button', { name: 'Run ATS check', exact: true }).isEnabled(), false);
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: width < 760 ? 844 : 1000 });
         await page.screenshot({ path: join(tmpdir(), 'rk-resume-hosted-' + width + '.png') });
+        await checkStudioFrame();
         assert.equal(await editor.locator('.rws').evaluate(element => element.scrollWidth <= innerWidth + 1), true);
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
-      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
+      await editor.getByRole('tab', { name: 'Document', exact: true }).click();
       failedSave = true;
-      await editor.getByLabel('Summary', { exact: true }).fill('Retain this edit when cloud saving fails.');
-      await editor.locator('.rws-status.is-error').waitFor();
-      await editor.getByRole('button', { name: 'Back to Studio', exact: true }).click();
+      await fillInline(editor, 'summary', 'Retain this edit when cloud saving fails.');
+      await page.locator('.adm__status[data-resume-state="error"]').waitFor();
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      await page.locator('.resume-save-banner:visible').waitFor();
+      assert.equal(await page.locator('.adm__resume-host').count(), 1);
+      assert.equal(await page.locator('.resume-save-banner:visible').getAttribute('role'),'alert');
+      assert.equal(await editor.locator('.rws-save-status, .rws-flash.is-error').count(),0);
+      assert.equal(await page.locator('.resume-save-banner:visible').getByRole('button').count(),1);
+      assert.equal(await page.locator('.resume-save-banner:visible span').innerText(),"Changes weren't saved. Try again later.");
+      assert.equal(await page.locator('.resume-save-banner:visible button').getAttribute('class'),'rk-flash__action');
+      for (const width of [1440,390,320]) {
+        await page.setViewportSize({width,height:width<760?844:1000});
+        await editor.locator('.resume-view-tools').evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        const banner=await page.locator('.resume-save-banner:visible').boundingBox(), footer=await page.locator('.adm__statusbar').boundingBox();
+        const tools=await editor.locator('.resume-view-tools').boundingBox();
+        assert.ok(Math.abs(footer.y-banner.y-banner.height-12)<1,'Hosted banner baseline is unchanged');
+        assert.ok(Math.abs(banner.x+banner.width/2-width/2)<1,'Hosted banner stays centred');
+        assert.ok(tools.x>=banner.x+banner.width+11 || tools.x+tools.width+11<=banner.x || tools.y+tools.height+11<=banner.y,'Editor floaty clears the parent banner across the iframe');
+        await page.screenshot({path:join(tmpdir(),`rk-editor-floaty-hosted-error-${width}.png`)});
+      }
+      await page.setViewportSize({width:1440,height:1000});
+      await page.locator('.resume-save-banner:visible').getByRole('button',{name:'Retry',exact:true}).click();
+      await page.locator('.adm__status[data-resume-state="error"]').waitFor();
+      assert.equal(await page.locator('.resume-save-banner:visible').count(),1);
+      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
       assert.equal(await page.locator('.adm__resume-host').count(), 1);
       assert.equal(await page.evaluate(id => !!localStorage.getItem('rk:resume:pending:' + id), id), true);
       failedSave = false;
-      await editor.getByRole('button', { name: 'Back to Studio', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       assert.equal((await store.get(id)).document.model.summary, 'Retain this edit when cloud saving fails.');
       await page.getByRole('button', { name: 'Saved resumes', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
-      assert.equal(await editor.locator('.rws-status').textContent().then(text => text.includes('Saved to Cloudflare')), true);
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
+      assert.equal(await page.locator('.adm__status[data-resume-state]').innerText(), 'Saved');
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), ownerDraft);
       await assert.rejects(page.evaluate(() => window.__RKStudio.resume.request('library', {}, window)), /owner session expired/);
       assert.equal(calls, 0); assert.deepEqual(errors, []);
-      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
+      await page.locator('.adm__tab[data-tab="ai"]').click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      assert.equal(await page.locator('.prep-dialog').count(), 0);
+      assert.equal(await page.locator('.adm__main').evaluate(element => element.inert), false);
+      await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
       const review = { id: 'migration-review', tool: 'ats', kind: 'review', at: 10, payload: { text: 'Original immutable resume before edits.', state: { mode: 'job', jd: 'Design accessible enterprise workflows', company: 'SyntheticCo' }, res: { score: 62, summary: 'Original assessment', checks: [], fixes: [{ point: 'Clarify summary', priority: 'high', anchor: { quote: 'Preserved edited summary.' } }] }, resumeDocument: { version: 1, sha256: row.document.sourceIds[0], name: 'original.txt', size: bytes.length, type: 'text/plain', lastModified: 0 } } };
+      review.payload.res.fixes.push(
+        { category: 'story', point: 'Explain the role transition', priority: 'low', anchor: { type: 'none' } },
+        { category: 'interview', point: 'Prepare for scrutiny', priority: 'low', anchor: { type: 'none' } },
+      );
+      review.payload.res.checks.push({ status: 'pass', label: 'Contact details', note: 'Email present.' });
       const workspace = { id: 'migration-workspace', tool: 'ats', kind: 'workspace', at: 20, payload: { reviewId: review.id, company: 'SyntheticCo', level: 'staff', jd: 'Design accessible enterprise workflows', res: review.payload.res, text: review.payload.text, rb: { name: 'Synthetic Designer', title: 'Product Designer', summary: 'Preserved edited summary.', contact: { email: 'synthetic@example.test', links: [{ label: 'Portfolio', url: 'https://example.test' }] }, sections: [{ kind: 'experience', heading: 'Experience', items: [{ role: 'Designer', org: 'Example', dates: '2020 - Present', location: '', bullets: ['Designed accessible enterprise workflows with research evidence.'] }] }] }, design: { font: 'inter', size: 'a4', density: 'normal', margin: 'normal', accent: '#167d83', layout: 'single', keepWhole: true } } };
       await legacy.put('prep/ats/' + review.id + '.json', JSON.stringify(review));
-      await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
-      await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
+      await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review]);
       await page.locator('.prep-dialog').getByRole('button', { name: 'Close', exact: true }).click();
       await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
       await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
-      await page.locator('[data-atsv-continue]').click();
-      await editor.locator('[data-ats-migration]').waitFor();
+      const assertReviewerAction = async label => {
+        const action = page.getByRole('button', { name: label, exact: true });
+        await action.waitFor();
+        assert.equal(await action.count(), 1);
+        assert.equal(await page.locator('[data-atsv-rail] [data-atsv-rebuild], [data-atsv-rail] [data-atsv-continue]').count(), 0);
+        for (const width of [1440, 390, 320]) {
+          await page.setViewportSize({ width, height: 1000 });
+          await assertStudioToolbar(page.locator('.atsv__bar'), { historyVisible: false });
+          const geometry = await action.evaluate(button => {
+            const bar = button.closest('.atsv__bar'), box = button.getBoundingClientRect(), back = bar.querySelector('[data-atsv-close]').getBoundingClientRect();
+            return { right: bar.getBoundingClientRect().right - box.right, inset: parseFloat(getComputedStyle(bar).paddingRight),
+              height: box.height, inside: box.left >= 0 && box.right <= innerWidth,
+              overlap: Math.min(box.right, back.right) > Math.max(box.left, back.left) && Math.min(box.bottom, back.bottom) > Math.max(box.top, back.top),
+              last: button.parentElement === bar.querySelector('.atsv__mid').lastElementChild };
+          });
+          assert.ok(Math.abs(geometry.right - geometry.inset) <= 1);
+          assert.equal(geometry.height, 34); assert.equal(geometry.inside, true);
+          assert.equal(geometry.overlap, false); assert.equal(geometry.last, true);
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+      };
+      await assertReviewerAction('Rebuild your resume');
+      await page.locator('.atsv__bar [data-atsv-close]').click();
+      await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
+      await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
+      await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
+      await assertReviewerAction('Continue editing resume');
+      const reviewCard = page.locator('.atsv__item[data-fi="0"]');
+      assert.equal(await reviewCard.evaluate(node => node.closest('details') === null), true, 'Concrete reviewer suggestions are not hidden in an accordion');
+      assert.doesNotMatch(await page.locator('[data-atsv-rail]').innerText(), /About this review|Heuristic assessment|Historical semantic/);
+      await assertReviewDisclosures(page.locator('[data-atsv-rail]'));
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
+      const reviewInfo = page.locator('#atsv-review-info');
+      assert.equal(await reviewInfo.locator('input,textarea').count(), 0);
+      assert.equal(await reviewInfo.locator('.resume-source-options').evaluate(element => element.open), false, 'Reviewer source options starts collapsed');
+      assert.equal(await page.locator('.atsv__bar [data-atsv-close]').isVisible(), true, 'The existing back bar is retained');
+      assert.equal(await page.getByRole('button', { name: 'Continue editing resume', exact: true }).isVisible(), true);
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.waitForFunction(() => {
+          const panel = document.querySelector('#atsv-review-info').getBoundingClientRect();
+          return panel.left >= 0 && panel.right <= innerWidth;
+        });
+        await assertReviewTargetLayout(reviewInfo);
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await reviewInfo.locator('summary').click();
+      assert.equal(await reviewInfo.getByRole('button', { name: 'Reupload source', exact: true }).isVisible(), true);
+      await reviewInfo.getByRole('button', { name: 'Edit role', exact: true }).press('Escape');
+      assert.equal(await reviewInfo.isVisible(), false);
+      assert.equal(await page.getByRole('dialog', { name: 'Resume review', exact: true }).isVisible(), true);
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
+      await reviewInfo.getByRole('button', { name: 'Edit role', exact: true }).click();
+      await editor.getByRole('dialog', { name: 'Target role', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      assert.equal(await editor.getByRole('button', { name: 'Back to review', exact: true }).count(), 1);
+      assert.equal(await editor.locator('.rws-document-bar .rws-proposal-return').count(), 0);
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      assert.equal(await page.getByRole('dialog', { name: 'Resume review', exact: true }).isVisible(), true);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry => entry.id === 'migration-review')), review);
+      await reviewCard.press('Enter');
+      const readOnlyFinding = page.getByRole('region', { name: 'Finding details', exact: true });
+      assert.equal(await readOnlyFinding.locator('input,textarea').count(), 0);
+      assert.equal(await readOnlyFinding.getByRole('button', { name: 'Apply', exact: true }).count(), 0);
+      await readOnlyFinding.press('Escape');
+      await readOnlyFinding.waitFor({ state: 'detached' });
+      await reviewCard.press('Enter');
+      await readOnlyFinding.getByRole('button', { name: 'Address in editor', exact: true }).click();
+      await editor.locator('[data-context-finding="0"]').waitFor();
+      assert.equal(await editor.locator('[data-ats-migration]').count(), 0);
+      await editor.getByRole('button', { name: 'Review information', exact: true }).click();
+      await editor.getByRole('button', { name: 'Edit role', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Edit role', exact: true }).press('Escape');
       assert.equal(await page.evaluate(() => {
         const host = document.querySelector('.adm__resume-host'), review = document.querySelector('.atsv');
         return Number(getComputedStyle(host).zIndex) > Number(getComputedStyle(review).zIndex) && document.elementFromPoint(innerWidth / 2, innerHeight / 2) === host;
@@ -721,41 +1927,48 @@ describe('Resume browser acceptance', () => {
       const migratedId = (await atsMigrationIdentity(workspace)).id;
       assert.equal((await store.get(migratedId)).document.model.summary, workspace.payload.rb.summary);
       assert.equal(await page.locator('[data-rbz-doc]').count(), 0);
-      await editor.getByRole('button', { name: 'Edit affected field', exact: true }).click();
-      assert.equal(await editor.getByLabel('Summary', { exact: true }).inputValue(), workspace.payload.rb.summary);
-      await editor.getByLabel('Summary', { exact: true }).fill('Current edited summary with accessibility and research outcomes.');
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await editor.locator('[data-review-finding] .rws-finding-target').first().click();
+      await editor.frameLocator('.rws-paper').locator('[data-field="summary"]').first().click();
+      assert.equal(await (await inlineField(editor, 'summary')).inputValue(), workspace.payload.rb.summary);
+      await fillInline(editor, 'summary', 'Current edited summary with accessibility and research outcomes.');
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       const migrated = await store.get(migratedId);
       assert.deepEqual(migrated.document.ats.legacy.entry, workspace);
       assert.deepEqual(new Uint8Array((await store.sourceFile(row.document.sourceIds[0])).bytes), new Uint8Array(bytes));
       const renderBefore = rendered;
       await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
       await editor.locator('.rws[data-view="pdf"]').waitFor();
-      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      await editor.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
       await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
       await editor.locator('.rws[data-view="pdf"]').waitFor();
       assert.equal(rendered, renderBefore + 1);
       assert.equal(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 0);
+      await editor.getByRole('button', { name: 'Print this PDF', exact: true }).click();
+      await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click();
+      assert.equal(await editor.locator('.rws-pdf-print-frame').count(), 0);
+      assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, false);
       await editor.getByRole('button', { name: 'Review migrated layout', exact: true }).click();
       await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click();
       assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, false);
       await editor.getByRole('button', { name: 'Review migrated layout', exact: true }).click();
       await editor.getByRole('button', { name: 'Accept reviewed layout', exact: true }).click();
-      await editor.getByRole('dialog').waitFor({ state: 'hidden' });
+      await editor.locator('dialog.rws-dialog').waitFor({ state: 'hidden' });
       assert.equal((await store.get(migratedId)).document.ats.layoutAccepted, true);
       assert.match(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).getAttribute('href'), /^blob:/);
-      const originalExport = (await store.get(migratedId)).exports.at(-1);
-      const originalExportBytes = Buffer.from((await store.exportFile(migratedId, originalExport.id)).bytes);
-      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      const originalPdfUrl = await editor.getByRole('link', { name: 'Download this PDF', exact: true }).getAttribute('href');
+      const originalExportBytes = Buffer.from(await page.evaluate(async url => [...new Uint8Array(await (await fetch(url)).arrayBuffer())], originalPdfUrl));
+      await editor.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
       await editor.getByRole('tab', { name: 'Design', exact: true }).click();
       await editor.getByLabel('Margins', { exact: true }).selectOption('narrow');
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       await editor.getByRole('button', { name: 'Preview PDF', exact: true }).click();
       await editor.locator('.rws[data-view="pdf"]').waitFor();
       assert.equal(rendered, renderBefore + 2);
-      assert.notEqual((await store.get(migratedId)).exports.at(-1).signature, originalExport.signature);
-      assert.deepEqual(Buffer.from((await store.exportFile(migratedId, originalExport.id)).bytes), originalExportBytes);
-      await editor.getByRole('button', { name: 'Edit resume', exact: true }).click();
+      const newPdfUrl = await editor.getByRole('link', { name: 'Download this PDF', exact: true }).getAttribute('href');
+      assert.notEqual(newPdfUrl, originalPdfUrl);
+      assert.notDeepEqual(Buffer.from(await page.evaluate(async url => [...new Uint8Array(await (await fetch(url)).arrayBuffer())], newPdfUrl)), originalExportBytes);
+      assert.equal((await store.get(migratedId)).exports.length, 0);
+      await editor.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
       for (const provider of ['openai', 'anthropic']) {
         await page.evaluate(provider => {
           localStorage.setItem('rk:ai:same', '0'); localStorage.setItem('rk:ai:mode', 'local'); localStorage.setItem('rk:ai:txt:provider', provider); localStorage.setItem('rk:ai:txt:key', 'synthetic-only');
@@ -777,60 +1990,82 @@ describe('Resume browser acceptance', () => {
           }
           window.atsMigrationCalls.push({ system, user });
           if (window.deferMigrationCheck) await new Promise(resolve => { window.releaseMigrationCheck = resolve; });
-          const value = system.includes('ONE exact field replacement') ? { kind: 'question', question: 'Which outcome can you substantiate?', reason: 'No new metric was supplied.' } : { score: 79, band: 'Good', summary: 'Checked the current exported resume', checks: [], fixes: [{ point: 'Clarify research impact', priority: 'high', anchor: { quote: 'Current edited summary with accessibility and research outcomes.' } }], keywords: { present: [], missing: [] } };
+          const value = { responseVersion: 1, score: 79, band: 'Good', summary: 'Checked the current exported resume', checks: [], fixes: [{ point: 'Clarify research impact', priority: 'high', anchor: { quote: 'Current edited summary with accessibility and research outcomes.' }, response: { kind: 'question', question: 'Which outcome can you substantiate?', reason: 'No new metric was supplied.' } }], keywords: { present: [], missing: [] } };
           return Response.json({ choices: [{ message: { content: JSON.stringify(value) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
         };
       });
-      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
-      await editor.getByRole('checkbox', { name: 'Allow this resume and target to be sent for an ATS check.' }).check();
+      await openReviewPanel(editor);
+      await page.evaluate(() => {
+        window.originalReviewConfiguration = window.__RKStudio.resume.configuration;
+        window.__RKStudio.resume.configuration = caller => ({ ...window.originalReviewConfiguration(caller), reviewResponseVersion: 0 });
+      });
+      const expectedPdfDocument = (await store.get(migratedId)).document;
+      expectedPdfDocument.design.margin = 'narrow';
+      const expectedPdfSignature = resumeSignature(expectedPdfDocument), saveDeadline = Date.now() + 15000;
+      let beforeOutdatedBridge;
+      do {
+        beforeOutdatedBridge = await store.get(migratedId);
+        if (beforeOutdatedBridge.document.assessment?.signature === expectedPdfSignature) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      } while (Date.now() < saveDeadline);
+      assert.equal(beforeOutdatedBridge.document.assessment?.signature, expectedPdfSignature);
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
       await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
-      await Promise.race([editor.getByRole('dialog').waitFor({ state: 'hidden' }), editor.getByRole('dialog').getByRole('alert').waitFor()]);
-      assert.equal(await editor.getByRole('dialog').count(), 0, (await editor.getByRole('dialog').allTextContents()).join(''));
+      await editor.getByRole('dialog', { name: 'Re-check ATS' }).getByRole('alert').filter({ hasText: 'No AI request was made.' }).waitFor();
+      assert.equal((await page.evaluate(() => window.atsMigrationCalls)).length, 0);
+      assert.deepEqual(await store.get(migratedId), beforeOutdatedBridge);
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.evaluate(() => { window.__RKStudio.resume.configuration = window.originalReviewConfiguration; delete window.originalReviewConfiguration; });
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.getByRole('checkbox', { name: 'Allow this resume, target and selected supporting sources to be sent for review and proposed revisions.' }).check();
+      await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
+      await Promise.race([editor.locator('dialog.rws-dialog').waitFor({ state: 'hidden' }), editor.locator('dialog.rws-dialog').getByRole('alert').waitFor()]);
+      assert.equal(await editor.locator('dialog.rws-dialog').count(), 0, (await editor.locator('dialog.rws-dialog').allTextContents()).join(''));
       const assessed = await store.get(migratedId);
       assert.equal(assessed.document.aiReview.kind, 'ats');
       assert.equal(assessed.document.aiReview.signature, resumeSignature(assessed.document));
       const inputs = await page.evaluate(() => window.atsMigrationCalls);
       assert.ok(inputs.some(input => input.user.includes('Current edited summary') && input.user.includes('Design accessible enterprise workflows')));
-      assert.ok(inputs.every(input => !input.user.includes('Original immutable resume before edits')));
-      await editor.getByRole('button', { name: 'Prepare revision', exact: true }).click();
-      await editor.getByRole('dialog').getByRole('checkbox').check();
-      await editor.getByRole('button', { name: 'Approve revision request', exact: true }).click();
+      assert.ok(inputs.every(input => !input.user.split('\n\nSUPPORTING EVIDENCE')[0].includes('Original immutable resume before edits')));
+      assert.ok(inputs.every(input => input.system.includes('Supporting evidence may inform proposed revisions ONLY')));
+      await editor.locator('[data-review-finding] .rws-finding-target').first().click();
       await editor.getByText('Which outcome can you substantiate?', { exact: true }).waitFor();
+      assert.equal(await editor.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+      assert.equal((await page.evaluate(() => window.atsMigrationCalls)).length, inputs.length);
       assert.equal((await store.get(migratedId)).document.model.summary, assessed.document.model.summary);
       await page.evaluate(() => { window.deferMigrationCheck = true; });
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
-      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
       await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
-      await editor.getByLabel('Summary', { exact: true }).fill('Newer wording after cancelled assessment.');
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await fillInline(editor, 'summary', 'Newer wording after cancelled assessment.');
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       const cancelled = await store.get(migratedId);
       await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
       await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
       assert.deepEqual(await store.get(migratedId), cancelled);
       const pending = new Promise(resolve => { saveStarted = resolve; }); holdSave = true;
-      await editor.getByLabel('Summary', { exact: true }).fill('Cancel before the pending save finishes.');
+      await fillInline(editor, 'summary', 'Cancel before the pending save finishes.');
       await pending;
       const callsBeforeEarlyCancel = await page.evaluate(() => window.atsMigrationCalls.length), exportsBeforeEarlyCancel = (await store.get(migratedId)).exports.length;
-      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
-      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await openReviewPanel(editor);
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
       await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-      releaseSave(); await editor.locator('.rws-status.is-saved').waitFor();
+      releaseSave(); await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), callsBeforeEarlyCancel);
       assert.equal((await store.get(migratedId)).exports.length, exportsBeforeEarlyCancel);
-      await editor.getByRole('tab', { name: 'Content', exact: true }).click();
+      await editor.getByRole('tab', { name: 'Document', exact: true }).click();
       const legacyChanged = structuredClone(workspace); legacyChanged.payload.rb.summary = 'Recovered late legacy edit';
       await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(legacyChanged));
-      await editor.getByLabel('Summary', { exact: true }).fill('Keep current unsaved wording through recovery.');
-      await editor.locator('.rws-status.is-conflict').waitFor();
-      await editor.getByRole('button', { name: 'Compare versions', exact: true }).click();
+      await fillInline(editor, 'summary', 'Keep current unsaved wording through recovery.');
+      await page.locator('.adm__status[data-resume-state="conflict"]').waitFor();
+      await page.getByRole('button', { name: 'Compare versions', exact: true }).click();
       await editor.getByRole('button', { name: 'Recover legacy copies', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       assert.equal((await store.get(migratedId)).document.model.summary, 'Keep current unsaved wording through recovery.');
       assert.ok((await store.list()).documents.some(row => row.document.model.summary === 'Recovered late legacy edit'));
       await editor.locator('html').evaluate(() => {
@@ -838,13 +2073,14 @@ describe('Resume browser acceptance', () => {
         Storage.prototype.setItem = function (key, value) { if (key.startsWith('rk:resume:')) throw new DOMException('Storage full', 'QuotaExceededError'); return write.call(this, key, value); };
       });
       failedSave = true;
-      await editor.getByLabel('Summary', { exact: true }).fill('Cloud save survives unavailable local recovery storage.');
-      await editor.locator('.rws-status.is-error').waitFor();
+      await fillInline(editor, 'summary', 'Cloud save survives unavailable local recovery storage.');
+      await page.locator('.adm__status[data-resume-state="error"]').waitFor();
       assert.equal(await editor.locator('html').evaluate(() => { const event = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; }), true);
       assert.equal((await store.get(migratedId)).document.model.summary, 'Keep current unsaved wording through recovery.');
       failedSave = false;
-      await editor.getByRole('button', { name: 'Retry save', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.getByRole('button', { name: 'Retry', exact: true }).click();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
+      assert.equal(await page.locator('.resume-save-banner:visible').count(), 0);
       const cloudDocument = (await store.get(migratedId)).document;
       assert.equal(cloudDocument.model.summary, 'Cloud save survives unavailable local recovery storage.');
       assert.equal(cloudDocument.design.margin, 'narrow'); assert.equal(cloudDocument.design.accent, workspace.payload.design.accent);
@@ -855,10 +2091,10 @@ describe('Resume browser acceptance', () => {
         await page.screenshot({ path: join(tmpdir(), 'rk-ats-migration-' + width + '.png') });
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
-      await editor.getByRole('tab', { name: 'Review', exact: true }).click();
+      await openReviewPanel(editor);
       await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
-      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
       await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
       const peer = await store.get(migratedId);
@@ -866,20 +2102,20 @@ describe('Resume browser acceptance', () => {
       const peerSaved = await store.save(migratedId, peerDocument, peer.version);
       await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
       await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
-      await editor.locator('.rws-status.is-conflict').waitFor();
+      await page.locator('.adm__status[data-resume-state="conflict"]').waitFor();
       assert.deepEqual(await store.get(migratedId), peerSaved);
       await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await editor.getByRole('button', { name: 'Compare versions', exact: true }).click();
+      await page.getByRole('button', { name: 'Compare versions', exact: true }).click();
       await editor.getByRole('button', { name: 'Use server version', exact: true }).click();
-      await editor.locator('.rws-status.is-saved').waitFor();
+      await page.locator('.adm__status[data-resume-state="saved"]').waitFor();
       await page.evaluate(() => { window.deferMigrationCheck = true; delete window.releaseMigrationCheck; });
-      await editor.getByRole('button', { name: 'Re-check ATS', exact: true }).click();
-      await editor.getByRole('dialog').getByRole('checkbox').check();
+      await editor.getByRole('button', { name: 'Review again', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').getByRole('checkbox').check();
       await editor.getByRole('button', { name: 'Run ATS check', exact: true }).click();
       await page.waitForFunction(() => typeof window.releaseMigrationCheck === 'function');
       const beforeClose = await store.get(migratedId);
-      await editor.getByRole('dialog').press('Escape');
-      await editor.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
+      await editor.locator('dialog.rws-dialog').press('Escape');
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
       await page.evaluate(() => { window.deferMigrationCheck = false; window.releaseMigrationCheck(); });
       await page.waitForFunction(() => window.__rkAiSession.state().active === 0);
@@ -887,6 +2123,10 @@ describe('Resume browser acceptance', () => {
       assert.equal(await page.locator('.atsv').isVisible(), true);
       assert.equal(await page.locator('.atsv').evaluate(element => element.inert), false);
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:content:draft')), ownerDraft);
+      await page.locator('.adm__tab[data-tab="ai"]').click();
+      await page.locator('.atsv').waitFor({state:'detached'});
+      assert.equal(await page.locator('.prep-dialog').count(), 0);
+      assert.equal(await page.locator('.adm__main').evaluate(element => element.inert), false);
       const otherContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
       try {
         await otherContext.route('**/*', fixtureRoute);
@@ -898,9 +2138,8 @@ describe('Resume browser acceptance', () => {
         await otherPage.locator('[data-act="prep-open"][data-tool="ats"]').click();
         await otherPage.locator('[data-act="resume-hist-open"][data-id="' + migratedId + '"]').click();
         const restored = otherPage.frameLocator('.adm__resume-host');
-        await restored.locator('.rws-status.is-saved').waitFor();
-        await restored.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Content', exact: true }).click();
-        assert.equal(await restored.getByLabel('Summary', { exact: true }).inputValue(), peerDocument.model.summary);
+        await otherPage.locator('.adm__status[data-resume-state="saved"]').waitFor();
+        assert.equal(await (await inlineField(restored, 'summary')).inputValue(), peerDocument.model.summary);
         assert.deepEqual((await store.get(migratedId)).document, peerSaved.document);
         const controls = await restored.locator('.rws-workbar button').evaluateAll(elements => elements.filter(element => element.getClientRects().length).map(element => { const box = element.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }; }));
         assert.ok(controls.length > 0); assert.ok(controls.every(box => box.left >= 0 && box.right <= 390));
@@ -1015,6 +2254,15 @@ describe('Resume browser acceptance', () => {
       assert.equal(await page.locator('.rws-canvas').getAttribute('data-canvas'), 'light');
       await page.getByRole('button', { name: 'Light canvas', exact: true }).click();
       assert.equal(await page.locator('.rws-canvas').getAttribute('data-canvas'), 'dark');
+      const peer = await context.newPage();
+      await peer.goto(page.url());
+      await peer.waitForFunction(() => Boolean(document.querySelector('.rws-paper')?.contentWindow.resumeReady));
+      await peer.getByRole('button', { name: 'Light canvas', exact: true }).click();
+      await page.locator('.rws-canvas[data-canvas="light"]').waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Light canvas', exact: true }).getAttribute('aria-pressed'),'true');
+      await page.getByRole('button', { name: 'Light canvas', exact: true }).click();
+      await peer.locator('.rws-canvas[data-canvas="dark"]').waitFor();
+      await peer.close();
       for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: 844 });
         await assertSingleScroller();
@@ -1072,7 +2320,7 @@ describe('Resume browser acceptance', () => {
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:resume-preview:inspector-width')), '600');
       await page.setViewportSize({ width: 390, height: 844 });
       assert.equal(await handle.isVisible(), false);
-      await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
+      await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Document', exact: true }).click();
       const mobile = await inspector.boundingBox(); assert.ok(mobile.width <= 345 && mobile.x >= 0 && mobile.x + mobile.width <= 390);
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.waitForFunction(() => document.querySelector('.rws-inspector-resizer').getAttribute('aria-valuenow') === '600');
@@ -1132,12 +2380,11 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Dismiss message' }).click();
       assert.equal(await page.locator('.rk-flash').count(), 0); assert.deepEqual(errors, []);
       await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
-      await page.getByRole('button', { name: 'AI review rubric', exact: true }).click();
-      const rubric = page.getByRole('dialog', { name: 'AI review rubric', exact: true });
-      assert.match(await rubric.innerText(), /configured transport/);
-      assert.equal(await rubric.getByRole('heading', { name: 'Role evidence / 60%' }).count(), 1);
-      const rubricBox = await rubric.locator('.pass__box').boundingBox(); assert.ok(rubricBox.x >= 0 && rubricBox.x + rubricBox.width <= 320);
-      await rubric.getByRole('button', { name: 'Close', exact: true }).click();
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
+      await page.getByRole('button', { name: 'Edit role', exact: true }).click();
+      const target = page.getByRole('dialog', { name: 'Target role', exact: true });
+      const targetBox = await target.locator('.pass__box').boundingBox(); assert.ok(targetBox.x >= 0 && targetBox.x + targetBox.width <= 320);
+      await target.getByRole('button', { name: 'Cancel', exact: true }).click();
     } finally { await context.close(); }
   });
   test('PDF embeds selected fonts and retains links and long content across margin changes', { timeout: 180000 }, async () => {
@@ -1226,9 +2473,9 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('tab', { name: 'Design', exact: true }).click();
       await page.getByLabel('Page limit', { exact: true }).fill('10'); await saved(page);
       await page.getByRole('button', { name: 'Hybrid', exact: true }).click(); await saved(page);
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Resume section', { exact: true }).selectOption('awards');
-      await page.getByLabel('Entry columns', { exact: true }).selectOption('2'); await saved(page);
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
+      await page.locator('[data-document-item="awards"] > .rws-document-row-heading .rws-document-item-label').click();
+      await page.getByLabel('Entry columns for Awards', { exact: true }).selectOption('2'); await saved(page);
       await page.reload(); await saved(page);
       const current = preview.store.get(document.id).document;
       assert.equal(current.design.bodySize, 8.5); assert.equal(current.design.lineHeight, 1.25); assert.equal(current.design.pageLimit, 10);
@@ -1255,9 +2502,8 @@ describe('Resume browser acceptance', () => {
           assert.ok(position >= previous, 'Single-column geometry order interleaves entries.'); previous = position + normalized.length;
         }
       }
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Resume section', { exact: true }).selectOption('awards');
-      assert.equal(await page.getByLabel('Entry columns', { exact: true }).isDisabled(), true);
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
+      assert.equal(await page.getByLabel('Entry columns for Awards', { exact: true }).count(), 0);
       await page.getByRole('tab', { name: 'Design', exact: true }).click();
       await page.getByRole('button', { name: 'Hybrid', exact: true }).click(); await saved(page);
       await page.waitForFunction(() => document.querySelector('.rws-paper')?.contentDocument?.querySelector('.pagedjs_page [data-section="awards"] .resume-entry-row'));
@@ -1276,9 +2522,8 @@ describe('Resume browser acceptance', () => {
     preview.store.create(document);
     const { page, context, errors } = await openSample(document.id);
     try {
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Resume section', { exact: true }).selectOption('awards');
-      await page.getByRole('group', { name: 'Recognition 0', exact: true }).getByLabel('Dates / duration / time', { exact: true }).fill('Oct 2024'); await saved(page);
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
+      await fillInline(page, 'award-0.dates', 'Oct 2024'); await saved(page);
       await page.reload(); await saved(page);
       const current = preview.store.get(document.id).document;
       assert.equal(current.model.sections.find(section => section.id === 'awards').items[0].dates, 'Oct 2024');
@@ -1308,16 +2553,15 @@ describe('Resume browser acceptance', () => {
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });
         if (width < 760) {
-          if (!await page.getByLabel('Resume section', { exact: true }).isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Content', exact: true }).click();
+          if (await page.getByRole('button', { name: 'Close properties', exact: true }).isVisible()) await page.getByRole('button', { name: 'Close properties', exact: true }).click();
         }
-        else await page.getByRole('tab', { name: 'Content', exact: true }).click();
-        await page.getByLabel('Resume section', { exact: true }).selectOption('awards');
-        const input = page.getByRole('group', { name: 'Recognition 0', exact: true }).getByLabel('Dates / duration / time', { exact: true });
+        else await page.getByRole('tab', { name: 'Document', exact: true }).click();
+        const input = await inlineField(page, 'award-0.dates');
         await input.scrollIntoViewIfNeeded();
-        const bounds = await input.boundingBox(); assert.ok(bounds.width > 40 && bounds.x >= 0 && bounds.x + bounds.width <= width);
+        const bounds = await input.boundingBox(); assert.ok(bounds.width > 40 && bounds.x >= -1 && bounds.x + bounds.width <= width + 1, JSON.stringify({ width, bounds }));
         assert.equal(await input.inputValue(), 'Oct 2024');
         await page.screenshot({ path: join(tmpdir(), 'rk-resume-date-controls-' + width + '.png') });
-        if (width < 760) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Content', exact: true }).click();
+        await input.press('Escape');
       }
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
@@ -1387,7 +2631,7 @@ describe('Resume browser acceptance', () => {
       const fieldId = roles.items[0].bullets[0].id;
       const canvas = page.frameLocator('iframe[title="Editable resume canvas"]');
       await canvas.locator('[data-field="' + fieldId + '"]').click();
-      await page.locator('[data-field-input="' + fieldId + '"]').fill('Led 12 interviews with participants.'); await saved(page);
+      await fillInline(page, fieldId, 'Led 12 interviews with participants.'); await saved(page);
       await page.reload(); await saved(page);
       const current = preview.store.get(id).document;
       assert.equal(resumeFields(current.model).find(field => field.id === fieldId).value, 'Led 12 interviews with participants.');
@@ -1398,7 +2642,7 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
-  test('PDF reader retries original files and navigates immutable multipage bytes with selectable text', { timeout: 90000 }, async () => {
+  test('PDF reader retries original files, navigates selectable text and prints immutable multipage artifacts', { timeout: 90000 }, async () => {
     const document = fixture(); document.id = 'pdf-reader';
     document.design.keepWhole = false;
     document.model.sections[0].items[0].bullets = Array.from({ length: 60 }, (_, index) => ({ id: 'reader-' + index, text: 'Contribution ' + (index + 1) + ': Authored a detailed, factual description of collaborative product design work and its documented outcome.' }));
@@ -1413,7 +2657,7 @@ describe('Resume browser acceptance', () => {
     let attempts = 0;
     await page.route('**/__resume/sources/' + source.id, route => { attempts++; return attempts === 1 ? route.fulfill({ status: 503, body: 'Synthetic unavailable source' }) : route.continue(); });
     try {
-      await page.getByRole('tab', { name: 'Original', exact: true }).click();
+      await openSources(page); await page.getByRole('button', { name: 'View original', exact: true }).first().click();
       const reader = page.getByRole('region', { name: 'Original source PDF', exact: true });
       await reader.getByRole('alert').waitFor();
       await reader.getByRole('button', { name: 'Retry PDF', exact: true }).click();
@@ -1434,7 +2678,7 @@ describe('Resume browser acceptance', () => {
       });
       assert.ok(selection.replace(/\s/g, '').includes('SyntheticDesigner'));
       await page.screenshot({ path: join(tmpdir(), 'rk-resume-original-pdf-reader.png') });
-      await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to document', exact: true }).click();
       await page.evaluate(() => {
         const NativeWorker = window.Worker;
         window.__readerWorkers = 0;
@@ -1447,46 +2691,206 @@ describe('Resume browser acceptance', () => {
       const requested = new Promise(resolve => { started = resolve; });
       const held = new Promise(resolve => { release = resolve; });
       await page.route('**/__resume/sources/' + source.id, async route => { started(); await held; await route.abort().catch(() => {}); });
-      await page.getByRole('tab', { name: 'Original', exact: true }).click(); await requested;
+      await openSources(page); await page.getByRole('button', { name: 'View original', exact: true }).first().click(); await requested;
       assert.equal(await page.evaluate(() => window.__readerWorkers), 0);
-      await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to document', exact: true }).click();
       await page.waitForFunction(() => window.__readerWorkers === 0); release();
       assert.deepEqual(preview.store.get(document.id), original); assert.deepEqual(preview.store.sourceFile(source.id).bytes, bytes);
-      assert.ok(attempts >= 2); assert.deepEqual(errors, []);
+      assert.ok(attempts >= 2);
+      await page.addInitScript(() => {
+        if (!window.frameElement?.classList.contains('rws-pdf-print-frame')) return;
+        window.print = () => {
+          const images = [...document.images];
+          const printable = document.documentElement.cloneNode(true);
+          parent.__printedPdf = {
+            pages: images.map((image, index) => {
+              const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+              const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+              printable.querySelectorAll('img')[index].src = canvas.toDataURL();
+              const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+              let ink = 0; for (let n = 0; n < pixels.length; n += 4) if (pixels[n + 3] > 200 && Math.min(pixels[n], pixels[n + 1], pixels[n + 2]) < 160) ink++;
+              return { width: image.naturalWidth, height: image.naturalHeight, ink, page: image.parentElement.style.page };
+            }),
+            pageRules: [...document.styleSheets].flatMap(sheet => [...sheet.cssRules].filter(rule => rule.type === CSSRule.PAGE_RULE).map(rule => rule.cssText)),
+            controls: document.querySelectorAll('button,input,a,iframe').length,
+            urls: images.map(image => image.src),
+            html: '',
+          };
+          const rules = document.createElement('style'); rules.textContent = [...document.styleSheets].flatMap(sheet => [...sheet.cssRules].map(rule => rule.cssText)).join('\n');
+          printable.querySelector('head').append(rules);
+          parent.__printedPdf.html = '<!doctype html>' + printable.outerHTML;
+          if (parent.__printMode === 'fail') throw new Error('Synthetic print failure');
+          if (parent.__printMode !== 'hold') window.dispatchEvent(new Event('afterprint'));
+        };
+      });
+      const openHistorical = async () => {
+        await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+        await page.getByRole('region', { name: 'Verified exported PDF', exact: true }).locator('canvas').first().waitFor();
+        await saved(page);
+        Object.assign(original, structuredClone(preview.store.get(document.id)));
+      };
+      await openHistorical();
+      const twoPage = page.getByRole('button', { name: 'Two-page view', exact: true });
+      const pdfControls = page.getByRole('toolbar', { name: 'PDF controls', exact: true });
+      const pdfReader = page.getByRole('region', { name: 'Verified exported PDF', exact: true });
+      assert.equal(await twoPage.getAttribute('aria-pressed'), 'false');
+      assert.ok(entry.pages >= 3, 'The spread fixture covers multiple pairs and a trailing page');
+      await pdfControls.getByRole('spinbutton', { name: 'PDF page', exact: true }).fill('3');
+      await twoPage.click();
+      assert.equal(await twoPage.getAttribute('aria-pressed'), 'true');
+      assert.equal(await pdfControls.getByRole('spinbutton', { name: 'PDF page', exact: true }).inputValue(), '3');
+      assert.deepEqual(await pdfReader.locator('.spread').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('.page')].map(node => Number(node.dataset.pageNumber)))),
+        Array.from({ length: Math.ceil(entry.pages / 2) }, (_, index) => [index * 2 + 1, index * 2 + 2].filter(number => number <= entry.pages)));
+      await pdfControls.getByRole('spinbutton', { name: 'PDF page', exact: true }).fill('1');
+      await pdfControls.getByRole('button', { name: 'Next PDF page', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('.rws-pdf-controls input').value === '3');
+      await pdfControls.getByRole('button', { name: 'Previous PDF page', exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('.rws-pdf-controls input').value === '1');
+      for (const width of [1440, 390, 320, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForFunction(() => {
+          const reader = document.querySelector('.rws-pdf-reader .rws-pdf-scroll'), pages = [...reader.querySelectorAll('.spread:first-child .page')];
+          const bounds = reader.getBoundingClientRect(), [first, second] = pages.map(node => node.getBoundingClientRect());
+          return first && second && Math.abs(first.top - second.top) < 1 && first.right <= second.left && first.left >= bounds.left && second.right <= bounds.right;
+        }).catch(async failure => {
+          throw new Error('Spread geometry: ' + JSON.stringify(await pdfReader.evaluate(node => ({
+            viewport: node.querySelector('.rws-pdf-scroll').getBoundingClientRect().toJSON(),
+            pages: [...node.querySelectorAll('.spread:first-child .page')].map(page => ({ rect: page.getBoundingClientRect().toJSON(), display: getComputedStyle(page).display, margin: getComputedStyle(page).margin, parent: getComputedStyle(page.parentElement).display })),
+          }))), { cause: failure });
+        });
+        const tools = page.getByRole('group', { name: 'PDF preview', exact: true });
+        const geometry = await tools.evaluate(node => {
+          const rect = node.getBoundingClientRect(), controls = [...node.querySelectorAll('button,input,a')].map(control => control.getBoundingClientRect());
+          return { height: rect.height, fits: rect.left >= 12 && rect.right <= innerWidth - 12,
+            oneRow: controls.every(box => Math.abs((box.top + box.bottom) / 2 - (rect.top + rect.bottom) / 2) < 1),
+            noOverlap: controls.every((box, index) => index === 0 || controls[index - 1].right <= box.left),
+            minButton: Math.min(...[...node.querySelectorAll('button,a')].map(button => button.getBoundingClientRect().width)) };
+        });
+        assert.deepEqual(geometry, { height: 44, fits: true, oneRow: true, noOverlap: true, minButton: width <= 380 ? 24 : width <= 480 ? 28 : 34 });
+        await pdfControls.getByRole('button', { name: 'Fit PDF page', exact: true }).click();
+        const spreadBox = await pdfReader.locator('.spread').first().boundingBox(), viewport = await pdfReader.locator('.rws-pdf-scroll').boundingBox();
+        assert.ok(spreadBox.width <= viewport.width && spreadBox.height <= viewport.height, 'Fit page fits the whole pair');
+        assert.equal(await twoPage.getAttribute('aria-pressed'), 'true');
+        await page.screenshot({ path: join(tmpdir(), `rk-resume-pdf-two-page-${width}.png`) });
+        await pdfControls.getByRole('button', { name: 'Fit PDF width', exact: true }).click();
+      }
+      await pdfControls.getByRole('spinbutton', { name: 'PDF page', exact: true }).fill(String(entry.pages));
+      await pdfReader.locator(`.page[data-page-number="${entry.pages}"] .textLayer`).waitFor();
+      assert.equal(await pdfControls.getByRole('button', { name: 'Next PDF page', exact: true }).isDisabled(), true);
+      await twoPage.click();
+      assert.equal(await twoPage.getAttribute('aria-pressed'), 'false');
+      assert.equal(await pdfReader.locator('.spread').count(), 0);
+      assert.equal(await pdfControls.getByRole('spinbutton', { name: 'PDF page', exact: true }).inputValue(), String(entry.pages));
+      await pdfControls.getByRole('button', { name: 'Zoom PDF in', exact: true }).click();
+      await twoPage.click();
+      assert.equal(await pdfControls.getAttribute('data-fit-mode'), 'page-fit', 'Enabling a spread after manual zoom fits the pair');
+      assert.deepEqual(preview.store.get(document.id), original, 'Two-page layout never changes document or artifact data');
+      const print = page.getByRole('button', { name: 'Print this PDF', exact: true });
+      await print.click();
+      await page.waitForFunction(() => window.__printedPdf && !document.querySelector('.rws-pdf-print-frame'));
+      const printed = await page.evaluate(() => window.__printedPdf);
+      assert.equal(printed.pages.length, entry.pages);
+      assert.equal(printed.pageRules.length, entry.pages);
+      assert.equal(printed.controls, 0);
+      for (const [index, printedPage] of printed.pages.entries()) {
+        assert.ok(printedPage.width >= 1200 && printedPage.height >= 1600 && printedPage.ink > 200);
+        assert.equal(printedPage.page, 'pdf' + (index + 1));
+        assert.match(printed.pageRules[index], /margin: 0/);
+      }
+      assert.equal(await print.isEnabled(), true);
+      await print.locator(':scope:focus').waitFor();
+      assert.equal(await page.evaluate(async urls => (await Promise.all(urls.map(url => fetch(url).then(() => false, () => true)))).every(Boolean), printed.urls), true, 'Print URLs are revoked after the dialog closes');
+      const printPage = await context.newPage();
+      try {
+        await printPage.setContent(printed.html);
+        const printedBytes = await printPage.pdf({ preferCSSPageSize: true, printBackground: true });
+        const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+        const printedDocument = await getDocument({ data: new Uint8Array(printedBytes) }).promise;
+        try {
+          assert.equal(printedDocument.numPages, entry.pages, 'Native print layout has exactly one sheet per PDF page, without blank sheets');
+          const size = (await printedDocument.getPage(1)).getViewport({ scale: 1 });
+          assert.ok(Math.abs(size.width - 595.28) < 2 && Math.abs(size.height - 841.89) < 2, 'Native print retains the artifact paper size');
+        } finally { await printedDocument.destroy(); }
+      } finally { await printPage.close(); }
+      assert.deepEqual(preview.store.get(document.id), original, 'Printing historical PDF does not save or regenerate');
+      await page.evaluate(() => { window.__printMode = 'fail'; });
+      await print.click();
+      await page.getByRole('alert').filter({ hasText: 'could not be prepared for printing' }).waitFor();
+      assert.equal(await page.locator('.rws-pdf-print-frame').count(), 0);
+      await page.getByRole('button', { name: 'Dismiss message', exact: true }).click();
+      await page.evaluate(() => { window.__printMode = 'hold'; window.__printedPdf = null; });
+      await print.click(); await page.waitForFunction(() => window.__printedPdf);
+      assert.equal(await print.isDisabled(), true);
+      await page.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      await page.locator('.rws-pdf-print-frame').waitFor({ state: 'detached' });
+      await page.getByRole('button', { name: 'Preview PDF', exact: true }).locator(':scope:focus').waitFor();
+      assert.equal(await page.getByRole('alert').count(), 0);
+      assert.deepEqual(preview.store.get(document.id), original);
+      assert.deepEqual(preview.store.exportFile(document.id, entry.id).bytes, bytes);
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  });
+  test('Two-page PDF toggle appears at exactly two pages and resets when the preview reopens', async () => {
+    const document = fixture(); document.id = 'two-page-threshold'; document.design.keepWhole = false;
+    document.model.sections[0].items[0].bullets = Array.from({ length: 30 }, (_, index) => ({ id: 'pair-' + index, text: 'Contribution ' + (index + 1) + ': Authored a detailed, factual description of collaborative product design work and its documented outcome.' }));
+    preview.store.create(document);
+    const artifact = await exportPdf(document);
+    assert.equal(artifact.pages, 2);
+    const original = structuredClone(preview.store.get(document.id));
+    const { page, context, errors } = await openSample(document.id);
+    try {
+      for (let visit = 0; visit < 2; visit++) {
+        await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
+        const toggle = page.getByRole('button', { name: 'Two-page view', exact: true });
+        await toggle.waitFor();
+        assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+        await toggle.click();
+        assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+        assert.equal(await page.locator('.rws-pdf-reader .spread').count(), 1);
+        assert.equal(await page.locator('.rws-pdf-reader .spread .page').count(), 2);
+        assert.equal(await page.getByRole('button', { name: 'Next PDF page', exact: true }).isDisabled(), true);
+        assert.equal(await page.getByRole('button', { name: 'Previous PDF page', exact: true }).isDisabled(), true);
+        await page.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      }
+      await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model, original.document.model);
+      assert.deepEqual(preview.store.get(document.id).exports, original.exports);
+      assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
   test('Studio outline, inline field selection, entries, history, role proposals and original import', { timeout: 120000 }, async () => {
     const original = structuredClone(preview.store.get('avery-meridian').document); original.id = 'editing'; preview.store.create(original);
+    preview.store.save(original.id, original, 1, 'Original resume', 'manual');
     const { page, context, errors } = await openSample(original.id);
     try {
       const canvas = page.frameLocator('iframe[title="Editable resume canvas"]');
       await canvas.locator('.pagedjs_page [data-field="name"]').click();
-      await page.locator('[data-field-input="name"]:focus').waitFor();
-      await page.getByLabel('Summary', { exact: true }).fill('');
-      await page.getByLabel('Summary', { exact: true }).pressSequentially('Two words\nAnother line ', { delay: 20 });
+      await canvas.locator('[data-inline-field="name"]:focus').waitFor();
+      await (await inlineField(page, 'summary')).fill('');
+      await (await inlineField(page, 'summary')).pressSequentially('Two words\nAnother line ', { delay: 20 });
       await saved(page);
       assert.equal(preview.store.get(original.id).document.model.summary, 'Two words\nAnother line ');
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(original.id).document.model.summary, 'Two words\nAnother line ');
-      await page.getByRole('navigation', { name: 'Resume sections' }).getByRole('button', { name: 'Capabilities' }).click();
-      const skills = page.locator('[data-field-input="methods.items"]');
+      await page.getByRole('region', { name: 'Document structure' }).getByRole('button', { name: 'Capabilities', exact: true }).click();
+      const skills = await inlineField(page, 'methods.items');
       await skills.fill(''); await skills.pressSequentially('Research, Systems design, Figma', { delay: 20 }); await saved(page);
       assert.deepEqual(preview.store.get(original.id).document.model.sections[1].groups[0].items, ['Research', 'Systems design', 'Figma']);
-      await page.getByRole('navigation', { name: 'Resume sections' }).getByRole('button', { name: 'Experience' }).click();
-      await page.getByRole('button', { name: 'Move entry down', exact: true }).first().click(); await saved(page);
+      await page.getByRole('region', { name: 'Document structure' }).getByRole('button', { name: 'Experience', exact: true }).click();
+      await page.getByRole('button', { name: 'Move Northstar down', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(original.id).document.model.sections[0].items[0].id, 'common');
-      await page.getByRole('button', { name: 'Remove entry', exact: true }).first().click(); await saved(page);
+      await page.locator('[data-document-item="common"] .rws-document-item-label').first().click();
+      await page.locator('[data-document-item="common"]').getByRole('button', { name: 'Remove', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(original.id).document.model.sections[0].items.length, 1);
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(original.id).document.model.sections[0].items.length, 2);
-      await page.getByRole('tab', { name: 'Review', exact: true }).click();
-      await page.getByRole('button', { name: 'Run checks', exact: true }).click();
+      await openReviewPanel(page);
       assert.equal(await page.locator('.rws-proposal').count(), 0);
       await page.getByRole('button', { name: 'Load sample', exact: true }).click();
       await page.locator('.rws-proposal').getByRole('button', { name: 'Apply', exact: true }).click(); await saved(page);
       assert.match(resumeFields(preview.store.get(original.id).document.model).find(field => field.id === 'onboarding').value, /^Redesigned onboarding/);
-      await page.getByRole('button', { name: 'Version history', exact: true }).click();
+      await resumeOption(page, 'View version history');
       await page.locator('.rws-version-list button').last().click();
       let restoreRequested, releaseRestore;
       const requested = new Promise(resolve => { restoreRequested = resolve; });
@@ -1497,7 +2901,7 @@ describe('Resume browser acceptance', () => {
       });
       const historyDialog = page.getByRole('dialog', { name: 'Version history', exact: true });
       try {
-        await page.getByRole('button', { name: 'Restore v1', exact: true }).click();
+        await page.getByRole('button', { name: 'Restore v2', exact: true }).click();
         await requested;
         await saved(page);
         assert.equal(await historyDialog.isVisible(), true);
@@ -1507,10 +2911,12 @@ describe('Resume browser acceptance', () => {
       await saved(page);
       assert.equal(preview.store.get(original.id).version, previousVersion + 1);
       assert.deepEqual(preview.store.get(original.id).document.model, original.model);
-      await page.getByRole('button', { name: 'Duplicate for another role', exact: true }).click();
+      await resumeOption(page, 'Duplicate resume');
       await page.getByLabel('Resume name').fill('Another role'); await page.getByRole('button', { name: 'Create', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' }); await saved(page);
       const duplicateId = await page.evaluate(() => localStorage.getItem('rk:resume-preview:selected'));
       assert.notEqual(duplicateId, original.id);
+      await openReviewPanel(page);
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
       await page.locator('.rws-target').click(); await page.getByLabel('Company', { exact: true }).fill('Second company');
       await page.getByLabel('Job description snapshot').fill('Research leadership and accessibility'); await page.getByRole('button', { name: 'Save target' }).click(); await saved(page);
       assert.equal(preview.store.get(original.id).document.target.company, 'Meridian');
@@ -1521,8 +2927,8 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(preview.store.sourceFile(sourceId).bytes, bytes);
       await page.reload(); await saved(page);
       assert.equal(await page.locator('.rws-document-name').innerText(), 'Another role');
-      await page.getByRole('tab', { name: 'Sections', exact: true }).click();
-      await page.getByRole('navigation', { name: 'Resume sections' }).getByRole('button', { name: 'Experience' }).click();
+      assert.equal(await page.getByRole('region', { name: 'Document structure' }).isVisible(), true);
+      await page.getByRole('region', { name: 'Document structure' }).getByRole('button', { name: 'Experience', exact: true }).click();
       await page.frameLocator('iframe[title="Editable resume canvas"]').locator('.pagedjs_page [data-field="name"]').waitFor();
       await page.waitForFunction(() => !document.querySelector('.rws-view-actions .lucide-loader-circle'));
       await page.screenshot({ path: join(tmpdir(), 'rk-resume-studio-desktop.png') });
@@ -1533,18 +2939,28 @@ describe('Resume browser acceptance', () => {
     const document = fixture(); document.id = 'recovery'; preview.store.create(document);
     const { page, context, errors } = await openSample(document.id);
     try {
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
       let offline = true;
       await page.route('**/__resume/api/resumes/recovery', route => offline && route.request().method() === 'PUT' ? route.abort() : route.continue());
-      await page.getByLabel('Summary', { exact: true }).fill('Recover this local edit.'); await page.locator('.rws-status.is-error').waitFor();
+      await (await inlineField(page, 'summary')).fill('Recover this local edit.'); await page.locator('.rws-status.is-error').waitFor();
       assert.equal(preview.store.get(document.id).document.model.summary, document.model.summary);
       assert.ok(await page.evaluate(() => localStorage.getItem('rk:resume-preview:pending:recovery')));
+      for (const width of [1440,390,320]) {
+        await page.setViewportSize({width,height:width<760?844:1000});
+        await page.locator('.resume-view-tools').evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        const banner=await page.locator('.rws-flash.is-error').boundingBox(), tools=await page.locator('.resume-view-tools').boundingBox();
+        assert.ok(Math.abs(page.viewportSize().height-banner.y-banner.height-(width<760?92:44))<1,'Local banner baseline is unchanged');
+        assert.ok(tools.x>=banner.x+banner.width+11 || tools.x+tools.width+11<=banner.x || tools.y+tools.height+11<=banner.y,'Floaty clears the standalone banner');
+      }
+      await page.setViewportSize({width:1440,height:1000});
       offline = false; page.on('dialog', dialog => dialog.accept()); await page.reload(); await saved(page);
+      await page.getByRole('button',{name:'Dismiss message',exact:true}).click();
+      await assertResumeViewTools(page.locator('.resume-view-tools'));
       assert.equal(preview.store.get(document.id).document.model.summary, 'Recover this local edit.');
       const remote = preview.store.get(document.id); remote.document.model.summary = 'Saved in the other tab.';
       preview.store.save(document.id, remote.document, remote.version);
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Summary', { exact: true }).fill('Keep my conflicting edit.'); await page.locator('.rws-status.is-conflict').waitFor();
+      await page.getByRole('tab', { name: 'Document', exact: true }).click();
+      await (await inlineField(page, 'summary')).fill('Keep my conflicting edit.'); await page.locator('.rws-status.is-conflict').waitFor();
       await page.getByRole('button', { name: 'Compare versions', exact: true }).click();
       await page.getByRole('button', { name: 'Keep mine as a copy' }).click(); await page.locator('.rws-status.is-saved').waitFor();
       const copyId = await page.evaluate(() => localStorage.getItem('rk:resume-preview:selected'));
@@ -1562,6 +2978,7 @@ describe('Resume browser acceptance', () => {
     document.sourceIds = [source.id]; preview.store.create(document);
     const { page, context, errors } = await openSample(document.id);
     try {
+      await openReviewPanel(page);
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 900 });
         if (width < 760 && !await page.getByRole('button', { name: 'Add revision', exact: true }).isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
@@ -1608,17 +3025,17 @@ describe('Resume browser acceptance', () => {
           await page.waitForFunction(() => { const paper = document.querySelector('.rws-paper-footprint'); return Math.abs(paper.getBoundingClientRect().width - parseFloat(paper.style.width)) < 1; });
           const canvasTop = await page.locator('.rws-canvas').evaluate(element => { element.scrollTop = 100; return element.scrollTop; });
           const canvasDocument = await page.locator('iframe.rws-paper').evaluateHandle(element => element.contentDocument);
-          const reviewTop = await page.locator('.rws-inspector-content').evaluate(element => element.scrollTop);
+          const reviewTop = await page.locator('.rws-review-panel .rws-inspector-content').evaluate(element => element.scrollTop);
           const proposalText = await proposal.innerText();
           await page.keyboard.press('Enter');
           await page.getByLabel('Original source', { exact: true }).waitFor().catch(failure => { throw new Error(failure.message + '\nBrowser errors: ' + JSON.stringify(errors)); });
           assert.equal(await page.getByLabel('Original source', { exact: true }).inputValue(), source.id);
           assert.equal(await page.locator('.rws-original-view pre').innerText(), bytes.toString());
-          assert.equal(await page.getByRole('button', { name: 'Back to suggestion', exact: true }).evaluate(element => element === document.activeElement), true);
+          assert.equal(await page.getByRole('button', { name: 'Back to suggestion', exact: true }).evaluate(element => element === document.activeElement), true, await page.evaluate(() => document.activeElement.outerHTML.slice(0, 400)));
           await page.getByRole('button', { name: 'Back to suggestion', exact: true }).press('Enter');
           await sourceLink.waitFor({ state: 'visible' });
           assert.equal(await sourceLink.evaluate(element => element === document.activeElement), true);
-          assert.ok(Math.abs(await page.locator('.rws-inspector-content').evaluate(element => element.scrollTop) - reviewTop) < 2);
+          assert.ok(Math.abs(await page.locator('.rws-review-panel .rws-inspector-content').evaluate(element => element.scrollTop) - reviewTop) < 2);
           assert.equal(await proposal.locator('details').getAttribute('open'), '');
           assert.equal(await proposal.innerText(), proposalText);
           assert.equal(await page.locator('iframe.rws-paper').evaluate((element, original) => element.contentDocument === original, canvasDocument), true);
@@ -1627,15 +3044,15 @@ describe('Resume browser acceptance', () => {
           await canvasDocument.dispose();
           const editField = proposal.getByRole('button', { name: 'Edit suggested field', exact: true });
           await editField.focus();
-          const fieldReviewTop = await page.locator('.rws-inspector-content').evaluate(element => element.scrollTop);
+          const fieldReviewTop = await page.locator('.rws-review-panel .rws-inspector-content').evaluate(element => element.scrollTop);
           await page.keyboard.press('Enter');
-          const selected = page.locator('.rws-field.is-selected textarea');
+          const selected = page.frameLocator('.rws-paper').locator('[data-inline-field="bullet-0"]');
           await selected.waitFor();
           assert.equal(await selected.inputValue(), 'Authored achievement 1');
           assert.equal(await selected.evaluate(element => element === document.activeElement), true);
           await page.getByRole('button', { name: 'Back to suggestion', exact: true }).press('Enter');
           assert.equal(await editField.evaluate(element => element === document.activeElement), true);
-          assert.ok(Math.abs(await page.locator('.rws-inspector-content').evaluate(element => element.scrollTop) - fieldReviewTop) < 2);
+          assert.ok(Math.abs(await page.locator('.rws-review-panel .rws-inspector-content').evaluate(element => element.scrollTop) - fieldReviewTop) < 2);
           assert.equal(await proposal.innerText(), proposalText);
           assert.equal(await proposal.getByRole('button', { name: 'Apply', exact: true }).isEnabled(), true);
           assert.deepEqual(preview.store.get(document.id), beforeNavigation);
@@ -1672,17 +3089,16 @@ describe('Resume browser acceptance', () => {
       const record = preview.store.get(document.id);
       assert.equal(record.document.model.sections[0].items[0].bullets[0].text, bytes.toString());
       assert.ok(record.versions.some(version => version.label.startsWith('Before suggestion:') && version.document.model.sections[0].items[0].bullets[0].text === 'Authored achievement 1'));
-      await page.getByRole('button', { name: 'Version history' }).click();
+      await resumeOption(page, 'View version history');
       await page.getByLabel('Restore point name').fill('Before application'); await page.getByRole('button', { name: 'Save restore point' }).click();
       await page.getByRole('button', { name: /Before application/ }).waitFor();
       await page.getByRole('button', { name: 'Close', exact: true }).click();
-      await page.getByRole('tab', { name: 'Sources', exact: true }).click();
-      await page.getByRole('button', { name: 'Capture original source check' }).click(); await saved(page);
-      const captured = preview.store.get(document.id).document.sourceAssessment;
-      assert.equal(captured.characters, bytes.length);
-      await page.getByRole('tab', { name: 'Content', exact: true }).click(); await page.getByLabel('Summary', { exact: true }).fill('Changed current document.'); await saved(page);
-      assert.deepEqual(preview.store.get(document.id).document.sourceAssessment, captured);
-      await page.getByRole('tab', { name: 'Review', exact: true }).click();
+      await openSources(page);
+      assert.equal(await page.getByRole('region', { name: 'Original files', exact: true }).locator('.rws-source').count(), 1);
+      await page.keyboard.press('Escape');
+      await fillInline(page, 'summary', 'Changed current document.'); await saved(page);
+      assert.deepEqual(preview.store.sourceFile(source.id).bytes, bytes);
+      await openReviewPanel(page);
       await page.getByRole('button', { name: 'Add revision', exact: true }).click();
       await page.getByLabel('Proposed wording').fill('Delivered accessibility audits.');
       await page.getByLabel('Exact supporting excerpt').fill(bytes.toString());
@@ -1692,7 +3108,11 @@ describe('Resume browser acceptance', () => {
       assert.ok(preview.store.get(document.id).document.proposals.some(proposal => proposal.after === 'Delivered accessibility audits.'));
       await page.waitForFunction(() => document.activeElement?.textContent.trim() === 'Add revision');
       await page.getByRole('button', { name: 'Edit suggested field', exact: true }).click();
-      await page.locator('.rws-field.is-selected textarea').fill('Manually edited the achievement.');
+      const editedSave = page.waitForResponse(response => response.url().endsWith('/resumes/' + document.id) &&
+        response.request().method() === 'PUT' && response.status() === 200 &&
+        response.request().postDataJSON().document.model.sections[0].items[0].bullets[0].text === 'Manually edited the achievement.');
+      await page.frameLocator('.rws-paper').locator('[data-inline-field]').fill('Manually edited the achievement.');
+      await editedSave;
       await saved(page);
       await page.getByRole('button', { name: 'Back to suggestion', exact: true }).click();
       assert.equal(await page.locator('.rws-proposal').getByRole('button', { name: 'Apply', exact: true }).isEnabled(), false);
@@ -1709,21 +3129,25 @@ describe('Resume browser acceptance', () => {
     response.findings = [{ criterionId: 'req-0', priority: 'low', action: 'Clarify existing experience.' }, { criterionId: 'req-1', priority: 'high', action: 'Check whether supporting evidence exists.' }];
     document.aiReview = { ...validateReview(response, packet, manifest), documentId: document.id, signature: resumeSignature(document), at: 123, provider: 'fixture', model: 'recorded-no-calls' };
     const proposal = { id: 'linked-proposal', fieldId: 'bullet-0', findingIndex: 0, origin: 'ai', title: 'Clarify the contribution', reason: 'Synthetic proposal for navigation only.', before: 'Authored achievement 1', after: 'Authored achievement 1.', signature: resumeSignature(document), evidence: [{ fieldId: 'bullet-0', quote: 'Authored achievement 1' }] };
-    document.proposals = [{ ...proposal, impact: projectResumeProposal(document, proposal, []) }];
+    document.proposals = [{ ...proposal, impact: projectResumeProposal(document, proposal, []) }, { ...proposal, id: 'prepared-proposal', reviewAt: 123 }];
     preview.store.create(document);
     const { page, context, errors } = await openSample(document.id); let aiCalls = 0;
     await page.route('**/__resume/api/ai/complete', route => { aiCalls++; return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"No AI calls allowed in this test"}' }); });
     try {
-      assert.deepEqual(await page.locator('[data-review-finding]').evaluateAll(rows => rows.map(row => Number(row.dataset.reviewFinding))), [1, 0]);
-      await page.locator('[data-review-finding="0"] .rws-finding-context > summary').click();
-      assert.equal(await page.locator('[data-review-finding="0"] .rws-review-passage blockquote').first().innerText(), manifest.requirements[0].quote);
+      assert.equal(await page.locator('[data-archived-suggestions]').evaluate(element => element === element.parentElement.lastElementChild), true);
+      assert.deepEqual(await page.locator('[data-review-finding]').evaluateAll(rows => rows.map(row => Number(row.dataset.reviewFinding)).sort()), [0, 1]);
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+      const findingDetails = page.getByRole('region', { name: 'Finding details', exact: true });
+      assert.equal(await findingDetails.locator('.rws-finding-context').count(), 0);
+      assert.equal(await findingDetails.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
       const original = preview.store.get(document.id).document;
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });
         if (width < 760 && !await page.locator('[data-review-finding="0"]').isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
-        await page.locator('[data-review-finding="0"]').getByRole('button', { name: 'Set aside', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Set aside finding', exact: true });
-        assert.equal(await dialog.getByRole('button', { name: 'Set aside', exact: true }).isDisabled(), true);
+        await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+        await findingDetails.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Archive suggestion', exact: true });
+        assert.equal(await dialog.getByRole('button', { name: 'Archive suggestion', exact: true }).isDisabled(), true);
         await dialog.getByLabel('Existing evidence', { exact: true }).selectOption('bullet-0');
         await dialog.getByLabel('Decision note', { exact: true }).fill('The cited passage already supplies this evidence.');
         for (const label of ['Reason', 'Existing evidence', 'Decision note']) {
@@ -1734,37 +3158,55 @@ describe('Resume browser acceptance', () => {
         await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
         assert.deepEqual(preview.store.get(document.id).document, original);
       }
-      await page.locator('[data-review-finding="0"]').getByRole('button', { name: 'Set aside', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Set aside finding', exact: true });
+      await findingDetails.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Archive suggestion', exact: true });
       await dialog.getByLabel('Existing evidence', { exact: true }).selectOption('bullet-0');
-      await dialog.getByRole('button', { name: 'Set aside', exact: true }).click(); await dialog.waitFor({ state: 'hidden' }); await saved(page);
+      await dialog.getByRole('button', { name: 'Archive suggestion', exact: true }).click(); await dialog.waitFor({ state: 'hidden' }); await saved(page);
       assert.equal(await page.locator('.rws-set-aside [data-review-finding="0"]').count(), 1);
       const decided = preview.store.get(document.id).document;
       assert.deepEqual(decided.model, original.model); assert.deepEqual(decided.aiReview, original.aiReview);
       assert.equal(decided.reviewDecisions[0].evidence.text, 'Authored achievement 1');
+      assert.equal(decided.reviewDecisions[0].archived.proposal.after, proposal.after);
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(document.id).document.reviewDecisions, undefined);
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
       await page.reload(); await saved(page);
       if (!await page.locator('.rws-set-aside').isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
       await page.locator('.rws-set-aside > summary').click();
-      await page.locator('.rws-set-aside').getByRole('button', { name: 'Reopen finding', exact: true }).click(); await saved(page);
+      await page.locator('.rws-set-aside .rws-finding-target').click();
+      await findingDetails.getByRole('button', { name: 'Restore suggestion', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(document.id).document.reviewDecisions.length, 0);
+      assert.equal(await findingDetails.count(), 0);
       const proposalRow = page.locator('[data-proposal-id="linked-proposal"]');
       await proposalRow.getByRole('button', { name: 'Edit suggested field', exact: true }).click();
+      await page.frameLocator('.rws-paper').locator('[data-inline-field="bullet-0"]').waitFor();
       await page.getByRole('button', { name: 'Back to suggestion', exact: true }).click();
       await page.waitForFunction(() => document.activeElement?.closest('[data-proposal-id]')?.dataset.proposalId === 'linked-proposal');
       await page.route('**/__resume/api/resumes/finding-decisions', route => route.request().method() === 'PUT' ? route.fulfill({ status: 503, json: { error: 'Simulated decision save unavailable' } }) : route.continue());
-      await page.locator('[data-review-finding="0"]').getByRole('button', { name: 'Set aside', exact: true }).click();
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+      await findingDetails.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
       await dialog.getByLabel('Reason', { exact: true }).selectOption('interpretation');
-      await dialog.getByRole('button', { name: 'Set aside', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Archive suggestion', exact: true }).click();
       await dialog.getByRole('alert').filter({ hasText: 'Simulated decision save unavailable' }).waitFor();
       assert.equal(preview.store.get(document.id).document.reviewDecisions.length, 0);
       assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rk:resume-preview:pending:finding-decisions')).document.reviewDecisions[0].reason), 'interpretation');
       await page.unroute('**/__resume/api/resumes/finding-decisions');
-      await dialog.getByRole('button', { name: 'Set aside', exact: true }).click(); await dialog.waitFor({ state: 'hidden' }); await saved(page);
+      await dialog.getByRole('button', { name: 'Archive suggestion', exact: true }).click(); await dialog.waitFor({ state: 'hidden' }); await saved(page);
       assert.equal(preview.store.get(document.id).document.reviewDecisions.length, 1);
       assert.deepEqual(preview.store.get(document.id).document.model, original.model);
+      const archivedRecord = preview.store.get(document.id);
+      const rechecked = { ...archivedRecord.document, aiReview: { ...document.aiReview, at: 456 }, proposals: [] };
+      preview.store.save(document.id, rechecked, archivedRecord.version, 'Rechecked resume');
+      await page.reload(); await saved(page); await openReviewPanel(page);
+      const archive = page.locator('[data-archived-suggestions]');
+      await archive.locator('summary').click();
+      const older = archive.locator('[data-archived-review]');
+      assert.match(await older.innerText(), /Clarify existing experience.*Earlier review/s);
+      assert.deepEqual(await older.locator('.rws-diff p').allTextContents(), ['Authored achievement 1', 'Authored achievement 1.']);
+      assert.equal(await older.getByRole('button', { name: 'Apply', exact: true }).count(), 0);
+      assert.equal(await older.getByRole('button', { name: 'Review current resume', exact: true }).isEnabled(), true);
+      assert.equal(await archive.evaluate(element => element === element.parentElement.lastElementChild), true);
+      await page.screenshot({ path: join(tmpdir(), 'rk-resume-archived-suggestions-320.png') });
       assert.equal(aiCalls, 0); assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
@@ -1775,6 +3217,7 @@ describe('Resume browser acceptance', () => {
     document.sourceIds = [source.id]; preview.store.create(document);
     const { page, context, errors } = await openSample(document.id);
     try {
+      await openReviewPanel(page);
       for (const wording of ['Delivered accessible prototypes.', 'Tested workflows with research partners.']) {
         await page.getByRole('button', { name: 'Add revision', exact: true }).click();
         await page.getByLabel('Proposed wording').fill(wording);
@@ -1791,6 +3234,7 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
       assert.deepEqual(preview.store.get(document.id).document.proposals, pending);
       await page.reload(); await saved(page);
+      await openReviewPanel(page);
       assert.equal(await page.locator('.rws-proposal').count(), 2);
       await page.locator('.rws-proposal').first().getByRole('button', { name: 'Dismiss', exact: true }).click(); await saved(page);
       assert.equal(await page.locator('.rws-proposal').count(), 1);
@@ -1808,27 +3252,31 @@ describe('Resume browser acceptance', () => {
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   });
-  test('Connected AI review approves inventory, retains revisions and saves missing-fact evidence', { timeout: 90000 }, async () => {
+  test('Connected AI review prepares revisions and missing-fact questions together without popup AI calls', { timeout: 90000 }, async () => {
     const { document, inventory, response } = reviewFixture(); document.id = 'connected-ai'; document.name = 'Connected AI fixture';
     const bytes = Buffer.from('Delivered accessible interaction design across two teams.');
     const source = preview.store.source({ name: 'AI evidence.txt', type: 'text/plain', text: bytes.toString() }, bytes);
     document.sourceIds = [source.id]; preview.store.create(document);
     const { page, context, errors } = await openSample(document.id), calls = [];
-    let revisionCount = 0;
+    let assessmentCount = 0;
     await page.route('**/__resume/api/ai/config', route => route.fulfill({ json: { available: true, provider: 'mock-only', model: 'fixture', remaining: 1 } }));
     await page.route('**/__resume/api/ai/complete', async route => {
       const input = route.request().postDataJSON(); calls.push(input);
       let result;
       if (input.stage === 'requirements') result = inventory;
-      if (input.stage === 'assessment') result = { ...response, findings: [{ criterionId: 'req-0', priority: 'high', action: 'Make the relevant work explicit.' }] };
-      if (input.stage === 'revision') {
-        revisionCount++;
-        result = revisionCount === 1 ? { kind: 'revision', fieldId: 'bullet-0', after: bytes.toString(), reason: 'Clarify relevant design experience.', evidence: ['source-0'] } : revisionCount === 2 ? { kind: 'question', question: 'What part of the accessibility work did you personally own?', reason: 'Ownership is not yet clear.' } : { kind: 'supported', reason: 'The cited current passage is sufficient in this synthetic fixture.', evidence: [JSON.parse(input.user).fields.find(field => field.fieldId === 'bullet-0').id] };
+      if (input.stage === 'assessment') {
+        assessmentCount++;
+        result = { ...response, findings: assessmentCount === 1 ? [
+          { criterionId: 'req-0', priority: 'high', action: 'Make the relevant work explicit.', response: { kind: 'revision', fieldId: 'bullet-0', after: bytes.toString(), reason: 'Clarify relevant design experience.', evidence: ['source-0'] } },
+          { criterionId: 'req-1', priority: 'medium', action: 'Clarify personal ownership.', response: { kind: 'question', question: 'What part of the accessibility work did you personally own?', reason: 'Ownership is not yet clear.' } },
+          { criterionId: 'req-0', priority: 'medium', action: 'Clarify who tested the work.', response: { kind: 'question', question: 'Who participated in the accessibility testing?', reason: 'The participants are not documented.' } }
+        ] : [{ criterionId: 'req-0', priority: 'high', action: 'Include the confirmed ownership.', response: { kind: 'revision', fieldId: 'bullet-0', after: JSON.parse(input.user).supportingEvidence.find(item => item.id === 'source-1').text, reason: 'Includes the author-provided fact.', evidence: ['source-1'] } }] };
       }
       await route.fulfill({ json: { text: JSON.stringify(result) } });
     });
     try {
-      await page.getByRole('button', { name: 'Review with AI', exact: true }).click();
+      await openReviewPanel(page);
+      await page.getByRole('button', { name: 'Review resume', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Review target requirements' });
       assert.equal(await dialog.getByRole('button', { name: 'Build requirements' }).isEnabled(), false);
       assert.equal(calls.length, 0);
@@ -1847,46 +3295,39 @@ describe('Resume browser acceptance', () => {
       assert.equal(preview.store.get(document.id).document.reviewManifestOriginal.requirements[0].importance, inventory.requirements[0].importance);
       assert.equal(preview.store.get(document.id).document.model.sections[0].items[0].bullets[0].text, 'Authored achievement 1');
       const reviewed = preview.store.get(document.id).document;
-      const citation = reviewed.aiReview.breakdown[0].evidence[0];
-      await page.locator('.rws-finding-context summary').first().click();
-      await page.getByRole('button', { name: 'Open cited field', exact: true }).first().click();
-      await page.locator('[data-field-input=' + JSON.stringify(citation.fieldId) + ']:focus').waitFor();
+      assert.equal(reviewed.proposals.length, 1);
+      assert.deepEqual(reviewed.aiReview.actions.map(action => action.kind), ['revision', 'question', 'question']);
+      assert.equal(JSON.parse(calls[1].user).supportingEvidence[0].text, bytes.toString());
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+      assert.equal(await page.locator('.rws-finding-context').count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+      await page.frameLocator('.rws-paper').locator('[data-field="bullet-0"].rws-active-field').first().waitFor();
+      assert.equal(await page.frameLocator('.rws-paper').locator('[data-field="title"].rws-active-field').count(), 0);
       assert.deepEqual(preview.store.get(document.id).document.model, reviewed.model);
       assert.equal(calls.length, 2);
-      await page.getByRole('button', { name: 'Back to review', exact: true }).press('Enter');
-      assert.equal(await page.locator('.rws-finding-context').first().evaluate(element => element.open), true);
-      assert.equal(await page.getByRole('button', { name: 'Open cited field', exact: true }).first().evaluate(element => document.activeElement === element), true);
-      await page.locator('.rws-finding-context summary').first().click();
-      await page.getByRole('button', { name: 'Prepare revision', exact: true }).click();
-      const revisionDialog = page.getByRole('dialog', { name: 'Prepare evidence-backed revision' });
-      assert.equal(await revisionDialog.getByRole('button', { name: 'Approve revision request' }).isEnabled(), false);
-      assert.equal(calls.length, 2);
-      await revisionDialog.getByRole('checkbox', { name: /Allow these job/ }).check();
-      await revisionDialog.getByRole('button', { name: 'Approve revision request' }).click();
       await page.locator('.rws-proposal').waitFor(); await saved(page);
-      assert.match(await page.locator('.rws-proposal .rws-method-tag').innerText(), /AI PROPOSAL/);
+      assert.equal(await page.locator('.rws-proposal .rws-method-tag').count(), 0);
       await page.reload(); await saved(page);
+      assert.equal(preview.store.get(document.id).document.proposals.length, 1);
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
       assert.equal(await page.locator('.rws-proposal').count(), 1);
-      assert.equal(calls.length, 3);
+      assert.equal(calls.length, 2);
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 900 });
         if (!await page.getByRole('button', { name: 'Review again', exact: true }).isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
         await page.locator('.rws-ai-review').scrollIntoViewIfNeeded();
         assert.equal(await page.locator('.rws-ai-review').evaluate(element => element.scrollWidth <= element.clientWidth), true);
-        const finding = page.locator('.rws-ai-review .rws-review-finding').first();
+        await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+        const finding = page.locator('[data-context-finding="0"]');
         const ramp = await finding.evaluate(element => {
           const style = selector => { const target = element.querySelector(selector), computed = getComputedStyle(target); return { size: computed.fontSize, family: computed.fontFamily, height: target.getBoundingClientRect().height, letterSpacing: computed.letterSpacing }; };
-          return { heading: style('h4'), body: style('.rws-finding-action'), action: style('.rws-secondary') };
+          return { heading: style('h4'), body: style('.rws-finding-action'), action: style('.rws-proposal-actions .btn--primary') };
         });
-        assert.equal(ramp.heading.size, '12px'); assert.equal(ramp.body.size, '12px'); assert.equal(ramp.action.size, '11px');
-        assert.match(ramp.body.family, /Hanken Grotesk/); assert.ok(['0px', 'normal'].includes(ramp.body.letterSpacing)); assert.ok(ramp.action.height >= 32 && ramp.action.height <= 34);
-        const details = finding.locator('.rws-finding-context');
-        assert.equal(await details.evaluate(element => element.open), false);
-        await details.locator('summary').focus(); await details.locator('summary').press('Enter');
-        assert.equal(await details.evaluate(element => element.open), true);
-        assert.equal(await details.locator('p').first().evaluate(element => getComputedStyle(element).fontSize), '11px');
-        assert.equal(await details.evaluate(element => element.scrollWidth <= element.clientWidth), true);
-        await details.locator('summary').press('Enter');
+        assert.equal(ramp.heading.size, '14px');
+        assert.match(ramp.body.family, /Hanken Grotesk/); assert.ok(['0px', 'normal'].includes(ramp.body.letterSpacing)); assert.ok(ramp.action.height >= 32);
+        assert.equal(await finding.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+        assert.equal(await finding.locator('.rws-proposal details').count(), 0);
+        assert.equal(await finding.evaluate(element => element.scrollWidth <= element.clientWidth), true);
         await page.frameLocator('iframe[title="Editable resume canvas"]').locator('.pagedjs_page').first().waitFor();
         await page.screenshot({ path: join(tmpdir(), `rk-resume-connected-review-${width}.png`) });
       }
@@ -1894,55 +3335,52 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Review again', exact: true }).click();
       await dialog.getByRole('checkbox', { name: /Allow these job/ }).waitFor();
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-      await page.getByRole('button', { name: 'Prepare revision', exact: true }).click();
-      await revisionDialog.getByRole('checkbox', { name: /Allow these job/ }).check();
-      await revisionDialog.getByRole('button', { name: 'Approve revision request' }).click();
-      await page.getByLabel('Your supporting evidence', { exact: true }).waitFor();
-      await page.getByLabel('Your supporting evidence', { exact: true }).fill('I owned the screen reader interaction specification and tested it with the team.');
-      await page.getByRole('button', { name: 'Save evidence', exact: true }).click();
-      await page.getByLabel('Your supporting evidence', { exact: true }).waitFor({ state: 'hidden' }); await saved(page);
+      await page.getByRole('button', { name: 'Keep original', exact: true }).click(); await saved(page);
+      await page.locator('[data-review-finding="1"] .rws-finding-target').click();
+      await page.getByLabel('Your answer', { exact: true }).waitFor();
+      await page.getByLabel('Your answer', { exact: true }).fill('I owned the screen reader interaction specification and tested it with the team.');
+      await page.getByRole('button', { name: 'Save answer', exact: true }).click();
+      await page.getByLabel('Your answer', { exact: true }).waitFor({ state: 'hidden' }); await saved(page);
       assert.equal(preview.store.get(document.id).document.sourceIds.length, 2);
       assert.equal(preview.store.get(document.id).document.evidenceAnswers[0].question.question, 'What part of the accessibility work did you personally own?');
-      assert.equal(await page.getByRole('button', { name: 'Prepare revision', exact: true }).isEnabled(), true);
-      assert.equal(await page.locator('.rws-proposal').getByRole('button', { name: 'Apply', exact: true }).isEnabled(), false);
-      const beforeSupported = structuredClone(preview.store.get(document.id).document);
-      await page.getByRole('button', { name: 'Prepare revision', exact: true }).click();
-      await revisionDialog.getByRole('checkbox', { name: /Allow these job/ }).check();
-      await revisionDialog.getByRole('button', { name: 'Approve revision request' }).click();
-      await page.getByRole('heading', { name: 'No revision recommended', exact: true }).waitFor(); await saved(page);
-      const supported = preview.store.get(document.id).document;
-      assert.deepEqual(supported.model, beforeSupported.model); assert.deepEqual(supported.aiReview, beforeSupported.aiReview); assert.deepEqual(supported.proposals, beforeSupported.proposals);
-      assert.equal(supported.aiResolution.evidence[0].quote, 'Authored achievement 1'); assert.equal(supported.reviewDecisions, undefined);
+      await page.locator('[data-review-finding="2"] .rws-finding-target').click();
+      await page.getByLabel('Your answer', { exact: true }).fill('The product design team tested the interactions.');
+      assert.equal(await page.getByRole('button', { name: 'Save answer', exact: true }).isEnabled(), true);
+      await page.getByRole('button', { name: 'Save answer', exact: true }).click();
+      await page.getByLabel('Your answer', { exact: true }).waitFor({ state: 'hidden' }); await saved(page);
+      assert.equal(preview.store.get(document.id).document.sourceIds.length, 3);
+      assert.equal(preview.store.get(document.id).document.evidenceAnswers[1].question.findingIndex, 2);
+      assert.equal(await page.getByRole('button', { name: 'Suggest a revision', exact: true }).count(), 0);
+      assert.equal(await page.locator('.rws-proposal').count(), 0);
+      assert.equal(calls.length, 2);
+      const beforeRecheck = structuredClone(preview.store.get(document.id).document);
+      await page.getByRole('button', { name: 'Review again', exact: true }).click();
+      await dialog.getByRole('checkbox', { name: /Allow these job/ }).check();
+      await dialog.getByRole('checkbox', { name: /I reviewed/ }).check();
+      await dialog.getByRole('button', { name: 'Approve and review' }).click();
+      await dialog.waitFor({ state: 'hidden' }); await saved(page);
+      const refreshed = preview.store.get(document.id).document;
+      assert.deepEqual(refreshed.model, beforeRecheck.model);
+      assert.equal(refreshed.proposals[0].after, 'I owned the screen reader interaction specification and tested it with the team.');
+      assert.equal(refreshed.proposals[0].evidence[0].sourceId, refreshed.evidenceAnswers[0].sourceId);
       await page.reload(); await saved(page);
-      assert.equal(await page.locator('[data-revision-resolution="0"] blockquote').innerText(), 'Authored achievement 1');
-      assert.equal(calls.length, 5);
-      await page.getByRole('tab', { name: 'Sources', exact: true }).click();
+      await page.locator('[data-review-finding="0"] .rws-finding-target').click();
+      assert.equal(await page.locator('.rws-proposal .rws-diff p').last().innerText(), refreshed.proposals[0].after);
+      assert.deepEqual(calls.map(call => call.stage), ['requirements', 'assessment', 'assessment']);
+      await openSources(page);
       const originals = page.getByRole('region', { name: 'Original files', exact: true });
-      const answers = page.getByRole('region', { name: 'Revision evidence', exact: true });
-      assert.equal(await originals.locator('.rws-source').count(), 1); assert.equal(await answers.locator('.rws-source').count(), 1);
-      assert.equal(await page.locator('.rws-available-sources').evaluate(element => element.open), false);
-      assert.equal(await originals.locator('.rws-source-provenance').evaluate(element => element.open), false);
-      await originals.locator('.rws-source-provenance summary').click();
-      assert.match(await originals.locator('.rws-hash').innerText(), new RegExp(source.sha256));
-      await answers.locator('.rws-source-provenance summary').click();
-      assert.match(await answers.innerText(), /What part of the accessibility work did you personally own/);
+      assert.equal(await originals.locator('.rws-source').count(), 1);
+      assert.equal(await page.locator('.rws-source-provenance,.rws-available-sources').count(), 0);
+      assert.equal(preview.store.get(document.id).document.evidenceAnswers.length, 2);
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 1000 });
-        if (!await originals.isVisible()) await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Sources', exact: true }).click();
+        await openSources(page);
         assert.equal(await originals.evaluate(element => element.scrollWidth <= element.clientWidth), true);
-        assert.equal(await answers.evaluate(element => element.scrollWidth <= element.clientWidth), true);
         await page.screenshot({ path: join(tmpdir(), 'rk-resume-grouped-sources-' + width + '.png') });
       }
-      await originals.getByRole('checkbox').click(); await saved(page);
-      assert.equal(await page.getByRole('button', { name: 'Capture original source check', exact: true }).isDisabled(), true);
-      assert.equal(await page.locator('.rws-available-sources').evaluate(element => element.open), true);
-      assert.equal(await page.locator('.rws-available-sources').getByRole('checkbox', { name: 'Use evidence from AI evidence.txt', exact: true }).evaluate(element => element === document.activeElement), true);
-      await page.locator('.rws-available-sources').getByRole('checkbox', { name: 'Use evidence from AI evidence.txt', exact: true }).press('Space'); await saved(page);
-      assert.equal(await originals.getByRole('checkbox').evaluate(element => element === document.activeElement && element.checked), true);
-      await page.getByRole('button', { name: 'Capture original source check', exact: true }).click(); await saved(page);
-      const sourceCheck = preview.store.get(document.id).document.sourceAssessment;
-      assert.equal(sourceCheck.characters, bytes.length); assert.deepEqual(sourceCheck.sourceIds, [source.id]);
-      assert.deepEqual(preview.store.get(document.id).document.model, beforeSupported.model);
+      assert.equal(await originals.getByRole('checkbox').count(), 0);
+      assert.equal(preview.store.get(document.id).document.sourceIds.length, 3);
+      assert.deepEqual(preview.store.get(document.id).document.model, beforeRecheck.model);
       assert.deepEqual(preview.store.sourceFile(source.id).bytes, bytes);
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
@@ -1965,18 +3403,18 @@ describe('Resume browser acceptance', () => {
     });
     await page.route('**/__resume/api/sources', async route => { arrived(); await held; await route.fulfill({ json: { id: 'late-source' } }); });
     try {
-      await page.getByLabel('Your supporting evidence', { exact: true }).fill('A delayed author statement.');
-      await page.getByRole('button', { name: 'Save evidence', exact: true }).click(); await requested;
-      await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+      await page.getByLabel('Your answer', { exact: true }).fill('A delayed author statement.');
+      await page.getByRole('button', { name: 'Save answer', exact: true }).click(); await requested;
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
       await page.locator('.rws-library-row').filter({ hasText: 'Master resume' }).click();
       await page.waitForFunction(() => document.querySelector('.rws-document-name').textContent === 'Master resume');
-      await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
       await page.locator('.rws-library-row').filter({ hasText: 'Late evidence fixture' }).click();
-      await page.getByLabel('Your supporting evidence', { exact: true }).waitFor();
+      await page.getByLabel('Your answer', { exact: true }).waitFor();
       release(); await page.waitForFunction(() => window.__lateEvidenceSettled);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       assert.deepEqual(preview.store.get(document.id), before); assert.deepEqual(preview.store.get('avery-master'), other);
-      assert.equal(await page.getByLabel('Your supporting evidence', { exact: true }).isVisible(), true);
+      assert.equal(await page.getByLabel('Your answer', { exact: true }).isVisible(), true);
       assert.equal(await page.getByRole('button', { name: 'Review again', exact: true }).isEnabled(), true);
       assert.equal(await page.evaluate(() => localStorage.getItem('rk:resume-preview:pending:late-evidence')), null);
       assert.deepEqual(errors, []);
@@ -1998,7 +3436,7 @@ describe('Resume browser acceptance', () => {
       });
       await page.locator('input[type=file]').setInputFiles({ name: 'delayed.txt', mimeType: 'text/plain', buffer: Buffer.from('Immutable original evidence.') });
       await page.waitForFunction(() => !!window.__releaseImportRead);
-      await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
       await page.locator('.rws-library-row').filter({ hasText: 'Master resume' }).click();
       await page.waitForFunction(() => document.querySelector('.rws-document-name').textContent === 'Master resume');
       await page.evaluate(() => window.__releaseImportRead());
@@ -2027,10 +3465,10 @@ describe('Resume browser acceptance', () => {
           assert.equal(await page.getByRole('button', { name: 'Attach original', exact: true }).isDisabled(), true);
           assert.equal(await page.getByRole('button', { name: 'Create resume from text', exact: true }).isDisabled(), true);
           await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-          await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+          await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
           await page.locator('.rws-library-row').filter({ hasText: 'Late import fixture' }).click();
           await page.waitForFunction(() => document.querySelector('.rws-document-name').textContent === 'Late import fixture');
-          await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+          await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
           await page.locator('.rws-library-row').filter({ hasText: 'Master resume' }).click();
           await page.waitForFunction(() => document.querySelector('.rws-document-name').textContent === 'Master resume');
           await page.evaluate(() => { window.__importResponseSettled = false; });
@@ -2048,16 +3486,14 @@ describe('Resume browser acceptance', () => {
   test('Phone editor panels and dialogs fit without overlapping controls', { timeout: 90000 }, async () => {
     const { page, context, errors } = await openSample('avery-master', 390);
     try {
-      await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Summary', { exact: true }).fill('A complete mobile edit.'); await saved(page);
-      await page.getByRole('button', { name: 'Close properties' }).click();
-      await page.getByRole('button', { name: 'Resume library', exact: true }).click();
-      await page.getByRole('tab', { name: 'Sections', exact: true }).click();
-      await page.getByRole('navigation', { name: 'Resume sections' }).getByRole('button', { name: 'Experience' }).click();
-      assert.equal(await page.getByLabel('Resume section', { exact: true }).inputValue(), 'experience');
+      await fillInline(page, 'summary', 'A complete mobile edit.'); await saved(page);
+      await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Document', exact: true }).click();
+      assert.equal(await page.getByRole('region', { name: 'Document structure' }).isVisible(), true);
+      await page.getByRole('region', { name: 'Document structure' }).getByRole('button', { name: 'Experience', exact: true }).click();
+      assert.equal(await page.locator('[data-document-item="experience"] > .rws-document-row-heading .rws-document-item-label').getAttribute('aria-current'), 'true');
       await page.screenshot({ path: join(tmpdir(), 'rk-resume-studio-mobile.png') });
       await page.getByRole('button', { name: 'Close properties' }).click();
-      await page.getByRole('button', { name: 'Duplicate for another role' }).click();
+      await resumeOption(page, 'Duplicate resume');
       const bounds = await page.locator('dialog .pass__box').boundingBox(); assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390);
       await page.getByLabel('Resume name').fill('Mobile role');
       await page.screenshot({ path: join(tmpdir(), 'rk-resume-studio-mobile-dialog.png') });
@@ -2071,9 +3507,9 @@ describe('Resume browser acceptance', () => {
       const narrowFit = await page.evaluate(() => [...document.querySelectorAll('.rws-workbar button')].filter(element => element.getBoundingClientRect().width).every(element => { const rect = element.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth; }));
       assert.equal(narrowFit, true);
       await page.getByRole('navigation', { name: 'Mobile workspace panels' }).getByRole('button', { name: 'Review', exact: true }).click();
-      await page.getByRole('button', { name: 'Run checks', exact: true }).click();
-      await page.getByText('Local diagnostic breakdown', { exact: true }).click();
-      await page.locator('.rws-score').waitFor(); await page.screenshot({ path: join(tmpdir(), 'rk-resume-studio-review-320.png') });
+      await page.getByRole('button', { name: 'Review information', exact: true }).click();
+      await page.locator('#resume-review-info:popover-open').waitFor();
+      await page.screenshot({ path: join(tmpdir(), 'rk-resume-studio-review-320.png') });
     } finally { await context.close(); }
   });
   test('Export returns the matching document, marks stale artifacts and ignores a late result after navigation', { timeout: 90000 }, async () => {
@@ -2082,13 +3518,8 @@ describe('Resume browser acceptance', () => {
     try {
       assert.equal(await page.getByRole('button', { name: 'Back to resumes', exact: true }).count(), 1);
       assert.equal(await page.getByRole('button', { name: 'Toggle resume library', exact: true }).count(), 0);
-      const exportStyle = await page.getByRole('button', { name: 'Export PDF', exact: true }).evaluate(button => {
-        const swatch = document.createElement('span'); swatch.style.color = 'var(--accent)'; button.append(swatch);
-        const result = { radius: getComputedStyle(button).borderRadius, color: getComputedStyle(button).color, accent: getComputedStyle(swatch).color, text: button.textContent, width: button.offsetWidth, height: button.offsetHeight };
-        swatch.remove(); return result;
-      });
-      assert.equal(exportStyle.radius, '50%'); assert.equal(exportStyle.text, ''); assert.equal(exportStyle.width, exportStyle.height);
-      assert.equal(exportStyle.color, exportStyle.accent);
+      assert.equal(await page.getByRole('button', { name: 'Export PDF', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Resume options', exact: true }).isVisible(), true);
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 900 });
         const comparison = await page.getByRole('button', { name: 'Preview PDF', exact: true }).evaluate(button => {
@@ -2104,22 +3535,96 @@ describe('Resume browser acceptance', () => {
         assert.equal(comparison.iconColor, comparison.actual.color); assert.equal(comparison.iconWidth, 15); assert.equal(comparison.stroke, '1.8');
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
+      await saved(page);
       await page.getByRole('button', { name: 'Preview PDF', exact: true }).click();
-      await page.getByRole('region', { name: 'Verified exported PDF', exact: true }).locator('canvas').waitFor(); await saved(page);
+      await page.getByRole('region', { name: 'Verified exported PDF', exact: true }).locator('canvas').waitFor();
+      await saved(page);
+      await page.getByRole('button', { name: 'Close PDF preview', exact: true }).locator(':scope:focus').waitFor();
       const reader = page.getByRole('region', { name: 'Verified exported PDF', exact: true });
       await reader.locator('.textLayer').first().waitFor();
       assert.ok((await reader.locator('.textLayer').first().textContent()).replace(/\s/g, '').includes('SyntheticDesigner'));
-      assert.equal(await reader.locator('.annotationLayer a[href="https://example.test/work"]').getAttribute('rel'), 'noopener noreferrer');
-      assert.equal(await page.getByRole('complementary', { name: 'Resume library', exact: true }).isVisible(), false);
+      const workLinks = await reader.locator('.annotationLayer a[href="https://example.test/work"]').evaluateAll(links => links.map(link => link.rel));
+      assert.ok(workLinks.length > 0);
+      assert.ok(workLinks.every(rel => rel === 'noopener noreferrer'));
+      assert.equal(await page.getByRole('tablist', { name: 'Workspace panels', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Two-page view', exact: true }).count(), 0, 'Single-page PDFs have no spread toggle');
+      assert.equal(await page.getByRole('complementary', { name: 'Resume review', exact: true }).isVisible(), false);
+      const parserPanel = page.getByRole('complementary', { name: 'Parser reading order', exact: true });
+      for (const width of [1440, 390, 320, 1440]) {
+        await page.setViewportSize({ width, height: 1000 });
+        assert.equal(await parserPanel.isVisible(), false);
+        assert.equal(await page.getByRole('button', { name: 'Show reading order panel', exact: true }).getAttribute('aria-expanded'), 'false');
+        assert.equal((await page.locator('.rws-workspace').boundingBox()).width, width);
+      }
+      await page.getByRole('button', { name: 'Show reading order panel', exact: true }).click();
+      assert.equal(await parserPanel.isVisible(), true);
+      assert.equal(await page.locator('.rws-pdf-view .rws-reading-order').count(), 0);
+      assert.match(await parserPanel.locator('pre').innerText(), /Authored achievement 12/);
       assert.equal(await page.getByRole('complementary', { name: 'Resume properties', exact: true }).isVisible(), false);
-      assert.match(await page.locator('.rws-canvas-tools').innerText(), /Current PDF/);
+      assert.match(await page.locator('#rws-pdf-summary').textContent(), /Current PDF/);
+      assert.equal(await page.locator('.rws-document-bar, .rws-pdf-view .rws-artifact-bar, .rws-pdf-view .rws-pdf-controls').count(), 0);
+      const floaty = page.getByRole('group', { name: 'PDF preview', exact: true });
+      const download = floaty.getByRole('link', { name: 'Download this PDF', exact: true });
+      let exportBeforeDownload = structuredClone(preview.store.get(document.id));
+      const expectedDownload = Buffer.from(await download.evaluate(async link => [...new Uint8Array(await (await fetch(link.href)).arrayBuffer())]));
+      const downloaded = page.waitForEvent('download');
+      await download.click();
+      assert.deepEqual(readFileSync(await (await downloaded).path()), expectedDownload);
+      await saved(page);
+      assert.deepEqual(preview.store.get(document.id).document.model, exportBeforeDownload.document.model);
+      assert.equal(preview.store.get(document.id).versions.at(-1).label, 'PDF exported');
+      exportBeforeDownload = structuredClone(preview.store.get(document.id));
+      const panelHandle = page.getByRole('separator', { name: 'Resize reading order panel', exact: true });
+      const dragPanel = async (distance, cancel) => {
+        const box = await panelHandle.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + 100); await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2 + distance, box.y + 100, { steps: 5 });
+        if (cancel === 'Escape') await page.keyboard.press('Escape');
+        if (cancel === 'pointercancel') await panelHandle.dispatchEvent('pointercancel', { pointerId: 1 });
+        await page.mouse.up();
+      };
+      assert.equal(await panelHandle.getAttribute('aria-valuenow'), '340');
+      await dragPanel(100);
+      assert.equal(await panelHandle.getAttribute('aria-valuenow'), '440');
+      assert.equal((await parserPanel.boundingBox()).width, 440);
+      await dragPanel(90, 'Escape'); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '440');
+      await dragPanel(-90, 'pointercancel'); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '440');
+      assert.equal(await page.locator('.rws').getAttribute('data-resizing-pdf-panel'), null);
+      await panelHandle.press('ArrowLeft'); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '424');
+      await panelHandle.press('ArrowRight'); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '440');
+      await dragPanel(-900); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '240');
+      await panelHandle.press('End'); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '600');
+      await page.setViewportSize({ width: 900, height: 900 });
+      await page.waitForFunction(() => document.querySelector('.rws-pdf-panel-resizer').getAttribute('aria-valuenow') === '460');
+      assert.ok((await reader.boundingBox()).width >= 440);
+      const compactTools = await floaty.boundingBox(), compactReader = await reader.boundingBox();
+      assert.ok(compactTools.x >= compactReader.x && compactTools.x + compactTools.width <= compactReader.x + compactReader.width, 'Print and Close fit beside a widened parser panel');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await panelHandle.dblclick(); assert.equal(await panelHandle.getAttribute('aria-valuenow'), '340');
       for (const width of [1440, 390, 320]) {
         await page.setViewportSize({ width, height: 900 });
-        assert.equal(await page.getByRole('complementary', { name: 'Resume library', exact: true }).isVisible(), false);
+        assert.equal(await page.getByRole('complementary', { name: 'Resume review', exact: true }).isVisible(), false);
+        if (width <= 760 && await parserPanel.isVisible()) await floaty.getByRole('button', { name: 'Hide reading order panel', exact: true }).click();
+        const panelToggle = floaty.getByRole('button', { name: /^(Show|Hide) reading order panel$/ });
+        assert.equal(await panelToggle.getAttribute('aria-expanded'), String(width > 760));
+        await panelToggle.click();
+        assert.equal(await parserPanel.isVisible(), width <= 760);
+        if (width <= 760) {
+          const bounds = await parserPanel.boundingBox(), tools = await floaty.boundingBox();
+          assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width && bounds.y + bounds.height <= tools.y);
+          await panelHandle.press('ArrowLeft');
+          await panelHandle.press('Home');
+          await page.screenshot({ path: join(tmpdir(), `rk-resume-pdf-panel-${width}.png`) });
+        } else {
+          assert.equal((await page.locator('.rws-workspace').boundingBox()).width, width);
+        }
+        await panelToggle.click();
+        assert.equal(await parserPanel.isVisible(), width > 760);
         assert.equal(await page.getByRole('complementary', { name: 'Resume properties', exact: true }).isVisible(), false);
         assert.equal(await page.getByRole('navigation', { name: 'Mobile workspace panels' }).isVisible(), false);
         const workspace = await page.locator('.rws-workspace').boundingBox();
-        assert.ok(workspace.x < 1 && workspace.width >= width - 1);
+        const navigationWidth = width > 1100 ? 340 : 0;
+        assert.ok(Math.abs(workspace.x - navigationWidth) < 1 && workspace.width >= width - navigationWidth - 1);
         await page.waitForFunction(() => {
           const reader = document.querySelector('.rws-pdf-reader'), page = reader?.querySelector('.pdfViewer .page'), canvas = page?.querySelector('canvas');
           if (!canvas || !page) return false;
@@ -2130,42 +3635,106 @@ describe('Resume browser acceptance', () => {
           for (let index = 0; index < pixels.length; index += 4) if (pixels[index + 3] > 200 && Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) < 160) ink++;
           return ink > 200;
         });
-        const pdfControls = await reader.locator('.rws-pdf-controls').evaluate(toolbar => {
-          const boxes = [...toolbar.querySelectorAll('button,input')].map(control => control.getBoundingClientRect());
-          return boxes.every(box => box.width > 20 && box.left >= 0 && box.right <= innerWidth) && boxes.every((box, index) => boxes.slice(index + 1).every(other => Math.min(box.right, other.right) <= Math.max(box.left, other.left)));
+        const pdfControls = await floaty.evaluate(toolbar => {
+          const box = toolbar.getBoundingClientRect(), stage = toolbar.closest('.rws-document-stage').getBoundingClientRect();
+          const reader = document.querySelector('.rws-pdf-reader').getBoundingClientRect(), scroll = document.querySelector('.rws-pdf-scroll').getBoundingClientRect();
+          const lift = parseFloat(getComputedStyle(toolbar.closest('.rws-document-stage')).getPropertyValue('--resume-view-controls-lift')) || 0;
+          return { height: box.height, right: stage.right - box.right, bottom: stage.bottom - box.bottom - lift,
+            inside: box.left >= stage.left && box.right <= stage.right, scrollInset: scroll.top - reader.top,
+            controls: [...toolbar.querySelectorAll('button,a')].map(control => ({ label: control.getAttribute('aria-label'), width: control.getBoundingClientRect().width, height: control.getBoundingClientRect().height, text: control.textContent, icon: control.querySelector('svg').getBoundingClientRect().width })) };
         });
-        assert.equal(pdfControls, true);
-        const actions = await page.locator('.rws-workbar-actions > button').evaluateAll(buttons => buttons.map(button => ({ radius: getComputedStyle(button).borderRadius, box: button.getBoundingClientRect().toJSON(), labelled: button.classList.contains('rws-preview-pdf') })));
-        for (const action of actions) {
-          assert.equal(action.radius, action.labelled ? '100px' : '50%');
-          assert.ok(action.box.x >= 0 && action.box.right <= width);
-          if (!action.labelled) assert.ok(Math.abs(action.box.width - action.box.height) < 1);
-        }
+        assert.deepEqual(pdfControls, { height: 44, right: 12, bottom: 12, inside: true, scrollInset: 0,
+          controls: [width > 760 ? 'Hide reading order panel' : 'Show reading order panel', 'Previous PDF page', 'Next PDF page', 'Zoom PDF out', 'Zoom PDF in', 'Fit PDF page', 'Download this PDF', 'Print this PDF', 'Close PDF preview'].map(label => ({ label, width: width <= 380 ? 24 : width <= 440 ? 28 : 34, height: 34, text: '', icon: 16 })) });
+        const navigation = page.getByRole('toolbar', { name: 'PDF controls', exact: true });
+        assert.equal(await navigation.locator('span').evaluate(node => getComputedStyle(node).whiteSpace), 'nowrap');
+        const navigationGeometry = await navigation.evaluate(node => {
+          const shell = node.closest('.rws-pdf-floaties'), a = shell.getBoundingClientRect();
+          const controls = [...shell.querySelectorAll('button,input,a')].map(control => control.getBoundingClientRect());
+          return { height: a.height, sameRow: controls.every(box => Math.abs((box.top + box.bottom) / 2 - (a.top + a.bottom) / 2) < 1),
+            fits: a.left >= 0 && a.right <= innerWidth && node.scrollWidth <= node.clientWidth,
+            avoidsBanners: [...document.querySelectorAll('.rws-flash')].filter(banner => banner.getClientRects().length).every(banner => { const c = banner.getBoundingClientRect(); return a.bottom <= c.top || a.top >= c.bottom || a.right <= c.left || a.left >= c.right; }),
+            noOverlap: controls.every((box, index) => controls.slice(index + 1).every(other => box.right <= other.left || other.right <= box.left)) };
+        });
+        assert.deepEqual(navigationGeometry, { height: 44, sameRow: true, fits: true, avoidsBanners: true, noOverlap: true });
+        const shell = await page.locator('.rws-pdf-floaties').evaluate(node => {
+          const style = getComputedStyle(node), rows = [...node.querySelectorAll('.resume-view-tools')].map(row => getComputedStyle(row));
+          return { border: style.borderTopWidth, radius: style.borderRadius, shadow: style.boxShadow !== 'none',
+            height: node.getBoundingClientRect().height,
+            rows: rows.map(row => ({ background: row.backgroundColor, shadow: row.boxShadow, radius: row.borderRadius })),
+            order: [...node.querySelectorAll('button,input,a')].map(control => control.getAttribute('aria-label')),
+            separators: [...node.querySelectorAll('.rws-pdf-controls-host, [data-pdf-separator]')].map(control => {
+              const separator = getComputedStyle(control, '::before');
+              return { width: separator.width, height: separator.height, content: separator.content, background: separator.backgroundColor === getComputedStyle(node).borderTopColor };
+            }) };
+        });
+        assert.deepEqual(shell, { border: '1px', radius: '8px', shadow: true, height: 44,
+          rows: [{ background: 'rgba(0, 0, 0, 0)', shadow: 'none', radius: '0px' }],
+          order: [width > 760 ? 'Hide reading order panel' : 'Show reading order panel', 'Previous PDF page', 'PDF page', 'Next PDF page', 'Zoom PDF out', 'Zoom PDF in', 'Fit PDF page', 'Download this PDF', 'Print this PDF', 'Close PDF preview'],
+          separators: Array.from({ length: 4 }, () => ({ width: '1px', height: '18px', content: '""', background: true })) });
+        assert.equal(await navigation.getByRole('spinbutton', { name: 'PDF page', exact: true }).count(), 1);
+        assert.equal(await navigation.getByRole('button').count(), 5);
+        const floatyBeforeScroll = await floaty.boundingBox();
+        const navigationBeforeScroll = await navigation.boundingBox();
+        await reader.locator('.rws-pdf-scroll').evaluate(node => { node.scrollTop = node.scrollHeight; });
+        assert.deepEqual(await floaty.boundingBox(), floatyBeforeScroll);
+        assert.deepEqual(await navigation.boundingBox(), navigationBeforeScroll);
+        assert.equal(await page.locator('.rws-workbar').count(), 0);
+        assert.equal(await page.getByRole('button', { name: /^Back to / }).count(), 0);
+        assert.equal(await page.getByRole('button', { name: 'Close PDF preview', exact: true }).count(), 1);
+        assert.equal(await page.getByRole('button', { name: /^(Edit resume|Export PDF|Version history)$/ }).count(), 0);
+        assert.equal(await page.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 1);
+        const header = await page.locator('.rws-header').boundingBox();
+        assert.equal((await page.locator('.rws-body').boundingBox()).y, header.y + header.height);
         await page.screenshot({ path: join(tmpdir(), `rk-resume-pdf-preview-${width}.png`) });
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
+      const navigation = page.getByRole('toolbar', { name: 'PDF controls', exact: true });
       const beforeZoom = await reader.locator('.pdfViewer .page').first().evaluate(element => element.getBoundingClientRect().width);
-      await reader.getByRole('button', { name: 'Zoom PDF in', exact: true }).click();
+      await navigation.getByRole('button', { name: 'Zoom PDF in', exact: true }).click();
       await page.waitForFunction(width => document.querySelector('.pdfViewer .page').getBoundingClientRect().width > width, beforeZoom);
-      await reader.getByRole('button', { name: 'Fit PDF width', exact: true }).click();
-      await page.getByText('Parser reading order /', { exact: false }).click();
-      assert.match(await page.locator('.rws-reading-order pre').innerText(), /Authored achievement 12/);
-      await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
-      assert.equal(await page.getByRole('complementary', { name: 'Resume library', exact: true }).isVisible(), true);
+      await navigation.getByRole('button', { name: 'Zoom PDF out', exact: true }).click();
+      await navigation.getByRole('button', { name: 'Fit PDF page', exact: true }).click();
+      assert.equal(await navigation.getAttribute('data-fit-mode'), 'page-fit');
+      const fittedPage = await reader.locator('.pdfViewer .page').first().boundingBox(), fittedViewport = await reader.locator('.rws-pdf-scroll').boundingBox();
+      assert.ok(fittedPage.width <= fittedViewport.width && fittedPage.height <= fittedViewport.height, 'Page fit uses both viewport dimensions');
+      await navigation.getByRole('button', { name: 'Fit PDF width', exact: true }).click();
+      assert.equal(await navigation.getAttribute('data-fit-mode'), 'page-width');
+      assert.equal(await navigation.getByRole('button', { name: 'Fit PDF page', exact: true }).count(), 1);
+      await navigation.getByRole('spinbutton', { name: 'PDF page', exact: true }).fill('1');
+      assert.equal(await navigation.getByRole('button', { name: 'Previous PDF page', exact: true }).isDisabled(), true);
+      assert.equal(await navigation.getByRole('button', { name: 'Next PDF page', exact: true }).isDisabled(), true);
+      await floaty.getByRole('button', { name: 'Show reading order panel', exact: true }).click();
+      assert.match(await parserPanel.locator('pre').innerText(), /Authored achievement 12/);
+      assert.deepEqual(preview.store.get(document.id), exportBeforeDownload, 'Reading-order visibility and resizing do not modify the document or exports');
+      await page.getByRole('button', { name: 'Close PDF preview', exact: true }).click();
+      await page.getByRole('button', { name: 'Preview PDF', exact: true }).locator(':scope:focus').waitFor();
+      await saved(page);
+      assert.equal(await page.getByRole('button', { name: 'Back to resumes', exact: true }).isVisible(), true);
+      assert.equal(await page.getByRole('button', { name: 'Resume options', exact: true }).isVisible(), true);
+      assert.equal(await page.getByRole('complementary', { name: 'Resume review', exact: true }).isVisible(), true);
       assert.equal(await page.getByRole('complementary', { name: 'Resume properties', exact: true }).isVisible(), true);
-      await page.getByRole('tab', { name: 'Content', exact: true }).click();
-      await page.getByLabel('Summary', { exact: true }).fill('Edited after export.'); await saved(page);
-      await page.getByRole('tab', { name: 'PDF', exact: true }).click();
-      assert.match(await page.locator('.rws-canvas-tools').innerText(), /Historical PDF/);
+      await fillInline(page, 'summary', 'Edited after export.'); await saved(page);
+      await resumeOption(page, 'View version history');
+      await page.locator('.rws-version-list button').filter({ hasText: 'PDF exported' }).click();
+      await page.getByRole('button', { name: 'Preview ON', exact: true }).click();
+      await page.locator('.rws-version-preview .textLayer').waitFor();
+      assert.doesNotMatch((await page.locator('.rws-version-preview').innerText()).replace(/\s/g, ''), /Editedafterexport/);
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
       let release, requested;
       const held = new Promise(resolve => { release = resolve; }); const arrived = new Promise(resolve => { requested = resolve; });
-      await page.route('**/__resume/api/resumes/export-flow/export', async route => { requested(); await held; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(preview.store.get(document.id).exports[0]) }); });
-      await page.getByRole('button', { name: 'Export PDF', exact: true }).click(); await arrived;
-      await page.getByRole('tab', { name: 'Canvas', exact: true }).click();
-      await page.getByRole('tab', { name: 'Resumes', exact: true }).click();
+      await page.evaluate(() => {
+        const originalFetch = window.fetch;
+        window.fetch = (url, options) => String(url).endsWith('/export')
+          ? originalFetch(url, { ...options, signal: undefined }).then(response => { window.__latePdfSettled = true; return response; })
+          : originalFetch(url, options);
+      });
+      await page.route('**/__resume/api/resumes/export-flow/export', async route => { requested(); await held; await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Cancelled old render' }) }); });
+      await resumeOption(page, 'Download PDF'); await arrived;
+      await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();
       await page.locator('.rws-library-row').filter({ hasText: 'Master resume' }).click();
       await page.waitForFunction(() => document.querySelector('.rws-document-name').textContent === 'Master resume');
-      release(); await page.getByRole('tab', { name: 'Canvas', exact: true }).waitFor().catch(error => { throw new Error(error.message + '\nPage errors: ' + JSON.stringify(errors)); });
+      release(); await page.waitForFunction(() => window.__latePdfSettled);
+      await page.locator('.rws[data-view="edit"]').waitFor().catch(error => { throw new Error(error.message + '\nPage errors: ' + JSON.stringify(errors)); });
       assert.equal(await page.getByRole('region', { name: 'Verified exported PDF', exact: true }).count(), 0);
       assert.equal(preview.store.get('avery-master').document.assessment, null);
       await page.getByRole('button', { name: 'Back to resumes', exact: true }).click();

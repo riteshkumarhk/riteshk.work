@@ -11,7 +11,15 @@ import os
 PORT = 5510
 
 
+class PreviewHTTPServer(http.server.ThreadingHTTPServer):
+    # Native previews load module graphs in several frames at once.
+    request_queue_size = 128
+
+
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".js": "text/javascript", ".mjs": "text/javascript"}
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
@@ -31,7 +39,7 @@ if __name__ == "__main__":
     # Always serve this file's folder, regardless of where it was launched from.
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     # Threaded so one slow/stuck client (e.g. a keep-alive connection) never blocks other requests.
-    http.server.ThreadingHTTPServer.allow_reuse_address = True
-    with http.server.ThreadingHTTPServer(("", PORT), NoCacheHandler) as httpd:
+    PreviewHTTPServer.allow_reuse_address = True
+    with PreviewHTTPServer(("", PORT), NoCacheHandler) as httpd:
         print(f"Serving http://localhost:{PORT}  (no-cache mode) — press Ctrl+C to stop")
         httpd.serve_forever()

@@ -2,40 +2,42 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Archive,
-  ArrowDown,
   ArrowLeft,
-  ArrowUp,
   BookOpen,
   Check,
   CheckCheck,
   ChevronDown,
   ChevronRight,
   CircleAlert,
-  Clock3,
   Columns2,
   Copy,
   Download,
   ExternalLink,
   FileCheck2,
+  FileDown,
   FileText,
-  FolderOpen,
   History,
+  Info,
   Link,
   List,
   LoaderCircle,
   LockKeyhole,
   Maximize,
   Moon,
+  MoreHorizontal,
   PanelsTopLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
+  Printer,
   Redo2,
   RefreshCw,
   ScanText,
   Search,
   Settings2,
-  ShieldCheck,
   Sun,
+  TextCursorInput,
   Trash2,
   Undo2,
   Upload,
@@ -51,6 +53,7 @@ import {
   resumeText,
   createResumeTask,
   createResumeHistory,
+  resumeHistoryCheckpoints,
   applyResumeProposal,
   projectResumeProposal,
   assessResume,
@@ -61,45 +64,70 @@ import {
   renderResumeHtml,
   RESUME_FONTS,
   RESUME_RENDER_VERSION,
+  resumeHref,
 } from "./resume-render.mjs";
+import { ResumeDocumentPanel } from "./resume-document-panel.jsx";
 import { sampleProposals } from "./resume-sample.mjs";
 import { ResumeAccentPicker } from "./resume-accent-picker.jsx";
 import { ResumePdfViewer } from "./resume-pdf-viewer.jsx";
 import { NumberField } from "./slide-shared-controls.jsx";
-import { REVIEW_RUBRIC, REVIEW_DECISION_REASONS, reviewPacket, inventoryResumeWithAI, reviewResumeWithAI, reviseResumeWithAI, canReviseReview, decideResumeFinding, resumeReviewFindings } from "./resume-review.mjs";
+import { REVIEW_DECISION_REASONS, reviewPacket, inventoryResumeWithAI, reviewResumeWithAI, canReviseReview, decideResumeFinding, resumeReviewFindings } from "./resume-review.mjs";
 import {
   applyStudioTypography,
   typographySystem,
 } from "./slide-merge-typography.mjs";
 import "../../css/resume-preview.css";
-import { createHostedResumeClient } from "./resume-hosted.mjs";
+import { createHostedResumeClient, resumeSaveFailureFeedback, observeResumeViewControls, RESUME_CANVAS_STORAGE_KEY, readResumeCanvasMode, saveResumeCanvasMode } from "./resume-hosted.mjs";
 import { atsEditorReview } from "./resume-ats.mjs";
+import { resumeReviewSections, resumeFindingTargets, observeResumeContext, observeResumeInfo } from "./resume-review-presentation.mjs";
+import { ResumeCandidateReview } from "./resume-assessment-ui.jsx";
+import { commitAssessmentRevision } from "./resume-assessment-revisions.mjs";
+
+function ReviewInfo({ children }) {
+  const button = useRef(null), panel = useRef(null);
+  useEffect(() => observeResumeInfo(button.current, panel.current), []);
+  return <>
+    <button ref={button} className="resume-review-info-button" aria-label="Review information" title="Review information" popoverTarget="resume-review-info"><Info size={18} /></button>
+    <section ref={panel} id="resume-review-info" className="resume-review-info" popover="auto" aria-label="Review information">{children}</section>
+  </>;
+}
 
 const hosted = new URLSearchParams(location.search).has("hosted");
+const sampleTools = !hosted && ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) &&
+  new URLSearchParams(location.search).get("sampleTools") === "1";
 const studioHost = (() => {
   if (!hosted || parent === window) return null;
   try { return parent.location.origin === location.origin ? parent.__RKStudio : null; }
   catch { return null; }
 })();
 const studioBridge = studioHost?.resume;
+const sharedStorageFeedback = hosted && typeof studioBridge?.storageFeedback === "function";
+const candidateEnabled = ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) &&
+  (new URLSearchParams(location.search).get("candidate") === "1" || studioHost && new URLSearchParams(parent.location.search).get("candidate") === "1");
 const hostedClient = studioBridge ? createHostedResumeClient({ request: (path, options) => studioBridge.request(path, options, window), ai: studioHost.resumeAI }) : null;
 const localKey = suffix => (hosted ? "rk:resume:" : "rk:resume-preview:") + suffix;
 
 const api = async (path, options = {}) => {
+  let data;
   if (hosted) {
     if (!hostedClient) throw new Error("Open Resume Studio from the signed-in Studio.");
-    return hostedClient.api(path, options);
-  }
-  const response = await fetch("/__resume/api/" + path, {
+    data = await hostedClient.api(path, options);
+  } else {
+    const response = await fetch("/__resume/api/" + path, {
     ...options,
     headers: { "Content-Type": "application/json", ...options.headers },
   });
-  const data = await response.json();
+    data = await response.json();
   if (!response.ok)
     throw Object.assign(
       new Error(data.error || "The preview server is unavailable."),
       { status: response.status },
     );
+  }
+  if (data.transient && data.base64) {
+    const { base64, ...entry } = data;
+    return { ...entry, blob: new Blob([Uint8Array.from(atob(base64), character => character.charCodeAt(0))], { type: "application/pdf" }) };
+  }
   return data;
 };
 const outboxKey = (id) => localKey("pending:" + id);
@@ -133,7 +161,33 @@ function IconButton({ icon: Icon, label, className = "", ...props }) {
     </button>
   );
 }
-function Dialog({ title, children, actions, onClose, wide = false }) {
+function ResumeOptions({ actions, disabled }) {
+  const [open, setOpen] = useState(false);
+  const host = useRef(null), trigger = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    host.current.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+    const outside = event => { if (!host.current?.contains(event.target)) setOpen(false); };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [open]);
+  const close = () => { setOpen(false); trigger.current?.focus(); };
+  return <div className="rws-options" ref={host} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+    <button ref={trigger} className="rws-icon" aria-label="Resume options" title="Resume options" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}><MoreHorizontal size={17} strokeWidth={1.75} /></button>
+    {open && <div className="rws-options-menu" role="menu" aria-label="Resume options" onKeyDown={event => {
+      const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]:not(:disabled)')];
+      const index = items.indexOf(document.activeElement);
+      if (event.key === "Escape") { event.preventDefault(); close(); }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+      }
+    }}>
+      {actions.map(({ label, icon: Icon, action }, index) => <button key={label} role="menuitem" className={index === 0 ? "rws-options-download" : ""} onClick={() => { close(); action(); }}><Icon size={20} /><span>{label}</span></button>)}
+    </div>}
+  </div>;
+}
+function Dialog({ title, children, actions, onClose, wide = false, headingActions, className = "" }) {
   const ref = useRef(null);
   useEffect(() => {
     const trigger = document.activeElement;
@@ -141,13 +195,14 @@ function Dialog({ title, children, actions, onClose, wide = false }) {
     return () =>
       requestAnimationFrame(() => {
         if (trigger?.isConnected) trigger.focus();
+        else document.querySelector('[aria-label="Resume options"]')?.focus();
       });
   }, []);
   return (
     <dialog
       ref={ref}
       aria-label={title}
-      className={"rws-dialog pass " + (wide ? "pass--wide" : "")}
+      className={"rws-dialog pass " + (wide ? "pass--wide " : "") + className}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -159,6 +214,7 @@ function Dialog({ title, children, actions, onClose, wide = false }) {
       <div className="pass__box">
         <div className="rws-dialog-heading">
           <h2 className="pass__title">{title}</h2>
+          {headingActions}
         </div>
         <div className="rws-dialog-body">{children}</div>
         <div className="pass__actions">{actions}</div>
@@ -265,6 +321,51 @@ function TextField({
   );
 }
 
+function PanelResizer({ label, panelId, className, width, preference, minimum, maximum, defaultWidth, direction, onPreview, onCommit, onResizing }) {
+  const drag = useRef(null), latest = useRef(null);
+  latest.current = { onPreview, onCommit, onResizing };
+  const clamp = value => Math.round(Math.max(minimum, Math.min(maximum, value)));
+  const finish = cancelled => {
+    const current = drag.current;
+    if (!current) return;
+    drag.current = null;
+    latest.current.onResizing(false);
+    if (cancelled) latest.current.onPreview(current.preference);
+    else latest.current.onCommit(current.width);
+    if (current.target.hasPointerCapture(current.pointerId)) current.target.releasePointerCapture(current.pointerId);
+  };
+  useEffect(() => {
+    const cancel = () => finish(true);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("resize", cancel);
+    return () => { cancel(); window.removeEventListener("blur", cancel); window.removeEventListener("resize", cancel); };
+  }, []);
+  return <div className={className} role="separator" aria-label={label} title={label}
+    aria-orientation="vertical" aria-controls={panelId} aria-valuemin={minimum} aria-valuemax={maximum}
+    aria-valuenow={width} aria-valuetext={`${width} pixels`} tabIndex={0}
+    onPointerDown={event => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      event.preventDefault(); event.currentTarget.focus({ preventScroll: true });
+      drag.current = { x: event.clientX, initial: width, width, preference, pointerId: event.pointerId, target: event.currentTarget };
+      onResizing(true); event.currentTarget.setPointerCapture(event.pointerId);
+    }}
+    onPointerMove={event => {
+      const current = drag.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      current.width = clamp(current.initial + direction * (event.clientX - current.x));
+      onPreview(current.width);
+    }}
+    onPointerUp={() => finish(false)} onPointerCancel={() => finish(true)} onLostPointerCapture={() => finish(true)}
+    onDoubleClick={() => onCommit(clamp(defaultWidth))}
+    onKeyDown={event => {
+      if (event.key === "Escape" && drag.current) { event.preventDefault(); event.stopPropagation(); finish(true); }
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || drag.current) return;
+      event.preventDefault();
+      onCommit(clamp(event.key === "Home" ? defaultWidth : event.key === "End" ? maximum : width + direction * (event.key === "ArrowRight" ? 16 : -16)));
+    }}
+  />;
+}
+
 function App() {
   const [fileUrls, setFileUrls] = useState({}), retainedUrls = useRef(new Map());
   const [aiModel, setAiModel] = useState("");
@@ -273,9 +374,32 @@ function App() {
     [doc, setDoc] = useState(null),
     [version, setVersion] = useState(1);
   const [saveState, setSaveState] = useState("loading"),
+    [saveError, setSaveError] = useState(null),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
-  const [pane, setPane] = useState("review"),
+  const [pdfControlsHost, setPdfControlsHost] = useState(null);
+  const pdfViewer = useRef(null), pdfPrintReturn = useRef(false);
+  const [pdfReady, setPdfReady] = useState(false), [printingPdf, setPrintingPdf] = useState(false);
+  const printDisplayedPdf = async () => {
+    if (doc.ats && !doc.ats.layoutAccepted) { setDialog("migration-layout"); return; }
+    setPrintingPdf(true);
+    try {
+      if (!pdfViewer.current) throw new Error("The PDF preview is not available. Reopen it before printing.");
+      await pdfViewer.current.print();
+    } catch (failure) {
+      if (failure.name !== "AbortError") setError(failure.message);
+    } finally {
+      pdfPrintReturn.current = true;
+      setPrintingPdf(false);
+    }
+  };
+  useLayoutEffect(() => {
+    if (!printingPdf && pdfPrintReturn.current) {
+      pdfPrintReturn.current = false;
+      document.querySelector('[aria-label="Print this PDF"]')?.focus();
+    }
+  }, [printingPdf]);
+  const [pane, setPane] = useState("content"),
     [group, setGroup] = useState("Profile"),
     [selectedField, setSelectedField] = useState(null);
   const [libraryOpen, setLibraryOpen] = useState(false),
@@ -293,27 +417,51 @@ function App() {
   const [versions, setVersions] = useState([]),
     [compareVersion, setCompareVersion] = useState(null),
     [proposals, setProposals] = useState([]);
+  const [historyPreview, setHistoryPreview] = useState(false), [historyPdf, setHistoryPdf] = useState(null), [historyPdfBusy, setHistoryPdfBusy] = useState(false), [historyPdfError, setHistoryPdfError] = useState("");
+  const recordedDownloads = useRef(new Set());
+  const downloading = useRef(false);
+  const historyDownload = useRef(null);
+  const [historyLayoutAccepted, setHistoryLayoutAccepted] = useState(false);
+  useEffect(() => setHistoryLayoutAccepted(false), [compareVersion?.number, dialog]);
   const [pageInfo, setPageInfo] = useState({
       width: 794,
       height: 1123,
       pages: 1,
+      pageHeight: 1123,
     }),
+    [currentPage, setCurrentPage] = useState(1),
     [previewHtml, setPreviewHtml] = useState(""),
     [rendering, setRendering] = useState(false),
     [zoom, setZoom] = useState("fit"),
-    [availableWidth, setAvailableWidth] = useState(900);
+    [availableWidth, setAvailableWidth] = useState(900),
+    [availableHeight, setAvailableHeight] = useState(900);
   const [historyTick, setHistoryTick] = useState(0),
     [conflict, setConflict] = useState(null);
   const [legacyConflict, setLegacyConflict] = useState(false);
-  const [rail, setRail] = useState("documents");
   const [libraryView, setLibraryView] = useState(false);
-  const [canvasMode, setCanvasMode] = useState(() => {
-    try { return localStorage.getItem("rk:resume-preview:canvas") === "light" ? "light" : "dark"; } catch { return "dark"; }
-  });
+  const rail = libraryView ? "documents" : "sections";
+  const [leftPane, setLeftPane] = useState("review");
+  const [returnToReview, setReturnToReview] = useState(false);
+  const [inlineEditing, setInlineEditing] = useState(false);
+  const inlineSession = useRef(null), renderedSignature = useRef(""), inlineNext = useRef(null), pendingInlineEdit = useRef(null);
+  const [contactEdit, setContactEdit] = useState(null);
+  const contactPanel = useRef(null), contactReturn = useRef(null);
+  const [focusedFinding, setFocusedFinding] = useState(null);
+  const [previewFieldIds, setPreviewFieldIds] = useState([]);
+  const [findingContextOpen, setFindingContextOpen] = useState(false);
+  const findingContext = useRef(null);
+  const findingContextFocus = useRef(false);
+  const pendingFindingFocus = useRef(false);
+  const pendingFieldScroll = useRef(null);
+  const openReview = () => {
+    setLeftPane("review");
+    setLibraryOpen(true);
+    setSheetOpen(false);
+  };
+  const [canvasMode, setCanvasMode] = useState(readResumeCanvasMode);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [aiConfiguration, setAiConfiguration] = useState(null);
   const [aiConsent, setAiConsent] = useState(false);
-  const [revisionFinding, setRevisionFinding] = useState(null);
   const [aiPacket, setAiPacket] = useState(null);
   const [requirementsConsent, setRequirementsConsent] = useState(false);
   const [evidenceAnswer, setEvidenceAnswer] = useState("");
@@ -323,6 +471,11 @@ function App() {
   const proposalReturn = useRef(null);
   const sourceReturn = useRef(null);
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [pdfPanelVisible, setPdfPanelVisible] = useState(false);
+  const [pdfPanelWidth, setPdfPanelWidth] = useState(340);
+  const [resizingPdfPanel, setResizingPdfPanel] = useState(false);
+  const pdfPanelMaximum = Math.max(240, Math.min(600, viewportWidth - (viewportWidth > 760 ? 440 : 24)));
+  const displayedPdfPanelWidth = Math.min(pdfPanelMaximum, pdfPanelWidth);
   const [inspectorWidth, setInspectorWidth] = useState(() => {
     try {
       const saved = localStorage.getItem("rk:resume-preview:inspector-width");
@@ -331,40 +484,18 @@ function App() {
     } catch { return null; }
   });
   const [resizingInspector, setResizingInspector] = useState(false);
-  const inspectorDrag = useRef(null);
   const inspectorDefault = viewportWidth > 1100 ? 316 : 290;
-  const inspectorMaximum = Math.max(290, Math.min(600, viewportWidth - (viewportWidth > 1100 && !libraryOpen ? 228 : 0) - 400));
+  const inspectorMaximum = Math.max(290, Math.min(600, viewportWidth - (viewportWidth > 1100 ? 340 : 0) - 400));
   const displayedInspectorWidth = Math.max(290, Math.min(inspectorMaximum, inspectorWidth ?? inspectorDefault));
   const storeInspectorWidth = width => {
     const next = Math.max(290, Math.min(inspectorMaximum, width));
     setInspectorWidth(next);
     try { localStorage.setItem("rk:resume-preview:inspector-width", String(next)); } catch {}
   };
-  const cancelInspectorResize = () => {
-    if (!inspectorDrag.current) return;
-    setInspectorWidth(inspectorDrag.current.preference);
-    inspectorDrag.current = null;
-    setResizingInspector(false);
-  };
-  const finishInspectorResize = (event, cancelled = false) => {
-    const drag = inspectorDrag.current;
-    if (!drag) return;
-    if (cancelled) cancelInspectorResize();
-    else {
-      inspectorDrag.current = null;
-      setResizingInspector(false);
-      storeInspectorWidth(drag.width);
-    }
-    if (event.currentTarget.hasPointerCapture(drag.pointerId)) event.currentTarget.releasePointerCapture(drag.pointerId);
-  };
   useEffect(() => {
-    const resize = () => { cancelInspectorResize(); setViewportWidth(window.innerWidth); };
+    const resize = () => setViewportWidth(window.innerWidth);
     window.addEventListener("resize", resize);
-    window.addEventListener("blur", cancelInspectorResize);
-    return () => {
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("blur", cancelInspectorResize);
-    };
+    return () => window.removeEventListener("resize", resize);
   }, []);
   useEffect(() => {
     if (!message || error) return;
@@ -379,6 +510,7 @@ function App() {
     fileInput = useRef(null),
     frame = useRef(null),
     canvas = useRef(null),
+    viewTools = useRef(null),
     navigation = useRef(0);
 
   const refreshLibrary = async () => {
@@ -398,12 +530,14 @@ function App() {
       seq: 0,
       saved: 0,
       label: "",
+      checkpoint: null,
     };
     history.current = createResumeHistory(document);
     setDoc(document);
     setVersion(record.version);
     setHistoryTick((value) => value + 1);
     setSaveState("saved");
+    setSaveError(null);
     setError("");
     setConflict(null);
     setLegacyConflict(false);
@@ -417,6 +551,13 @@ function App() {
     setGroup("Profile");
     setMode("edit");
     setLibraryView(false);
+    setLeftPane("review");
+    setInlineEditing(false); inlineSession.current = null; inlineNext.current = null; pendingInlineEdit.current = null; contactReturn.current = null; setContactEdit(null);
+    setPane("content");
+    setFocusedFinding(null);
+    setPreviewFieldIds([]);
+    setFindingContextOpen(false);
+    pendingFieldScroll.current = null;
     setExported(
       record.exports?.findLast(
         (entry) =>
@@ -444,14 +585,15 @@ function App() {
     const snapshot = structuredClone(live.current.document),
       seq = live.current.seq,
       expected = live.current.version,
-      label = live.current.label;
+      label = live.current.label,
+      checkpointKind = live.current.checkpoint;
     setSaveState("saving");
     const operation = (async () => {
       try {
         const record = await api("resumes/" + snapshot.id, {
           method: "PUT",
           headers: { "If-Match": String(expected) },
-          body: JSON.stringify({ document: snapshot, label }),
+          body: JSON.stringify({ document: snapshot, label, checkpoint: checkpointKind }),
         });
         if (live.current?.document.id === snapshot.id) {
           live.current.version = record.version;
@@ -459,6 +601,7 @@ function App() {
           setVersion(record.version);
           if (live.current.seq === seq) {
             setSaveState("saved");
+            setSaveError(null);
             setError("");
             try {
               localStorage.removeItem(outboxKey(snapshot.id));
@@ -470,6 +613,8 @@ function App() {
                 JSON.stringify({
                   document: live.current.document,
                   version: record.version,
+                  label: live.current.label,
+                  checkpoint: live.current.checkpoint,
                 }),
               );
             } catch {}
@@ -491,6 +636,7 @@ function App() {
       } catch (failure) {
         if (live.current?.document.id === snapshot.id) {
           setSaveState(failure.status === 409 ? "conflict" : "error");
+          setSaveError(failure);
           setError(failure.message);
           if (failure.status === 409) {
             setLegacyConflict(failure.code === 'legacy-conflict');
@@ -513,11 +659,12 @@ function App() {
     if (live.current?.saved !== live.current?.seq) return persist();
     return live.current;
   };
-  const change = (next, label = "Edited resume", recordHistory = true) => {
+  const change = (next, label = "Edited resume", recordHistory = true, checkpointKind = null) => {
     if (!live.current || next.id !== live.current.document.id) return;
     live.current.document = next;
     live.current.seq++;
     live.current.label = label;
+    live.current.checkpoint = checkpointKind;
     if (recordHistory) history.current.record(next);
     else history.current.refresh(next);
     setHistoryTick((value) => value + 1);
@@ -526,7 +673,7 @@ function App() {
     try {
       localStorage.setItem(
         outboxKey(next.id),
-        JSON.stringify({ document: next, version: live.current.version }),
+        JSON.stringify({ document: next, version: live.current.version, label, checkpoint: checkpointKind }),
       );
     } catch {
       setError(
@@ -542,7 +689,28 @@ function App() {
     update(next);
     change(next, label);
   };
+  const acceptInlineEdit = data => {
+    const session = inlineSession.current;
+    if (!session || session.id !== data.fieldId || typeof data.value !== "string") return;
+    const field = resumeFields(live.current.document.model).find(field => field.id === session.id);
+    const value = data.cancel ? session.original : data.value;
+    if (data.cancel && session.recorded) history.current.discard();
+    if (field && value !== field.value) {
+      change(editResumeField(live.current.document, session.id, value), "Edited " + field.label, !session.recorded && !data.cancel);
+      session.recorded = true;
+    }
+    if (data.type === "resume-edit-end") {
+      inlineSession.current = null; inlineNext.current = data.nextField || null;
+      setInlineEditing(false);
+    }
+  };
+  const finishInlineEdit = () => {
+    if (!inlineSession.current) return;
+    const result = frame.current?.contentWindow?.resumeInline?.finish();
+    if (result) acceptInlineEdit(result);
+  };
   const load = async (id, initialContext = null) => {
+    finishInlineEdit();
     const generation = ++navigation.current;
     try {
       await persist();
@@ -557,7 +725,7 @@ function App() {
         pending = JSON.parse(localStorage.getItem(outboxKey(id)));
       } catch {}
       if (pending?.document?.id === id) {
-        change(pending.document, "Recovered unsaved local edits");
+        change(pending.document, pending.label || "Recovered unsaved local edits", true, pending.checkpoint ?? null);
         if (pending.version !== record.version) {
           clearTimeout(saveTimer.current);
           live.current.conflict = true;
@@ -572,6 +740,22 @@ function App() {
         clearTimeout(saveTimer.current); live.current.conflict = true;
         setLegacyConflict(true); setConflict(record); setSaveState('conflict'); setDialog('conflict');
         setError('Legacy ATS copies differ. Recover them as separate variants before saving.');
+      }
+      const review = live.current.document.aiReview, reviewNavigation = context.reviewNavigation;
+      setReturnToReview(!!reviewNavigation?.reviewId);
+      if (reviewNavigation?.editRole && reviewNavigation.reviewId === live.current.document.ats?.reviewId && !context.legacyConflict) {
+        setTargetInput(structuredClone(live.current.document.target));
+        setDialog("target");
+      }
+      if (reviewNavigation?.reviewId === live.current.document.ats?.reviewId && reviewNavigation?.finding && review?.kind === "ats") {
+        const index = review.result?.fixes?.findIndex(finding => JSON.stringify(finding) === JSON.stringify(reviewNavigation.finding)) ?? -1;
+        if (index >= 0) {
+          const proposal = live.current.document.proposals?.find(item => item.findingIndex === index && item.reviewAt === review.at && !live.current.document.dismissed?.includes(item.id));
+          const targets = resumeFindingTargets(review.findings[index], review, resumeFields(live.current.document.model), proposal);
+          pendingFindingFocus.current = true; pendingFieldScroll.current = targets[0];
+          setFocusedFinding(index); setPreviewFieldIds(targets); setSelectedField(null);
+          findingContextFocus.current = true; setFindingContextOpen(true); openReview();
+        }
       }
       return record;
     } catch (failure) {
@@ -627,12 +811,18 @@ function App() {
     };
   }, []);
   useEffect(() => {
-    if (!hostedClient || !doc) return;
+    if (!doc) return;
     let active = true;
+    let transientUrl;
     const source = sources.find(item => item.id === sourceId) || sources.find(item => doc.sourceIds.includes(item.id));
     const files = [];
-    if (source) files.push(["sources/" + source.id, source.type === "application/pdf" ? "application/pdf" : "application/octet-stream"]);
-    if (exported) files.push(["resumes/" + doc.id + "/exports/" + exported.id, "application/pdf"]);
+    if (hostedClient && source) files.push(["sources/" + source.id, source.type === "application/pdf" ? "application/pdf" : "application/octet-stream"]);
+    if (exported?.blob) {
+      const path = "resumes/" + doc.id + "/exports/" + exported.id;
+      transientUrl = URL.createObjectURL(exported.blob);
+      retainedUrls.current.set(path, transientUrl);
+      setFileUrls(Object.fromEntries(retainedUrls.current));
+    } else if (hostedClient && exported) files.push(["resumes/" + doc.id + "/exports/" + exported.id, "application/pdf"]);
     (async () => {
       for (const [path, type] of files) {
         if (retainedUrls.current.has(path)) continue;
@@ -642,10 +832,45 @@ function App() {
         setFileUrls(Object.fromEntries(retainedUrls.current));
       }
     })().catch(failure => { if (active) setError(failure.message); });
-    return () => { active = false; };
+    return () => { active = false; if (transientUrl) { URL.revokeObjectURL(transientUrl); retainedUrls.current.delete("resumes/" + doc.id + "/exports/" + exported.id); } };
   }, [doc?.id, sourceId, sources, exported?.id]);
   useEffect(() => () => { for (const url of retainedUrls.current.values()) URL.revokeObjectURL(url); retainedUrls.current.clear(); }, []);
-  const fileHref = (path, download = false) => hosted ? fileUrls[path] : (path.startsWith("sources/") ? "/__resume/" : "/__resume/api/") + path + (download ? "?download" : "");
+  const fileHref = (path, download = false) => fileUrls[path] || (hosted ? undefined : (path.startsWith("sources/") ? "/__resume/" : "/__resume/api/") + path + (download ? "?download" : ""));
+  useEffect(() => {
+    setHistoryPdf(null); setHistoryPdfError(""); setHistoryPdfBusy(false);
+    if (dialog !== "versions" || !historyPreview || !compareVersion) return;
+    const controller = new AbortController();
+    let url;
+    setHistoryPdfBusy(true);
+    api("resumes/" + doc.id + "/export", { method: "POST", headers: { "If-Match": String(live.current.version) }, body: JSON.stringify({ transient: true, number: compareVersion.number }), signal: controller.signal })
+      .then(entry => {
+        if (controller.signal.aborted) return;
+        if (!entry.blob) throw new Error("The snapshot PDF was not returned.");
+        url = URL.createObjectURL(entry.blob);
+        setHistoryPdf({ entry, url });
+      }).catch(failure => { if (!controller.signal.aborted) setHistoryPdfError(failure.message); })
+      .finally(() => { if (!controller.signal.aborted) setHistoryPdfBusy(false); });
+    return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
+  }, [dialog, historyPreview, compareVersion?.number, doc?.id]);
+  useEffect(() => () => historyDownload.current?.abort(), [dialog, compareVersion?.number, doc?.id]);
+  const downloadBlob = (blob, name) => {
+    const url = URL.createObjectURL(blob), anchor = document.createElement("a");
+    anchor.href = url; anchor.download = name; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  const downloadHistoryPdf = async () => {
+    if (!compareVersion || historyPdfBusy) return;
+    if (compareVersion.document.ats && !compareVersion.document.ats.layoutAccepted && !historyLayoutAccepted) return;
+    const controller = new AbortController(); historyDownload.current = controller;
+    setHistoryPdfBusy(true); setHistoryPdfError("");
+    try {
+      const entry = historyPdf?.entry.version === compareVersion.number ? historyPdf.entry : await api("resumes/" + doc.id + "/export", { method: "POST", headers: { "If-Match": String(live.current.version) }, body: JSON.stringify({ transient: true, number: compareVersion.number }), signal: controller.signal });
+      controller.signal.throwIfAborted();
+      if (!entry.blob) throw new Error("The snapshot PDF was not returned.");
+      downloadBlob(entry.blob, entry.name);
+    } catch (failure) { if (!controller.signal.aborted) setHistoryPdfError(failure.message); }
+    finally { if (!controller.signal.aborted) setHistoryPdfBusy(false); }
+  };
   const downloadOriginal = async (event, source) => {
     if (!hosted) return;
     event.preventDefault();
@@ -656,9 +881,55 @@ function App() {
     } catch (failure) { setError(failure.message); }
   };
   const closeHosted = async () => {
+    finishInlineEdit();
     task.current?.cancel(); setBusy(null);
-    try { await persist(); studioBridge.close(window); } catch (failure) { setError(failure.message); }
+    try { await persist(); studioBridge.close(window); return true; } catch (failure) { setError(failure.message); return false; }
   };
+  useEffect(() => studioBridge?.setLeaveHandler?.(window, closeHosted));
+  const storageIssue = saveError?.message || (saveState === "conflict" ? error || "Compare both versions before saving." : "");
+  const storageFailure = resumeSaveFailureFeedback({ status: saveError?.status, offline: navigator.onLine === false });
+  const storageMessage = conflict ? "A newer version was saved. Compare versions before saving." : storageFailure.message;
+  const storageActionLabel = conflict ? "Compare versions" : storageFailure.actionLabel;
+  const storageBusy = saveState === "saving" || saveState === "pending";
+  const storageAction = () => conflict ? setDialog("conflict") : persist();
+  useLayoutEffect(() => {
+    const viewport = canvas.current, paper = frame.current;
+    if (!viewport || !paper || mode !== "edit" || libraryView) return;
+    const updatePage = () => {
+      const bounds = paper.getBoundingClientRect(), scale = bounds.width / paper.clientWidth;
+      const midpoint = viewport.getBoundingClientRect().top + viewport.clientHeight / 2;
+      let current = 1;
+      paper.contentDocument?.querySelectorAll('.pagedjs_page').forEach((page, index) => {
+        if (bounds.top + page.getBoundingClientRect().top * scale <= midpoint) current = index + 1;
+      });
+      setCurrentPage(current);
+    };
+    const observer = new ResizeObserver(updatePage);
+    observer.observe(viewport);
+    observer.observe(paper);
+    viewport.addEventListener("scroll", updatePage, { passive: true });
+    updatePage();
+    return () => { observer.disconnect(); viewport.removeEventListener("scroll", updatePage); };
+  }, [doc?.id, mode, libraryView, pageInfo, zoom, availableWidth, availableHeight]);
+  useLayoutEffect(() => {
+    if (mode === "pdf" && !libraryView) viewTools.current?.querySelector('[aria-label="Close PDF preview"]')?.focus();
+  }, [mode, libraryView]);
+  useLayoutEffect(() => {
+    if (!viewTools.current) return;
+    const banners = [...document.querySelectorAll('.rws-flash')];
+    if (sharedStorageFeedback) banners.push(...parent.document.querySelectorAll('.resume-save-banner'));
+    const controls = observeResumeViewControls(viewTools.current, banners, sharedStorageFeedback ? window.frameElement : null);
+    return () => controls.dispose();
+  }, [doc?.id, mode, libraryView, storageIssue, error, message]);
+  useEffect(() => {
+    if (!sharedStorageFeedback) return;
+    studioBridge.storageFeedback(window, {
+      state: saveState === "pending" ? "saving" : saveState,
+      text: !doc ? saveState === "error" ? "Resume unavailable" : saveState === "saved" ? "No active resumes" : "Opening resume..." : saveState === "saved" ? "Saved" : saveState === "conflict" ? "Save conflict" : saveState === "error" ? "Not saved" : "Saving...",
+      message: storageIssue ? storageMessage : "",
+      detail: storageIssue, actionLabel: storageIssue ? storageActionLabel : "", busy: storageBusy
+    }, storageAction);
+  });
   const recoverLegacyCopies = async () => {
     if (busy || !live.current) return;
     const id = live.current.document.id;
@@ -678,31 +949,48 @@ function App() {
     finally { if (live.current?.document.id === id) setBusy(null); }
   };
   const signature = doc ? resumeSignature(doc) : "";
-  const applyCanvasMode = () => frame.current?.contentDocument?.documentElement?.style.setProperty("--resume-page-shadow", canvasMode === "light" ? "0 0 0 1px rgba(17,24,39,.04),0 1px 3px rgba(17,24,39,.05),0 18px 30px -18px rgba(17,24,39,.3)" : "0 1px 2px rgba(0,0,0,.2),0 24px 44px -20px rgba(0,0,0,.55)");
+  const applyCanvasMode = () => {
+    if (canvas.current) frame.current?.contentDocument?.documentElement?.style.setProperty("--resume-page-shadow", getComputedStyle(canvas.current).getPropertyValue("--resume-page-shadow"));
+  };
   useEffect(() => {
-    try { localStorage.setItem("rk:resume-preview:canvas", canvasMode); } catch {}
+    saveResumeCanvasMode(canvasMode);
     applyCanvasMode();
   }, [canvasMode, rendering, mode]);
+  useEffect(() => {
+    const sync = event => { if (event.storageArea === localStorage && (event.key === RESUME_CANVAS_STORAGE_KEY || event.key === null)) setCanvasMode(readResumeCanvasMode()); };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
   useEffect(() => {
     if (!doc) return;
     if (!["Profile", "Contact"].includes(group) && !doc.model.sections.some(section => section.id === group)) setGroup("Profile");
     if (selectedField && !resumeFields(doc.model).some(field => field.id === selectedField)) setSelectedField(null);
   }, [signature]);
   useEffect(() => {
-    if (!doc) return;
+    if (!doc || inlineEditing) return;
+    if (signature === renderedSignature.current && frame.current?.contentWindow?.resumeReady?.signature === signature) {
+      setRendering(false);
+      if (inlineNext.current) {
+        const next = inlineNext.current; inlineNext.current = null;
+        requestAnimationFrame(() => frame.current?.contentWindow?.resumeInline?.open(next));
+      }
+      return;
+    }
     setRendering(true);
     const timer = setTimeout(
-      () =>
+      () => {
+        renderedSignature.current = resumeSignature(doc);
         setPreviewHtml(
           renderResumeHtml(doc, {
             interactive: true,
             base: location.origin + "/",
           }),
-        ),
+        );
+      },
       300,
     );
     return () => clearTimeout(timer);
-  }, [signature]);
+  }, [signature, inlineEditing]);
   useEffect(() => {
     const receive = (event) => {
       if (
@@ -710,12 +998,22 @@ function App() {
         event.source !== frame.current?.contentWindow ||
         event.origin !== location.origin ||
         event.data.documentId !== live.current?.document.id ||
-        event.data.signature !== resumeSignature(live.current.document)
+        event.data.signature !== renderedSignature.current
       )
         return;
       if (event.data.type === "resume-ready") {
-        setPageInfo(event.data);
-        setRendering(false);
+        const firstPage = frame.current.contentDocument.querySelector('.pagedjs_page');
+        if (!firstPage) { setError("The resume page could not be measured. Reload the preview to try again."); setRendering(false); return; }
+        const pageStyle = frame.current.contentWindow.getComputedStyle(firstPage.parentElement);
+        setPageInfo({ ...event.data, pageHeight: firstPage.getBoundingClientRect().height + parseFloat(pageStyle.paddingTop) + parseFloat(pageStyle.paddingBottom) });
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          if (renderedSignature.current !== event.data.signature) return;
+          setRendering(false);
+          if (inlineNext.current) {
+            const next = inlineNext.current; inlineNext.current = null;
+            requestAnimationFrame(() => frame.current?.contentWindow?.resumeInline?.open(next));
+          }
+        }));
       }
       if (event.data.type === "resume-error") {
         setError(event.data.message);
@@ -726,13 +1024,28 @@ function App() {
           (field) => field.id === event.data.fieldId,
         );
         if (field) {
-          setPane("content");
-          setRail("sections");
+          setFindingContextOpen(false);
           setGroup(field.group);
           setSelectedField(field.id);
-          setSheetOpen(true);
+          openContact(field.id);
         }
       }
+      if (event.data.type === "resume-edit-start") {
+        const field = resumeFields(live.current.document.model).find(field => field.id === event.data.fieldId);
+        if (!field || field.value !== event.data.value) { setError("This field changed while the page was updating. Reopen it before editing."); setInlineEditing(false); return; }
+        inlineSession.current = { id: field.id, original: field.value, recorded: false };
+        setInlineEditing(true); setFindingContextOpen(false); setContactEdit(null);
+        setGroup(field.group); setSelectedField(field.id); setSheetOpen(false); setLibraryOpen(false);
+        const iframe = frame.current;
+        if (iframe.getBoundingClientRect().width / iframe.clientWidth < 0.8) {
+          setZoom(0.85);
+        }
+      }
+      if (["resume-edit", "resume-edit-end"].includes(event.data.type)) {
+        acceptInlineEdit(event.data);
+      }
+      if (event.data.type === "resume-undo") undo(event.data.redo);
+      if (event.data.type === "resume-edit-exit") document.querySelector(event.data.backwards ? '.rws-workbar button' : '.rws-panel-toggle button[aria-selected="true"]')?.focus();
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
@@ -740,11 +1053,17 @@ function App() {
   useEffect(() => {
     if (!canvas.current) return;
     const observer = new ResizeObserver((entries) => {
-      if (!frame.current?.parentElement.hidden) setAvailableWidth(entries[0].contentRect.width);
+      if (!frame.current?.parentElement.hidden) {
+        setAvailableWidth(entries[0].contentRect.width);
+        setAvailableHeight(entries[0].contentRect.height);
+      }
     });
     observer.observe(canvas.current);
     return () => observer.disconnect();
   }, [!!doc]);
+  useLayoutEffect(() => {
+    if (inlineEditing) frame.current?.contentDocument?.querySelector("[data-inline-field]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [inlineEditing, zoom, availableWidth, availableHeight]);
   useEffect(() => {
     const keyboard = (event) => {
       if (
@@ -809,14 +1128,6 @@ function App() {
       setError(failure.message);
     }
   };
-  const updateField = (fieldId, value) =>
-    change(
-      editResumeField(live.current.document, fieldId, value),
-      "Edited " +
-        (resumeFields(live.current.document.model).find(
-          (field) => field.id === fieldId,
-        )?.label || "text"),
-    );
   const design = (key, value) =>
     mutate((next) => {
       next.design[key] = value;
@@ -832,8 +1143,10 @@ function App() {
       setError("The cited source is no longer available for this resume.");
       return;
     }
+    if (Number.isInteger(proposal.findingIndex)) setFocusedFinding(proposal.findingIndex);
+    setFindingContextOpen(false);
     setProposalVisit({
-      documentId: doc.id, proposalId: proposal.id, findingIndex: trigger.closest("[data-review-finding]") ? proposal.findingIndex : undefined, destination,
+      documentId: doc.id, proposalId: proposal.id, findingIndex: trigger.closest("[data-context-finding],[data-review-finding]") ? proposal.findingIndex : undefined, destination,
       trigger: trigger.dataset.proposalNav, mode, group, selectedField, rail, sourceId, libraryOpen,
       inspectorTop: inspectorContent.current.scrollTop,
       canvasTop: canvas.current.scrollTop, canvasLeft: canvas.current.scrollLeft,
@@ -843,48 +1156,94 @@ function App() {
       setSourceId(source.id);
       setMode("source");
       setSheetOpen(false);
+      setLibraryOpen(false);
     } else {
+      pendingFieldScroll.current = field.id;
+      pendingInlineEdit.current = field.id;
       selectGroup(field.group);
       setSelectedField(field.id);
     }
   };
   const returnToProposal = () => {
     if (!proposalVisit || proposalVisit.documentId !== live.current.document.id) return;
+    finishInlineEdit();
     proposalReturn.current = proposalVisit;
     setMode(proposalVisit.mode);
     setGroup(proposalVisit.group);
     setSelectedField(proposalVisit.selectedField);
-    setRail(proposalVisit.rail);
+    setLibraryView(proposalVisit.rail === "documents");
     setSourceId(proposalVisit.sourceId);
-    setLibraryOpen(proposalVisit.libraryOpen);
-    setPane("review");
-    setSheetOpen(true);
+    if (Number.isInteger(proposalVisit.findingIndex)) setFindingContextOpen(true);
+    openReview();
     setProposalVisit(null);
   };
   useLayoutEffect(() => {
     if (proposalVisit?.destination === "source") {
-      sourceReturn.current?.focus({ preventScroll: true });
+      sourceReturn.current?.querySelector("button")?.focus({ preventScroll: true });
       canvas.current.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
     const saved = proposalReturn.current;
-    if (!saved || pane !== "review" || saved.documentId !== doc?.id) return;
+    if (!saved || leftPane !== "review" || saved.documentId !== doc?.id) return;
     proposalReturn.current = null;
     const proposal = Number.isInteger(saved.findingIndex)
-      ? [...inspectorContent.current.querySelectorAll("[data-review-finding]")].find(element => Number(element.dataset.reviewFinding) === saved.findingIndex)
+      ? findingContext.current?.querySelector('[data-context-finding="' + saved.findingIndex + '"]')
       : [...inspectorContent.current.querySelectorAll("[data-proposal-id]")].find(element => element.dataset.proposalId === saved.proposalId);
     if (proposal) {
-      proposal.querySelector("details").open = saved.evidenceOpen;
+      const details = proposal.querySelector("details"); if (details) details.open = saved.evidenceOpen;
       const trigger = [...proposal.querySelectorAll("[data-proposal-nav]")].find(element => element.dataset.proposalNav === saved.trigger);
       (trigger && !trigger.disabled ? trigger : proposal.querySelector("h4"))?.focus({ preventScroll: true });
     }
     inspectorContent.current.scrollTo({ top: saved.inspectorTop, behavior: "instant" });
     canvas.current.scrollTo({ top: saved.canvasTop, left: saved.canvasLeft, behavior: "instant" });
-  }, [pane, mode, proposalVisit, doc?.id]);
+  }, [leftPane, mode, proposalVisit, findingContextOpen, doc?.id]);
+  useLayoutEffect(() => {
+    if (!pendingFindingFocus.current || leftPane !== "review" || !doc) return;
+    pendingFindingFocus.current = false;
+    const finding = inspectorContent.current?.querySelector('[data-review-finding="' + focusedFinding + '"]');
+    const group = finding?.closest("details"); if (group) group.open = true;
+    finding?.scrollIntoView({ block: "nearest", behavior: "instant" });
+    finding?.querySelector("h4")?.focus({ preventScroll: true });
+  }, [focusedFinding, leftPane, doc?.id]);
+  useEffect(() => {
+    if (rendering || mode !== "edit") return;
+    const document = frame.current?.contentDocument;
+    if (!document) return;
+    document.querySelectorAll(".rws-active-field").forEach(field => field.classList.remove("rws-active-field"));
+    const ids = selectedField ? [selectedField] : previewFieldIds;
+    const fields = ids.flatMap(id => [...document.querySelectorAll('.pagedjs_page [data-field="' + CSS.escape(id) + '"]')]);
+    fields.forEach(field => field.classList.add("rws-active-field"));
+    if (fields.length && ids.includes(pendingFieldScroll.current)) {
+      pendingFieldScroll.current = null;
+      fields[0].scrollIntoView({ block: "center", behavior: "instant" });
+    }
+    if (pendingInlineEdit.current && ids.includes(pendingInlineEdit.current)) {
+      const id = pendingInlineEdit.current; pendingInlineEdit.current = null;
+      frame.current.contentWindow.resumeInline?.open(id);
+    }
+  }, [selectedField, previewFieldIds, rendering, mode]);
+  useLayoutEffect(() => {
+    if (findingContextFocus.current && findingContext.current) {
+      findingContextFocus.current = false;
+      findingContext.current.focus({ preventScroll: true });
+    }
+  });
+  useLayoutEffect(() => {
+    if (!findingContextOpen || mode !== "edit" || rendering || !findingContext.current) return;
+    const panel = findingContext.current, stage = panel.parentElement;
+    return observeResumeContext(panel, stage, () => {
+      const iframe = frame.current;
+      const target = previewFieldIds.map(id => iframe?.contentDocument?.querySelector('.pagedjs_page [data-field="' + CSS.escape(id) + '"]')).find(Boolean);
+      if (!target) return null;
+      const outer = iframe.getBoundingClientRect(), inner = target.getBoundingClientRect();
+      const ratio = outer.width / iframe.clientWidth;
+      return { left: outer.left + inner.left * ratio, right: outer.left + inner.right * ratio,
+        top: outer.top + inner.top * ratio, bottom: outer.top + inner.bottom * ratio };
+    }, frame.current?.contentDocument);
+  }, [findingContextOpen, focusedFinding, previewFieldIds, mode, rendering, zoom, pageInfo, availableWidth, availableHeight]);
   const reviewProposals = () => setProposals(sampleProposals(live.current.document, sources).map(proposal => ({ ...proposal, impact: projectResumeProposal(live.current.document, proposal, sources) })));
-  const openAiReview = async (findingIndex = null) => {
-    if (hosted && !Number.isInteger(findingIndex)) { await openAtsCheck(); return; }
+  const openAiReview = async () => {
+    if (hosted) { await openAtsCheck(); return; }
     setError(""); setAiConsent(false); setRequirementsConsent(false);
-    setRevisionFinding(Number.isInteger(findingIndex) ? findingIndex : null);
     setAiPacket(null); setAiConfiguration(null);
     setDialog("ai-review");
     try { setAiPacket(reviewPacket(live.current.document)); const configuration = hosted ? await studioBridge.configuration(window) : await api("ai/config"); setAiConfiguration(configuration); setAiModel(configuration.models?.find(model => Number.isFinite(model.pricing?.input) && Number.isFinite(model.pricing?.output))?.id || ""); }
@@ -894,7 +1253,7 @@ function App() {
     task.current?.cancel(); task.current = null;
     setBusy(null); setDialog(null); setAiConsent(false);
   };
-  const runAiReview = async (stage, findingIndex) => {
+  const runAiReview = async (stage) => {
     if (busy) return;
     if (!aiConfiguration?.available) { setError("The Studio AI session is not connected."); return; }
     if (!aiConsent || !aiPacket || stage === "assessment" && !requirementsConsent) return;
@@ -919,31 +1278,24 @@ function App() {
         change({ ...live.current.document, reviewManifest: manifest, reviewManifestOriginal: structuredClone(manifest) }, "Inventoried target requirements", false);
         setRequirementsConsent(false);
       } else if (stage === "assessment") {
-        const result = await reviewResumeWithAI(currentTask.snapshot, { ...options, manifest: currentTask.snapshot.reviewManifest });
+        const result = await reviewResumeWithAI(currentTask.snapshot, { ...options, manifest: currentTask.snapshot.reviewManifest, prepareActions: true, sources });
         if (!currentTask.accept(live.current.document, result)) return;
-        change({ ...live.current.document, aiReview: result, aiQuestion: null, aiResolution: null }, "Reviewed role evidence", false);
-        setDialog(null); setPane("review"); setSheetOpen(true);
-      } else {
-        const result = await reviseResumeWithAI(currentTask.snapshot, { ...options, review: currentTask.snapshot.aiReview, findingIndex, sources });
-        if (!currentTask.accept(live.current.document, {})) return;
-        if (result.kind === "question") {
-          change({ ...live.current.document, aiQuestion: result, aiResolution: null }, "Recorded an evidence question", false);
-          setEvidenceAnswer("");
-        } else if (result.kind === "supported") {
-          change({ ...live.current.document, aiResolution: result, aiQuestion: null }, "Recorded a cited no-revision recommendation", false);
-        } else {
-          const nextProposals = [...proposals.filter(proposal => proposal.findingIndex !== findingIndex || proposal.origin !== "ai"), result.proposal];
-          setProposals(nextProposals);
-          change({ ...live.current.document, proposals: nextProposals, aiQuestion: null, aiResolution: null }, "Prepared a selective revision", false);
-        }
-        setDialog(null); setAiConsent(false);
+        const nextProposals = [...proposals.filter(proposal => proposal.origin !== "ai"), ...result.actions.filter(action => action?.kind === "revision").map(action => action.proposal)];
+        setProposals(nextProposals);
+        change({ ...live.current.document, aiReview: result, proposals: nextProposals, aiQuestion: null, aiResolution: null }, "Reviewed role evidence and prepared revisions", false);
+        setDialog(null); setFocusedFinding(null); setFindingContextOpen(false); setPreviewFieldIds([]); openReview();
       }
       await persist();
     } catch (failure) { if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message); }
     finally { if (task.current === currentTask) { setBusy(null); task.current = null; } }
   };
-  const saveEvidenceAnswer = async () => {
+  const canAnswerQuestion = question => {
+    const document = live.current.document, review = document.aiReview;
+    return !!question && (question.reviewAt === undefined || question.reviewAt === review?.at) && (question.signature === resumeSignature(document) || !!review && question.signature === review.signature && canReviseReview(document, review));
+  };
+  const saveEvidenceAnswer = async (question = doc.aiQuestion) => {
     if (busy || !evidenceAnswer.trim()) return;
+    if (!canAnswerQuestion(question)) { setError("The resume or review changed. Review again before answering this question."); return; }
     const currentTask = createResumeTask(live.current.document);
     task.current?.cancel(); task.current = currentTask;
     setBusy("evidence"); setError("");
@@ -952,13 +1304,13 @@ function App() {
       const bytes = new TextEncoder().encode(text);
       const source = await api("sources", { method: "POST", signal: currentTask.signal, body: JSON.stringify({ name: "Author evidence.txt", type: "text/plain", text, base64: btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join("")) }) });
       if (task.current !== currentTask || !currentTask.accept(live.current.document, source)) return;
-      change({ ...live.current.document, sourceIds: [...new Set([...live.current.document.sourceIds, source.id])], evidenceAnswers: [...(live.current.document.evidenceAnswers || []), { question: currentTask.snapshot.aiQuestion, sourceId: source.id, at: Date.now() }], aiQuestion: null }, "Added author evidence");
+      change({ ...live.current.document, sourceIds: [...new Set([...live.current.document.sourceIds, source.id])], evidenceAnswers: [...(live.current.document.evidenceAnswers || []), { question, sourceId: source.id, at: Date.now() }], aiQuestion: null }, "Added author evidence");
       await persist();
       if (task.current !== currentTask || currentTask.signal.aborted) return;
       await refreshLibrary();
       if (task.current !== currentTask || currentTask.signal.aborted) return;
       setEvidenceAnswer("");
-      setMessage("Evidence saved. Request a revision for the finding; the earlier review remains historical.");
+      setMessage("Answer saved. Review again to include this fact in the proposed revisions; your resume wording is unchanged.");
     } catch (failure) { if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message); }
     finally { if (task.current === currentTask) { setBusy(null); task.current = null; } }
   };
@@ -967,13 +1319,15 @@ function App() {
     const documentId = live.current.document.id;
     setBusy("finding-decision"); setError("");
     try {
-      change(decideResumeFinding(live.current.document, review, findingIndex, choice), choice.reason === "reopen" ? "Reopened review finding" : "Recorded author review decision");
+      change(decideResumeFinding(live.current.document, review, findingIndex, choice), choice.reason === "reopen" ? "Restored archived suggestion" : "Archived review suggestion");
       await persist();
       if (live.current.document.id !== documentId) return;
-      setDialog(null); setFindingDecision(null);
+      setDialog(null); setFindingDecision(null); setFindingContextOpen(false);
+      openReview();
       requestAnimationFrame(() => {
         const row = inspectorContent.current?.querySelector('[data-review-finding="' + findingIndex + '"]');
-        const group = row?.closest(".rws-set-aside"); if (group) group.open = true;
+        const group = row?.closest("details"); if (group) group.open = true;
+        row?.scrollIntoView({ block: "nearest" });
         row?.querySelector("h4")?.focus({ preventScroll: true });
       });
     } catch (failure) { if (live.current.document.id === documentId) setError(failure.message); }
@@ -992,12 +1346,13 @@ function App() {
       const nextProposals = [...proposals, proposal];
       setProposals(nextProposals);
       change({ ...live.current.document, proposals: nextProposals }, "Prepared a manual revision");
-      setPane("review"); setSheetOpen(true); setDialog(null); setError("");
+      openReview(); setDialog(null); setError("");
     } catch (failure) { setError(failure.message); }
   };
-  const checkpoint = async label => {
+  const checkpoint = async (label, kind = null, expectedSignature = null) => {
     await persist();
-    change(structuredClone(live.current.document), label, false);
+    if (expectedSignature && resumeSignature(live.current.document) !== expectedSignature) throw new Error("The resume changed before download. Preview the current version again.");
+    change(structuredClone(live.current.document), label, false, kind);
     await persist();
   };
   const applyProposal = async proposal => {
@@ -1014,8 +1369,29 @@ function App() {
       change(next, "Applied: " + proposal.title);
       setProposals(previous => previous.filter(item => item.id !== proposal.id));
       await persist();
-      setMessage("Applied the reviewed change. The preceding version is saved in history.");
+      setMessage("Applied the reviewed change. You can Undo to keep the original.");
     } catch (failure) { setError(failure.message); }
+    finally { setBusy(null); }
+  };
+  const applyCandidateRevision = async ({ revision, snapshot, assessment, signal }) => {
+    if (busy) throw new Error("Another editor operation is still running.");
+    setBusy("candidate-revision"); setError("");
+    try {
+      const result = await commitAssessmentRevision({ revision, snapshot, assessment, signal, confirmed: true,
+        getRecord: () => ({ document: live.current.document, version: live.current.version }),
+        checkpoint: async label => {
+          await checkpoint(label);
+          return { document: live.current.document, version: live.current.version };
+        },
+        save: async (next, options) => {
+          signal.throwIfAborted();
+          if (live.current.version !== options.expectedVersion || resumeSignature(live.current.document) !== options.expectedSignature) throw new Error("The resume changed before Apply. Nothing was replaced.");
+          change(next, options.label); await persist();
+          return { document: live.current.document, version: live.current.version };
+        } });
+      setMessage("Applied the reviewed candidate revision. The preceding version and claim evidence are saved; recheck explicitly when ready.");
+      return result;
+    } catch (failure) { setError(failure.message); throw failure; }
     finally { setBusy(null); }
   };
   const openAtsCheck = async () => {
@@ -1025,55 +1401,76 @@ function App() {
   };
   const runHostedAssessment = async () => {
     if (busy || !aiConsent || !aiConfiguration?.available) return;
+    if (aiConfiguration.reviewResponseVersion !== 1) { setError("Studio needs to be reopened before this updated review can run. No AI request was made."); return; }
     const currentTask = createResumeTask(live.current.document);
     task.current?.cancel(); task.current = currentTask;
     setBusy('ats-check'); setError('');
     try {
       await persist();
       if (task.current !== currentTask || !currentTask.accept(live.current.document, {})) return;
-      const artifact = await api('resumes/' + currentTask.snapshot.id + '/export', { method: 'POST', headers: { 'If-Match': String(live.current.version) }, body: '{}', signal: currentTask.signal });
+      const artifact = await api('resumes/' + currentTask.snapshot.id + '/export', { method: 'POST', headers: { 'If-Match': String(live.current.version) }, body: '{"transient":true}', signal: currentTask.signal });
       if (!currentTask.accept(live.current.document, artifact)) return;
       setExported(artifact);
-      const result = await studioBridge.assess(currentTask.snapshot, artifact.id, window, currentTask.signal);
+      const { blob, ...entry } = artifact;
+      const result = await studioBridge.assess(currentTask.snapshot, { entry, bytes: new Uint8Array(await blob.arrayBuffer()) }, window, currentTask.signal);
       if (!currentTask.accept(live.current.document, result)) return;
       const assessment = assessResume(currentTask.snapshot, { pages: artifact.pages, complete: true, fields: artifact.verification.fields, extractedText: artifact.extractedText, layout: artifact.layout, renderVersion: artifact.renderVersion });
-      const aiReview = { ...atsEditorReview(currentTask.snapshot, result), provider: result.provider, model: result.model };
-      change({ ...live.current.document, assessment, aiReview, aiQuestion: null, aiResolution: null }, 'ATS checked current PDF', false);
+      const aiReview = atsEditorReview(currentTask.snapshot, result, { sources });
+      const nextProposals = [...proposals.filter(proposal => proposal.origin !== "ai"), ...(aiReview.actions || []).filter(action => action?.kind === "revision").map(action => action.proposal)];
+      setProposals(nextProposals);
+      change({ ...live.current.document, assessment, aiReview, proposals: nextProposals, aiQuestion: null, aiResolution: null }, 'ATS checked current PDF', false);
       await persist();
       if (task.current !== currentTask || currentTask.signal.aborted) return;
-      setDialog(null); setPane('review'); setSheetOpen(true); setMessage('ATS check saved for this resume and target.');
+      setDialog(null); setFocusedFinding(null); setFindingContextOpen(false); setPreviewFieldIds([]); openReview(); setMessage('ATS check saved for this resume and target.');
     } catch (failure) { if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message); }
     finally { if (task.current === currentTask) { task.current = null; setBusy(null); } }
   };
-  const runAssessment = async () => {
-    if (hosted) { await openAtsCheck(); return; }
-    const currentTask = createResumeTask(live.current.document);
-    task.current?.cancel();
-    task.current = currentTask;
-    const result = await Promise.resolve(
-      assessResume(
-        currentTask.snapshot,
-        exported?.signature === currentTask.signature && exported.renderVersion === RESUME_RENDER_VERSION
-          ? {
-              pages: exported.pages,
-              complete: exported.verification.complete,
-              fields: exported.verification.fields,
-              extractedText: exported.extractedText,
-              layout: exported.layout,
-              renderVersion: exported.renderVersion,
-            }
-          : null,
-      ),
-    );
-    const accepted = currentTask.accept(live.current.document, result);
-    if (accepted) {
-      change(
-        { ...live.current.document, assessment: accepted },
-        "Assessed current version",
-        false,
-      );
-      setMessage("Local checks updated for this version.");
+  const prepareCandidateExport = async (signal) => {
+    signal.throwIfAborted();
+    await persist();
+    signal.throwIfAborted();
+    const { document, version } = structuredClone(live.current);
+    const signature = resumeSignature(document);
+    const previewReady = frame.current?.contentWindow?.resumeReady;
+    if (previewReady?.signature === signature && !previewReady.hasPlaceholders && previewReady.layoutError) throw new Error(previewReady.layoutError);
+    const current = () => {
+      signal.throwIfAborted();
+      if (live.current.version !== version || resumeSignature(live.current.document) !== signature) throw new Error("The document changed while preparing the PDF. Prepare the current version again.");
+    };
+    const { blob: exportedBlob, ...entry } = await api("resumes/" + document.id + "/export", {
+      method: "POST", headers: { "If-Match": String(version), ...(hosted && previewReady?.signature === signature && !previewReady.hasPlaceholders ? { "X-Resume-Pages": String(pageInfo.pages) } : {}) },
+      body: '{"transient":true}', signal,
+    });
+    current();
+    const path = "resumes/" + document.id + "/exports/" + entry.id;
+    let blob;
+    if (exportedBlob) blob = exportedBlob;
+    else if (hosted) blob = await hostedClient.file(path, "application/pdf", { signal });
+    else {
+      const response = await fetch(fileHref(path), { signal });
+      if (!response.ok) throw new Error("The checked PDF could not be read.");
+      blob = await response.blob();
     }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    current();
+    return { document, version, entry, bytes };
+  };
+  const downloadCurrentPdf = async (entry = exported) => {
+    if (!entry || downloading.current || busy && busy !== "pdf") return;
+    downloading.current = true;
+    setError("");
+    try {
+      if (entry.signature !== resumeSignature(live.current.document)) throw new Error("The resume changed. Preview the current version before downloading.");
+      if (!entry.blob) throw new Error("The PDF is no longer available. Preview it again.");
+      if (!recordedDownloads.current.has(entry.id)) {
+        await checkpoint("PDF exported", "export", entry.signature);
+        recordedDownloads.current.add(entry.id);
+      }
+      if (entry.signature !== resumeSignature(live.current.document)) throw new Error("The resume changed before download. Preview the current version again.");
+      downloadBlob(entry.blob, entry.name);
+      await refreshLibrary();
+    } catch (failure) { setError(failure.message); }
+    finally { downloading.current = false; }
   };
   const renderPdf = async (download = false) => {
     let currentTask;
@@ -1085,13 +1482,14 @@ function App() {
       setBusy("pdf");
       setError("");
       const previewReady = frame.current?.contentWindow?.resumeReady;
-      if (previewReady?.signature === currentTask.signature && previewReady.layoutError) throw new Error(previewReady.layoutError);
-      const result = await api(
+      if (previewReady?.signature === currentTask.signature && !previewReady.hasPlaceholders && previewReady.layoutError) throw new Error(previewReady.layoutError);
+      const result = exported?.blob && exported.signature === currentTask.signature && exported.renderVersion === RESUME_RENDER_VERSION ? exported : await api(
         "resumes/" + currentTask.snapshot.id + "/export",
         {
           method: "POST",
-          headers: { "If-Match": String(live.current.version), ...(hosted && frame.current?.contentWindow?.resumeReady?.signature === currentTask.signature ? { "X-Resume-Pages": String(pageInfo.pages) } : {}) },
-          body: "{}",
+          headers: { "If-Match": String(live.current.version), ...(hosted && previewReady?.signature === currentTask.signature && !previewReady.hasPlaceholders ? { "X-Resume-Pages": String(pageInfo.pages) } : {}) },
+          body: '{"transient":true}',
+          signal: currentTask.signal,
         },
       );
       if (!currentTask.accept(live.current.document, result)) {
@@ -1121,13 +1519,7 @@ function App() {
       );
       if (download && live.current.document.ats && !live.current.document.ats.layoutAccepted) setDialog('migration-layout');
       else if (download) {
-        const anchor = document.createElement("a");
-        const path = "resumes/" + currentTask.snapshot.id + "/exports/" + result.id;
-        const temporary = hosted ? URL.createObjectURL(await hostedClient.file(path, "application/pdf")) : null;
-        anchor.href = temporary || fileHref(path, true);
-        anchor.download = result.name;
-        anchor.click();
-        if (temporary) setTimeout(() => URL.revokeObjectURL(temporary), 60000);
+        await downloadCurrentPdf(result);
       }
       setMessage(
         result.pages + (result.pages === 1 ? " page verified. " : " pages verified. ") + "Every authored field is present.",
@@ -1142,8 +1534,10 @@ function App() {
     try {
       await persist();
       const record = await api("resumes/" + doc.id);
-      setVersions([...record.versions].reverse());
-      setCompareVersion(null);
+      const checkpoints = resumeHistoryCheckpoints(record).reverse();
+      setVersions(checkpoints);
+      setCompareVersion(checkpoints[0] || null);
+      setHistoryPreview(false);
       setInput("");
       setDialog("versions");
     } catch (failure) {
@@ -1157,10 +1551,13 @@ function App() {
         headers: { "If-Match": String(live.current.version) },
         body: JSON.stringify({ number }),
       });
+      const restoredHistory = history.current;
+      restoredHistory.record(record.document);
       install(record);
+      history.current = restoredHistory;
       await refreshLibrary();
       setDialog(null);
-      setMessage("Restored version " + number + " as a new version.");
+      setMessage("Restored checkpoint v" + number + ". You can Undo to return to the previous draft.");
     } catch (failure) {
       setError(failure.message);
     }
@@ -1226,43 +1623,71 @@ function App() {
         selected.groups.push({ id, label: "", items: [] });
       else selected.items.push({ id, title: "", meta: "" });
     }, "Added entry");
-  const moveSection = (direction) =>
-    mutate((next) => {
-      const index = next.model.sections.findIndex(
-          (section) => section.id === group,
-        ),
-        target = index + direction;
-      if (target < 0 || target >= next.model.sections.length) return;
-      const [section] = next.model.sections.splice(index, 1);
-      next.model.sections.splice(target, 0, section);
-    }, "Reordered section");
   const selectGroup = (id) => {
     setGroup(id);
     setSelectedField(null);
     setPane("content");
-    setRail("sections");
+    setLibraryView(false);
     setLibraryOpen(false);
-    setSheetOpen(true);
+    setSheetOpen(false);
     setMode("edit");
   };
-  const moveEntry = (sectionId, entryId, direction) =>
-    mutate((next) => {
-      const section = next.model.sections.find((item) => item.id === sectionId),
-        entries = section.groups || section.items;
-      const index = entries.findIndex((item) => item.id === entryId),
-        target = index + direction;
-      if (index < 0 || target < 0 || target >= entries.length) return;
-      const [entry] = entries.splice(index, 1);
-      entries.splice(target, 0, entry);
-    }, "Reordered entry");
-  const removeEntry = (sectionId, entryId) => {
-    mutate((next) => {
-      const section = next.model.sections.find((item) => item.id === sectionId),
-        key = section.groups ? "groups" : "items";
-      section[key] = section[key].filter((item) => item.id !== entryId);
-    }, "Removed entry");
-    setSelectedField(null);
+  const selectDocumentField = (id, fieldId) => {
+    setGroup(id); setSelectedField(fieldId); setFindingContextOpen(false);
+    setMode("edit"); pendingFieldScroll.current = fieldId;
   };
+  const openContact = (fieldId = null) => {
+    const document = live.current.document;
+    const field = fieldId && resumeFields(document.model).find(field => field.id === fieldId);
+    const link = document.model.contact.links.find(link => fieldId === link.id + ".label" || fieldId === link.id + ".url");
+    setFindingContextOpen(false); setSheetOpen(false); setLibraryOpen(false);
+    setContactEdit({ fieldId, kind: link ? "link" : field?.group === "Contact" ? field.key : field ? "detail" : ['email', 'phone', 'location'].find(key => !document.model.contact[key]) || "link", linkId: link?.id, label: link?.label || "", value: link?.url || field?.value || "" });
+  };
+  const saveContact = (remove = false) => {
+    try {
+      const edit = contactEdit;
+      let value = edit.value.trim();
+      if (!remove && edit.kind === "link") {
+        value = resumeHref(value);
+        if (!/^https?:\/\//.test(value)) throw new Error("Enter a valid website address.");
+      }
+      mutate(next => {
+        if (edit.kind === "link") {
+          const links = next.model.contact.links;
+          if (remove) {
+            next.model.contact.links = links.filter(link => link.id !== edit.linkId);
+            if (next.model.contact.order) next.model.contact.order = next.model.contact.order.filter(id => id !== edit.linkId);
+          } else if (edit.linkId) Object.assign(links.find(link => link.id === edit.linkId), { label: edit.label.trim(), url: value });
+          else links.push({ id: crypto.randomUUID(), label: edit.label.trim(), url: value });
+        } else if (edit.kind === "detail") {
+          const field = resumeFields(next.model).find(field => field.id === edit.fieldId);
+          if (!field) throw new Error("This link no longer exists.");
+          if (!remove && !/^https?:\/\//.test(resumeHref(value))) throw new Error("Enter a valid website address.");
+          field.owner[field.key] = remove ? "" : value;
+        } else next.model.contact[edit.kind] = remove ? "" : value;
+      }, remove ? "Removed contact detail" : "Updated contact detail");
+      contactReturn.current = { fieldId: remove ? null : edit.fieldId };
+      setContactEdit(null);
+    } catch (failure) { setError(failure.message); }
+  };
+  const closeContact = () => { contactReturn.current = { fieldId: contactEdit.fieldId }; setContactEdit(null); };
+  useLayoutEffect(() => {
+    if (contactEdit || rendering || !contactReturn.current || renderedSignature.current !== signature) return;
+    const target = [...(frame.current?.contentDocument?.querySelectorAll(".pagedjs_page [data-field]") || [])].find(node => node.dataset.field === contactReturn.current.fieldId);
+    contactReturn.current = null;
+    (target || document.querySelector('.rws-panel-toggle button[aria-selected="true"]'))?.focus({ preventScroll: true });
+  }, [contactEdit, rendering, signature]);
+  useLayoutEffect(() => {
+    if (!contactEdit || !contactPanel.current) return;
+    const panel = contactPanel.current;
+    panel.querySelector("input,select")?.focus({ preventScroll: true });
+    return observeResumeContext(panel, panel.parentElement, () => {
+      const iframe = frame.current, target = [...(iframe?.contentDocument?.querySelectorAll(".pagedjs_page [data-field]") || [])].find(node => node.dataset.field === contactEdit.fieldId);
+      if (!target) return null;
+      const outer = iframe.getBoundingClientRect(), inner = target.getBoundingClientRect(), ratio = outer.width / iframe.clientWidth;
+      return { left: outer.left + inner.left * ratio, right: outer.left + inner.right * ratio, top: outer.top + inner.top * ratio, bottom: outer.top + inner.bottom * ratio };
+    }, frame.current?.contentDocument);
+  }, [!!contactEdit, contactEdit?.fieldId, rendering, zoom, pageInfo, availableWidth, availableHeight]);
   const importFile = async (file) => {
     if (!file) return;
     const currentTask = createResumeTask(live.current.document), generation = navigation.current;
@@ -1386,7 +1811,7 @@ function App() {
         if (!isCurrent()) return;
       }
       setSourceId(source.id);
-      setPane("sources");
+      openReview();
       setDialog(null);
       setImported(null);
       setMessage("Original bytes retained. No AI rewrite was applied.");
@@ -1414,13 +1839,15 @@ function App() {
       </main>
     );
   const fields = resumeFields(doc.model),
-    currentSection = doc.model.sections.find((section) => section.id === group),
-    assessment = doc.assessment,
-    fresh = assessment?.methodVersion === 1 && assessment.signature === signature && (!assessment.pdf || assessment.pdf.renderVersion === RESUME_RENDER_VERSION);
-  const scale =
-    zoom === "fit"
-      ? Math.max(0.25, Math.min(1, (availableWidth - 48) / pageInfo.width))
-      : zoom;
+    currentSection = doc.model.sections.find((section) => section.id === group);
+  const widthScale = Math.min(1, Math.max(1, availableWidth) / pageInfo.width);
+  const scale = zoom === "page" ? Math.min(widthScale, Math.max(1, availableHeight) / pageInfo.pageHeight)
+    : zoom === "fit" ? widthScale : zoom;
+  const fitLabel = zoom === "page" ? "Fit width" : "Fit page";
+  const toggleFit = () => {
+    setZoom(zoom === "page" ? "fit" : "page");
+    canvas.current?.scrollTo(0, 0);
+  };
   const linkedSources = sources.filter((source) =>
       doc.sourceIds.includes(source.id),
     ),
@@ -1429,8 +1856,6 @@ function App() {
   const currentRow = library.find((row) => row.document.id === doc.id);
   const answerSources = new Set((doc.evidenceAnswers || []).map(answer => answer.sourceId));
   const originalFiles = linkedSources.filter(source => !answerSources.has(source.id));
-  const revisionEvidence = linkedSources.filter(source => answerSources.has(source.id));
-  const availableSources = sources.filter(source => !doc.sourceIds.includes(source.id));
   const visibleLibrary = library.filter(
     (row) =>
       !!row.document.archived === archived &&
@@ -1439,11 +1864,19 @@ function App() {
         .includes(search.toLowerCase()),
   );
   const tabs = [
-    ["content", List, "Content"],
+    ["content", List, "Document"],
     ["design", Settings2, "Design"],
-    ["review", ScanText, "Review"],
-    ["sources", BookOpen, "Sources"],
   ];
+  const atsReview = doc.aiReview?.kind === "ats" ? doc.aiReview : null;
+  const hasAtsScore = typeof atsReview?.score === "number" && Number.isFinite(atsReview.score);
+  const reviewedTarget = atsReview?.target || doc.target;
+  const scoreContext = reviewedTarget.company || reviewedTarget.role;
+  const reviewHeading = (
+    <div className="rws-panel-heading rws-review-heading">
+      <h2>Review</h2>
+      <IconButton icon={X} label="Close navigation" className="rws-small-screen" onClick={() => setLibraryOpen(false)} />
+    </div>
+  );
   const indicator =
     saveState === "saved" ? (
       <CheckCheck size={15} />
@@ -1452,203 +1885,114 @@ function App() {
     ) : (
       <LoaderCircle size={15} className="is-spinning" />
     );
-  const fieldInput = (field) => (
-    <TextField
-      key={field.id}
-      label={field.label}
-      value={field.value}
-      onChange={(value) => updateField(field.id, value)}
-      multiline={
-        ["summary", "Achievement"].includes(
-          field.id === "summary" ? field.id : field.label,
-        ) ||
-        field.id.endsWith(".text") ||
-        field.key === "items"
-      }
-      selected={selectedField === field.id}
-      data-field-input={field.id}
-    />
-  );
-  const entryFields = (entry) =>
-    fields.filter(
-      (field) => field.owner === entry || entry.bullets?.includes(field.owner),
-    );
+  const saveStatus = !sharedStorageFeedback && <div className={"rws-status is-" + saveState + (mode === "pdf" ? " rws-pdf-summary" : "")}>
+    <span className="rws-save-status" role="status" aria-live="polite" title={saveState === "error" ? "Edits retained locally. Retry saving before leaving." : saveState === "conflict" ? "Edits retained. Compare versions before leaving." : undefined}>
+      {indicator}
+      <span>{saveState === "saved" ? "Saved" : saveState === "conflict" ? "Save conflict" : saveState === "error" ? "Not saved" : "Saving..."}</span>
+    </span>
+  </div>;
   const reviewFindings = resumeReviewFindings(doc);
+  const archivedSuggestions = [...(doc.reviewDecisions || [])].sort((first, second) => second.at - first.at);
+  const findingProposals = new Map(reviewFindings.map(({ index }) => [
+    index, proposals.find(proposal => proposal.findingIndex === index && proposal.reviewAt === doc.aiReview?.at && !doc.dismissed?.includes(proposal.id)),
+  ]));
+  const contextualProposalIds = new Set([...findingProposals.values()].filter(Boolean).map(proposal => proposal.id));
+  const standaloneProposals = proposals.filter(proposal => !doc.dismissed?.includes(proposal.id) && !contextualProposalIds.has(proposal.id));
+  const pdfSummary = exported ? `${exported.signature === signature && exported.renderVersion === RESUME_RENDER_VERSION ? "Current" : "Historical"} PDF / v${exported.version} / ${exported.pages} pages / ${fileSize(exported.bytes)} / ${exported.verification.fields} fields verified` : "";
+  const reviewSections = resumeReviewSections(reviewFindings.filter(item => !item.decision), doc.aiReview);
+  const selectedReviewFinding = reviewFindings.find(item => item.index === focusedFinding);
+  const reviewKeywords = doc.aiReview?.result?.keywords;
+  const missingSkills = [...new Set((reviewKeywords?.missing || []).filter(term => typeof term === "string" && term.trim()))];
+  const coveredSkills = [...new Set((reviewKeywords?.present || []).filter(term => typeof term === "string" && term.trim()))];
+  const renderEvidenceQuestion = (question = doc.aiQuestion) => <section className="rws-evidence-question"><h4>A little more context</h4><p>{question.question}</p><p>{question.reason}</p><TextField label="Your answer" multiline value={evidenceAnswer} onChange={setEvidenceAnswer} /><button className="rws-secondary" disabled={!!busy || !evidenceAnswer.trim() || !canAnswerQuestion(question)} onClick={() => saveEvidenceAnswer(question)}><Plus size={13} />Save answer</button></section>;
   const renderSource = source => <article className="rws-source" data-source-id={source.id} key={source.id}>
-    <div className="rws-source-heading"><FileText size={19} /><strong>{source.name}</strong><input type="checkbox" aria-label={"Use evidence from " + source.name} checked={doc.sourceIds.includes(source.id)} onChange={event => {
-      const checked = event.target.checked;
-      mutate(next => { next.sourceIds = checked ? [...new Set([...next.sourceIds, source.id])] : next.sourceIds.filter(id => id !== source.id); }, "Changed evidence selection");
-      requestAnimationFrame(() => {
-        const checkbox = inspectorContent.current?.querySelector('[data-source-id="' + source.id + '"] input');
-        const library = checkbox?.closest('.rws-available-sources'); if (library) library.open = true;
-        checkbox?.focus();
-      });
-    }} /></div>
+    <div className="rws-source-heading"><FileText size={19} /><strong>{source.name}</strong></div>
     <small>{fileSize(source.size)} / {source.text.length.toLocaleString()} characters</small>
     <div className="rws-inline-actions">
-      <button className="rws-text-button" onClick={() => { setSourceId(source.id); setMode("source"); setSheetOpen(false); }}>View original<ExternalLink size={13} /></button>
+      <button className="rws-text-button" onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); setSourceId(source.id); setMode("source"); setSheetOpen(false); setLibraryOpen(false); }}>View original<ExternalLink size={13} /></button>
+      <button className="rws-text-button" disabled={!!busy} onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); fileInput.current.click(); }}>Reupload source<Upload size={13} /></button>
       <a className="rws-text-button" href={fileHref("sources/" + source.id, true)} onClick={event => downloadOriginal(event, source)} download>Download<Download size={13} /></a>
     </div>
-    <details className="rws-source-provenance"><summary>Provenance</summary>
-      <p>{answerSources.has(source.id) ? "Author statement" : "Original uploaded file"} / {time(source.at)}</p>
-      <span className="rws-hash" title={source.sha256}>SHA-256 {source.sha256}</span>
-      {(doc.evidenceAnswers || []).filter(answer => answer.sourceId === source.id).map((answer, index) => <p key={index}>{answer.question?.question}</p>)}
-    </details>
   </article>;
-  const renderFinding = ({ finding, index, decision }) => {
+  const renderFinding = ({ finding, index, decision }, contextual = false) => {
     const criterion = doc.aiReview.breakdown.find(part => part.id === finding.criterionId);
-    const requirement = doc.aiReview.manifest?.requirements.find(item => item.id === finding.criterionId);
-    const resolution = doc.aiResolution?.reviewAt === doc.aiReview.at && doc.aiResolution.findingIndex === index ? doc.aiResolution : null;
-    return <section className="rws-review-finding" key={index} data-review-finding={index}>
-      <h4 tabIndex={-1}>{criterion.label}</h4><small>{decision ? "Set aside / " + REVIEW_DECISION_REASONS[decision.reason] : finding.priority + " priority / " + (criterion.status === "absent" ? "not evidenced" : criterion.status)}</small>
-      <p className="rws-finding-action">{finding.action}</p>
-      {doc.aiReview.kind === 'ats' && <>{finding.fieldIds.length === 1 ? <button className="rws-text-button" onClick={event => visitProposal({ id: 'finding-' + index, findingIndex: index, signature, fieldId: finding.fieldIds[0] }, 'field', event.currentTarget)}><Pencil size={13} />Edit affected field</button> : <p className="rws-inline-warning">No unique field match. Choose the relevant field before editing.</p>}{finding.replacement && <details><summary>Earlier suggested wording / not applied</summary><p>{finding.replacement}</p></details>}</>}
-      <details className="rws-finding-context">
-        <summary>Rationale and evidence</summary>
-        {requirement && <div className="rws-review-passage"><small>Job requirement</small><blockquote>{requirement.quote}</blockquote></div>}
-        <p>{criterion.reason}</p>
-        {criterion.evidence.map(excerpt => {
-          const field = fields.find(field => field.id === excerpt.fieldId);
-          return <div className="rws-review-passage" key={excerpt.id}>
-            {excerpt.context?.entry && <small>{excerpt.context.entry}{excerpt.context.organization ? " / " + excerpt.context.organization : ""}</small>}
-            <blockquote>{excerpt.text}</blockquote>
-            <button className="rws-text-button" data-proposal-nav={"finding:" + excerpt.id} disabled={!field} title={field ? "Open " + field.label : "Cited field is no longer available"} onClick={event => visitProposal({ id: "finding-" + index, findingIndex: index, signature, fieldId: excerpt.fieldId }, "field", event.currentTarget)}><Pencil size={13} />Open cited field</button>
-          </div>;
-        })}
-      </details>
-      {resolution && <div className="rws-review-passage" data-revision-resolution={index}><h4>No revision recommended</h4><small>AI follow-up / verify evidence</small><p>{resolution.reason}</p>{resolution.evidence.map(reference => <blockquote key={reference.fieldId}>{reference.quote}</blockquote>)}{resolution.signature !== signature && <small>Recommendation recorded before later edits.</small>}</div>}
-      {decision && <div className="rws-review-passage"><small>Author decision / {time(decision.at)}</small>{decision.note && <p>{decision.note}</p>}{decision.evidence && <blockquote>{decision.evidence.text}</blockquote>}{decision.documentSignature !== signature && <small>Evidence recorded before later edits.</small>}</div>}
-      <div className="rws-finding-actions">
-        {decision ? <button className="rws-text-button" disabled={!!busy} onClick={() => saveFindingDecision(doc.aiReview, index, { reason: "reopen" })}><Undo2 size={13} />Reopen finding</button> : <>
-          <button className="rws-secondary" disabled={!!busy || !canReviseReview(doc, doc.aiReview)} title={!canReviseReview(doc, doc.aiReview) ? "Review the current document before preparing a revision" : "Prepare an evidence-backed revision"} onClick={() => openAiReview(index)}><Pencil size={13} />Prepare revision</button>
-          <button className="rws-text-button" disabled={!!busy} onClick={() => { setError(""); setFindingDecision({ review: doc.aiReview, findingIndex: index, reason: "evidenced", fieldId: "", note: "" }); setDialog("finding-decision"); }}><Archive size={13} />Set aside</button>
-        </>}
-      </div>
+    const prepared = doc.aiReview.actions?.[index];
+    const resolution = prepared?.kind === "supported" ? prepared : doc.aiResolution?.reviewAt === doc.aiReview.at && doc.aiResolution.findingIndex === index ? doc.aiResolution : null;
+    const answered = doc.evidenceAnswers?.some(answer => answer.question?.reviewAt === doc.aiReview.at && answer.question.findingIndex === index);
+    const question = !answered && prepared?.kind === "question" ? prepared : doc.aiQuestion?.findingIndex === index ? doc.aiQuestion : null;
+    const isAts = doc.aiReview.kind === 'ats';
+    const citedFieldIds = isAts ? finding.fieldIds : criterion.evidence.map(excerpt => excerpt.fieldId);
+    const proposal = findingProposals.get(index);
+    const targets = resumeFindingTargets(finding, doc.aiReview, fields, proposal);
+    const focusPassage = () => {
+      findingContextFocus.current = true;
+      if (focusedFinding !== index) setEvidenceAnswer("");
+      setFocusedFinding(index);
+      setSelectedField(null);
+      setPreviewFieldIds(targets);
+      setFindingContextOpen(true);
+      setMode("edit");
+      setLibraryOpen(false);
+      setSheetOpen(false);
+      if (!targets.length) {
+        if (citedFieldIds.length) setError("The cited passage is no longer available in this resume.");
+        return;
+      }
+      pendingFieldScroll.current = targets[0];
+      setMode("edit");
+      setLibraryOpen(false);
+      setSheetOpen(false);
+    };
+    const priority = finding.priority === 'high' ? 'high' : finding.priority === 'low' ? 'low' : 'med';
+    const findingStatus = decision ? "Archived / " + REVIEW_DECISION_REASONS[decision.reason] : finding.priority + " priority / " + (criterion.status === "absent" ? "not evidenced" : criterion.status);
+    if (!contextual) return <section className={"rws-review-finding resume-finding resume-finding--compact" + (focusedFinding === index ? " is-active" : "")} key={index} data-review-finding={index} data-has-passage={targets.length > 0} onClick={event => {
+      if (!event.target.closest("button")) focusPassage();
+    }}>
+      <div className="atsv__ihead"><span className={"atsv__dot atsv__dot--" + priority} aria-hidden="true" /><span className={"atsv__pri atsv__pri--" + priority}>{priority}</span>{decision && <span className="rws-finding-scope">Archived</span>}</div>
+      <h4 className="atsv__point" tabIndex={-1}><button className="rws-finding-target" onClick={focusPassage}>{finding.action}</button></h4>
+      <p className="atsv__how">{finding.reason || criterion.reason}</p>
+      <small className="rws-finding-scope">{targets.length ? "Show passage and next step" : "Whole-resume guidance"}</small>
+      {question && <p className="rws-finding-scope">Supporting fact needed</p>}
+    </section>;
+    return <section className="rws-review-finding resume-finding" data-context-finding={index}>
+      {isAts ? <>
+        <div className="atsv__ihead"><span className={"atsv__dot atsv__dot--" + priority} aria-hidden="true" /><span className={"atsv__pri atsv__pri--" + priority}>{priority}</span>{decision && <span className="rws-finding-scope">Archived</span>}</div>
+        <h4 className="atsv__point" tabIndex={-1}>{finding.action}</h4>
+        {(finding.reason || criterion.reason) && <p className="atsv__how">{finding.reason || criterion.reason}</p>}
+        {finding.fieldIds.length !== 1 && (finding.anchor?.type === 'none' ? <p className="rws-finding-scope">Overall recommendation / no specific field targeted.</p> : <p className="rws-inline-warning">No unique field match. Choose the relevant field before editing.</p>)}
+      </> : <>
+        <h4 tabIndex={-1}>{criterion.label}</h4><small>{findingStatus}</small>
+        <p className="rws-finding-action">{finding.action}</p>
+      </>}
+      {prepared?.kind === "guidance" && prepared.reason !== (finding.reason || criterion.reason) && <p>{prepared.reason}</p>}
+      {resolution && <div className="rws-review-passage" data-revision-resolution={index}><h4>No revision recommended</h4><p>{resolution.reason}</p>{resolution.signature !== signature && <small>Recommendation recorded before later edits.</small>}</div>}
+      {decision && <div className="rws-review-passage"><small>Author decision / {time(decision.at)}</small><p>{REVIEW_DECISION_REASONS[decision.reason]}</p>{decision.note && <p>{decision.note}</p>}{decision.evidence && <blockquote>{decision.evidence.text}</blockquote>}{decision.documentSignature !== signature && <small>Evidence recorded before later edits.</small>}</div>}
+      {question && renderEvidenceQuestion(question)}
+      {answered && <p role="status">Answer saved. Review again to refresh this suggestion.</p>}
+      {proposal && <article className="rws-proposal" data-proposal-id={proposal.id}>
+        <div className="rws-diff"><span>Current</span><p>{proposal.before}</p><span>Proposed</span><p>{proposal.after}</p></div>
+        {proposal.signature !== signature && <p role="status">Document changed. Review again to refresh this suggestion.</p>}
+        <div className="rws-proposal-actions">
+          <button className="btn btn--ghost" disabled={!!busy} onClick={() => mutate(next => { next.dismissed = [...(next.dismissed || []), proposal.id]; }, "Kept original wording")}>Keep original</button>
+          <button className="btn btn--primary" disabled={!!busy || proposal.signature !== signature} onClick={() => applyProposal(proposal)}>Apply</button>
+        </div>
+      </article>}
+      {doc.aiReview.signature !== signature && <p className="rws-inline-warning" role="status">This review is historical. Recheck the revised document before treating this finding as resolved.</p>}
+      {decision && <div className="rws-finding-actions"><button className="rws-text-button" disabled={!!busy} onClick={() => saveFindingDecision(doc.aiReview, index, { reason: "reopen" })}><Undo2 size={13} />Restore suggestion</button></div>}
     </section>;
   };
-  const renderFields = (list) =>
-    list.map((field) => (
-      <React.Fragment key={field.id}>
-        {fieldInput(field)}
-        {field.label === "Achievement" && (
-          <div className="rws-inline-actions">
-            <IconButton
-              icon={ArrowUp}
-              label="Move achievement up"
-              disabled={
-                currentSection?.items.find((item) =>
-                  item.bullets?.some((bullet) => bullet.id === field.id),
-                )?.bullets[0]?.id === field.id
-              }
-              onClick={() =>
-                mutate((next) => {
-                  for (const section of next.model.sections)
-                    for (const item of section.items || []) {
-                      const index = item.bullets?.findIndex(
-                        (bullet) => bullet.id === field.id,
-                      );
-                      if (index > 0)
-                        [item.bullets[index - 1], item.bullets[index]] = [
-                          item.bullets[index],
-                          item.bullets[index - 1],
-                        ];
-                    }
-                }, "Reordered achievement")
-              }
-            />
-            <IconButton
-              icon={ArrowDown}
-              label="Move achievement down"
-              disabled={
-                currentSection?.items
-                  .find((item) =>
-                    item.bullets?.some((bullet) => bullet.id === field.id),
-                  )
-                  ?.bullets.at(-1)?.id === field.id
-              }
-              onClick={() =>
-                mutate((next) => {
-                  for (const section of next.model.sections)
-                    for (const item of section.items || []) {
-                      const index = item.bullets?.findIndex(
-                        (bullet) => bullet.id === field.id,
-                      );
-                      if (index >= 0 && index < item.bullets.length - 1)
-                        [item.bullets[index + 1], item.bullets[index]] = [
-                          item.bullets[index],
-                          item.bullets[index + 1],
-                        ];
-                    }
-                }, "Reordered achievement")
-              }
-            />
-            <IconButton
-              icon={Trash2}
-              label="Remove achievement"
-              onClick={() => {
-                mutate((next) => {
-                  for (const section of next.model.sections)
-                    for (const item of section.items || [])
-                      if (item.bullets)
-                        item.bullets = item.bullets.filter(
-                          (bullet) => bullet.id !== field.id,
-                        );
-                }, "Removed achievement");
-                setSelectedField(null);
-              }}
-            />
-          </div>
-        )}
-      </React.Fragment>
-    ));
-  const libraryPanel = (
-    <aside className="rws-library" aria-label="Resume library">
-      <div
-        className="rws-rail-tabs"
-        role="tablist"
-        aria-label="Resume navigation"
-      >
-        <button
-          role="tab"
-          aria-selected={rail === "documents"}
-          onClick={() => setRail("documents")}
-        >
-          <FolderOpen size={15} />
-          Resumes
-        </button>
-        <button
-          role="tab"
-          aria-selected={rail === "sections"}
-          onClick={() => setRail("sections")}
-        >
-          <List size={15} />
-          Sections
-        </button>
-        <IconButton
-          icon={X}
-          label="Close library"
-          className="rws-small-screen"
-          onClick={() => setLibraryOpen(false)}
-        />
-      </div>
+  const libraryPanel = libraryView && (
+    <aside className="rws-library rws-left-panel" aria-label="Resume library">
       <div className="rws-rail-heading">
         <h2>
-          {rail === "sections"
-            ? "Document outline"
-            : archived
-              ? "Archived"
-              : "My resumes"}
+          {archived ? "Archived" : "My resumes"}
         </h2>
         <IconButton
           icon={Plus}
-          label={rail === "sections" ? "Add a section" : "Create resume"}
-          onClick={() =>
-            rail === "sections" ? setDialog("section") : openDialog("new")
-          }
+          label="Create resume"
+          onClick={() => openDialog("new")}
         />
       </div>
-      {rail === "documents" ? (
-        <>
           <label className="rws-search">
             <Search size={15} />
             <input
@@ -1695,30 +2039,12 @@ function App() {
             </button>
             <span className="rws-sample-note">{hosted ? "Private resumes" : "Fictional sample documents"}</span>
           </div>
-        </>
-      ) : (
-        <nav className="rws-outline" aria-label="Resume sections">
-          {[
-            { id: "Profile", heading: "Profile" },
-            { id: "Contact", heading: "Contact" },
-            ...doc.model.sections,
-          ].map((section) => (
-            <button
-              key={section.id}
-              aria-current={group === section.id ? "true" : undefined}
-              onClick={() => selectGroup(section.id)}
-            >
-              <FileText size={16} />
-              <span>{section.heading || "Untitled section"}</span>
-              <ChevronRight size={14} />
-            </button>
-          ))}
-        </nav>
-      )}
     </aside>
   );
 
   const backToResumes = async () => {
+    if (!returnToReview && proposalVisit) { returnToProposal(); return; }
+    if (!returnToReview && mode === "source") { setMode("edit"); return; }
     if (hosted) { await closeHosted(); return; }
     const request = ++navigation.current;
     try {
@@ -1726,17 +2052,30 @@ function App() {
       if (request !== navigation.current) return;
       task.current?.cancel();
       setBusy(null);
-      setRail("documents");
       setSearch("");
       setLibraryOpen(false);
       setSheetOpen(false);
       setLibraryView(true);
     } catch (failure) { setError(failure.message); }
   };
+  const reviewContext = (
+    <ReviewInfo>
+      <p className="resume-review-info__label">Target role</p>
+      <div className="resume-review-target">
+        <div><h3>{doc.target.role || "General purpose"}</h3><p>{doc.target.company || "No company selected"}</p></div>
+        <button className="btn btn--ghost rws-target" onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); setTargetInput(structuredClone(doc.target)); setDialog("target"); }}>Edit role</button>
+      </div>
+      <details className="resume-source-options"><summary>Source options</summary>
+        <section aria-label="Original files"><h4>Original files</h4>{originalFiles.map(renderSource)}
+          {!originalFiles.length && <button className="rws-text-button" disabled={!!busy} onClick={() => { document.getElementById("resume-review-info")?.hidePopover(); fileInput.current.click(); }}><Upload size={14} />Upload source</button>}
+        </section>
+      </details>
+    </ReviewInfo>
+  );
 
   return (
-    <div className="adm is-open rws" data-history={historyTick} data-view={libraryView ? "library" : mode} data-resizing-inspector={resizingInspector ? "true" : undefined} style={{ "--rws-inspector-width": `${displayedInspectorWidth}px` }}>
-      <header className="rws-header">
+    <div className="adm is-open rws" onPointerDownCapture={finishInlineEdit} data-history={historyTick} data-view={libraryView ? "library" : mode} data-resizing-inspector={resizingInspector ? "true" : undefined} data-resizing-pdf-panel={resizingPdfPanel ? "true" : undefined} data-pdf-panel={pdfPanelVisible ? "open" : "closed"} style={{ "--rws-inspector-width": `${displayedInspectorWidth}px`, "--rws-pdf-panel-width": `${displayedPdfPanelWidth}px` }}>
+      {!hosted && <header className="rws-header">
         <div className="rws-brand">
           <span className="rws-monogram">RK</span>
           <span>
@@ -1745,39 +2084,33 @@ function App() {
           </span>
         </div>
         {!hosted && <span className="rws-preview-label">LOCAL PREVIEW</span>}
-        <div className="rws-header-actions">
-          <span className="rws-private">
-            <LockKeyhole size={14} />
-            {hosted ? "Private" : "Private sample"}
+      </header>}
+      {mode !== "pdf" && <div className="adm__workbar rws-workbar">
+        <div className="studio-worknav" role="group" aria-label="Workspace navigation">
+          <span className="studio-worknav__back" ref={sourceReturn}>
+            <IconButton
+              icon={ArrowLeft}
+              className="adm__hist-btn adm__workback"
+              label={returnToReview ? "Back to review" : proposalVisit ? Number.isInteger(proposalVisit.findingIndex) ? "Back to review" : "Back to suggestion" : mode === "source" ? "Back to document" : hosted ? "Back to ATS check" : "Back to resumes"}
+              onClick={backToResumes}
+            />
           </span>
-          <IconButton
-            icon={FolderOpen}
-            label="Resume library"
-            onClick={() => setLibraryOpen((value) => !value)}
-          />
-          {hosted && <IconButton icon={X} label="Back to Studio" onClick={closeHosted} />}
+          <div className="studio-worknav__history rws-history-controls">
+            <IconButton
+              icon={Undo2}
+              label="Undo"
+              disabled={!history.current.canUndo}
+              onClick={() => undo(false)}
+            />
+            <IconButton
+              icon={Redo2}
+              label="Redo"
+              disabled={!history.current.canRedo}
+              onClick={() => undo(true)}
+            />
+          </div>
         </div>
-      </header>
-      <div className="adm__workbar rws-workbar">
-        <IconButton
-          icon={ArrowLeft}
-          label={hosted ? "Back to ATS check" : "Back to resumes"}
-          onClick={backToResumes}
-        />
-        <div className="rws-history-controls">
-          <IconButton
-            icon={Undo2}
-            label="Undo"
-            disabled={!history.current.canUndo}
-            onClick={() => undo(false)}
-          />
-          <IconButton
-            icon={Redo2}
-            label="Redo"
-            disabled={!history.current.canRedo}
-            onClick={() => undo(true)}
-          />
-        </div>
+        <div className="rws-document-heading">
         <button
           className="rws-document-name"
           onClick={() => openDialog("rename", doc.name)}
@@ -1786,17 +2119,35 @@ function App() {
           <span>{doc.name}</span>
           <Pencil size={13} />
         </button>
+        {saveStatus}
+        </div>
         <div className="rws-workbar-actions">
-          <IconButton
-            icon={Copy}
-            label="Duplicate for another role"
-            onClick={() => openDialog("duplicate", doc.name + " / copy")}
-          />
-          <IconButton
-            icon={History}
-            label="Version history"
-            onClick={showVersions}
-          />
+          <div className="rws-preview-controls">
+          {mode === "edit" && <div className="adm__hm-seg rws-panel-toggle" role="tablist" aria-label="Workspace panels">
+            {tabs.map(([id, Icon, label], index) => (
+              <button
+                key={id}
+                id={"rws-panel-tab-" + id}
+                role="tab"
+                aria-label={label}
+                title={label}
+                aria-selected={pane === id}
+                aria-controls="rws-panel-content"
+                tabIndex={pane === id ? 0 : -1}
+                className={pane === id ? "is-on" : ""}
+                onClick={() => { setPane(id); setSheetOpen(true); setLibraryOpen(false); }}
+                onKeyDown={event => {
+                  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+                  setPane(tabs[next][0]); setSheetOpen(true); setLibraryOpen(false);
+                  document.getElementById("rws-panel-tab-" + tabs[next][0])?.focus();
+                }}
+              >
+                <Icon size={14} /><span>{label}</span>
+              </button>
+            ))}
+          </div>}
           <button
             className="adm__bar-prev rws-preview-pdf"
             onClick={() =>
@@ -1813,16 +2164,25 @@ function App() {
             )}
             <span className="adm__bar-prev-tx">{mode === "edit" ? "Preview PDF" : "Edit resume"}</span>
           </button>
-          <IconButton
-            icon={Download}
-            label="Export PDF"
-            className="rws-download"
-            onClick={() => renderPdf(true)}
-            disabled={!!busy}
-          />
+          </div>
+          <ResumeOptions disabled={!!busy} actions={[
+            { label: "Download PDF", icon: FileDown, action: () => renderPdf(true) },
+            { label: "Rename resume", icon: TextCursorInput, action: () => openDialog("rename", doc.name) },
+            { label: "Duplicate resume", icon: Copy, action: () => openDialog("duplicate", doc.name + " / copy") },
+            { label: doc.archived ? "Restore from archive" : "Archive this resume", icon: Archive, action: () => setDialog("archive") },
+            { label: "View version history", icon: History, action: showVersions },
+          ]} />
         </div>
-      </div>
-      {(error || message) && (
+      </div>}
+      {mode === "pdf" && saveStatus}
+      {!sharedStorageFeedback && storageIssue && (
+        <div className="rk-flash is-on is-error rws-flash" role="alert" title={storageIssue}>
+          <CircleAlert size={16} />
+          <span>{storageMessage}</span>
+          {storageActionLabel && <button className="rk-flash__action" disabled={storageBusy} onClick={() => Promise.resolve(storageAction()).catch(() => {})}>{storageActionLabel}</button>}
+        </div>
+      )}
+      {!storageIssue && (error || message) && (
         <div
           className={"rk-flash is-on rws-flash " + (error ? "is-error" : "")}
           role={error ? "alert" : "status"}
@@ -1830,7 +2190,7 @@ function App() {
           {error ? <CircleAlert size={16} /> : <Check size={16} />}
           <span>{error || message}</span>
           {conflict && (
-            <button onClick={() => setDialog("conflict")}>
+            <button className="rk-flash__action" onClick={() => setDialog("conflict")}>
               Compare versions
             </button>
           )}
@@ -1847,11 +2207,11 @@ function App() {
       <div
         className={
           "rws-body " +
-          (libraryOpen ? "library-open" : "") +
-          (sheetOpen ? " sheet-open" : "")
+          (mode !== "pdf" && libraryOpen ? "library-open" : "") +
+          (mode !== "pdf" && sheetOpen ? " sheet-open" : "")
         }
       >
-        {(libraryOpen || sheetOpen) && (
+        {mode !== "pdf" && (libraryOpen || sheetOpen) && (
           <button
             className="rws-sheet-backdrop"
             aria-label="Close side panels"
@@ -1862,64 +2222,78 @@ function App() {
           />
         )}
         {libraryPanel}
+        {mode === "pdf" && exported && !libraryView && <aside id="rws-pdf-reading-order" className="rws-pdf-panel" aria-label="Parser reading order" hidden={!pdfPanelVisible}>
+          {pdfPanelVisible && <PanelResizer label="Resize reading order panel" panelId="rws-pdf-reading-order" className="rws-pdf-panel-resizer"
+            width={displayedPdfPanelWidth} preference={pdfPanelWidth} minimum={240} maximum={pdfPanelMaximum} defaultWidth={340} direction={1}
+            onPreview={setPdfPanelWidth} onCommit={setPdfPanelWidth} onResizing={setResizingPdfPanel} />}
+          <div className="rws-rail-heading"><h2>Parser reading order</h2></div>
+          <div className="rws-reading-order">
+            <p>{exported.layout?.itemCount || 0} text fragments</p>
+            <p>This is a positional text reconstruction, not a Workday or other vendor acceptance test.</p>
+            {exported.layout?.flags.map(flag => <p key={flag.label}>{flag.label}: {flag.note}</p>)}
+            <pre>{exported.layout?.linearized || exported.extractedText}</pre>
+          </div>
+        </aside>}
         <main className="rws-workspace">
-          <div className="rws-document-bar">
-            {proposalVisit?.destination === "source" ? (
-              <button ref={sourceReturn} className="rws-text-button rws-proposal-return" onClick={returnToProposal}>
-                <ArrowLeft size={14} />{Number.isInteger(proposalVisit.findingIndex) ? "Back to review" : "Back to suggestion"}
-              </button>
-            ) : <div
-              className="rws-view-tabs"
-              role="tablist"
-              aria-label="Document view"
-            >
-              <button
-                role="tab"
-                aria-selected={mode === "edit"}
-                onClick={() => setMode("edit")}
-              >
-                Canvas
-              </button>
-              <button
-                role="tab"
-                aria-selected={mode === "source"}
-                disabled={!original}
-                onClick={() => setMode("source")}
-              >
-                Original
-              </button>
-              <button
-                role="tab"
-                aria-selected={mode === "pdf"}
-                disabled={!exported}
-                onClick={() => setMode("pdf")}
-              >
-                PDF
-              </button>
+          {mode !== "pdf" && <div className={"rws-document-bar" + (mode === "edit" && proposalVisit?.destination !== "source" ? " is-overlay" : "")}>
+            {!(proposalVisit && mode === "edit") && <IconButton icon={ScanText} label="Review" className="rws-outline-toggle" onClick={() => { setLibraryOpen(value => !value); setSheetOpen(false); }} />}
+            {mode !== "edit" && <div className="rws-canvas-tools">
+              {mode === "source" && (
+                <span className="rws-verified">
+                  <LockKeyhole size={14} />
+                  Original bytes
+                </span>
+              )}
             </div>}
-            <div className="rws-canvas-tools">
+          </div>}
+          <div className="rws-document-stage">
+              {mode === "pdf" && exported && <div className="resume-view-tools rws-pdf-floaties" ref={viewTools} role="group" aria-label="PDF preview" aria-describedby="rws-pdf-summary">
+                <span id="rws-pdf-summary" className="rws-pdf-summary" role="status">{pdfSummary}</span>
+                <IconButton icon={pdfPanelVisible ? PanelLeftClose : PanelLeftOpen} label={pdfPanelVisible ? "Hide reading order panel" : "Show reading order panel"} aria-expanded={pdfPanelVisible} aria-controls="rws-pdf-reading-order" onClick={() => setPdfPanelVisible(!pdfPanelVisible)} />
+                <div className="rws-pdf-controls-host" ref={setPdfControlsHost} />
+                {doc.ats && !doc.ats.layoutAccepted ? <IconButton data-pdf-separator icon={Download} label="Review migrated layout" title="Review migrated layout before downloading" onClick={() => setDialog("migration-layout")} /> : <a
+                  data-pdf-separator
+                  href={fileHref("resumes/" + doc.id + "/exports/" + exported.id, true)}
+                  download={exported.name || true}
+                  aria-label="Download this PDF"
+                  title={`Download this PDF (${pdfSummary})`}
+                  onClick={event => { event.preventDefault(); downloadCurrentPdf(); }}
+                ><Download size={16} /></a>}
+                <IconButton icon={printingPdf ? LoaderCircle : Printer} label="Print this PDF" title={printingPdf ? "Preparing PDF for printing" : "Print this PDF"} disabled={!pdfReady || printingPdf} aria-busy={printingPdf} onClick={printDisplayedPdf} />
+                <IconButton icon={X} label="Close PDF preview" onClick={() => { setMode("edit"); requestAnimationFrame(() => document.querySelector('.rws-preview-pdf')?.focus()); }} />
+              </div>}
+              {mode === "edit" && contactEdit && <section className="resume-context rws-contact-card" ref={contactPanel} role="dialog" aria-label="Contact detail" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); closeContact(); } }}>
+                <form onSubmit={event => { event.preventDefault(); saveContact(); }}>
+                  <div className="rws-panel-heading"><h2>{contactEdit.fieldId ? "Edit detail" : "Add contact detail"}</h2><IconButton icon={X} label="Close contact detail" type="button" onClick={closeContact} /></div>
+                  {!contactEdit.fieldId && <label className="rws-field"><span>Type</span><select aria-label="Contact type" value={contactEdit.kind} onChange={event => setContactEdit({ ...contactEdit, kind: event.target.value, value: "", label: "" })}><option value="email" disabled={!!doc.model.contact.email}>Email</option><option value="phone" disabled={!!doc.model.contact.phone}>Phone</option><option value="location" disabled={!!doc.model.contact.location}>Location</option><option value="link">Link</option></select></label>}
+                  {contactEdit.kind === "link" && <label className="rws-field"><span>Display label</span><input value={contactEdit.label} onChange={event => setContactEdit({ ...contactEdit, label: event.target.value })} /></label>}
+                  <label className="rws-field"><span>{({ email: "Email address", phone: "Phone number", location: "Location", link: "Website address", detail: "Website address" })[contactEdit.kind]}</span><input required type={contactEdit.kind === "email" ? "email" : contactEdit.kind === "phone" ? "tel" : "text"} value={contactEdit.value} onChange={event => setContactEdit({ ...contactEdit, value: event.target.value })} /></label>
+                  <div className="rws-inline-actions">
+                    {contactEdit.fieldId && <button className="rws-text-button" type="button" onClick={() => saveContact(true)}>Remove</button>}
+                    {["link", "detail"].includes(contactEdit.kind) && /^https?:\/\//.test(resumeHref(contactEdit.value)) && <a href={resumeHref(contactEdit.value)} target="_blank" rel="noopener noreferrer">Open link</a>}
+                    <button className="btn btn--ghost" type="button" onClick={closeContact}>Cancel</button><button className="btn btn--primary" type="submit">Done</button>
+                  </div>
+                </form>
+              </section>}
+              {mode === "edit" && findingContextOpen && selectedReviewFinding && <section
+                className="resume-context" ref={findingContext} role="region" aria-label="Finding details" tabIndex={-1}
+                onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setFindingContextOpen(false); openReview(); requestAnimationFrame(() => inspectorContent.current?.querySelector('[data-review-finding="' + focusedFinding + '"] button')?.focus()); } }}>
+                <div className="resume-context__heading resume-context__tools">
+                  {!selectedReviewFinding.decision && <IconButton icon={Archive} label="Archive suggestion" disabled={!!busy} onClick={() => { setError(""); setFindingDecision({ review: doc.aiReview, findingIndex: focusedFinding, reason: "evidenced", fieldId: "", note: "" }); setDialog("finding-decision"); }} />}
+                  <IconButton icon={X} label="Close finding details" onClick={() => { setFindingContextOpen(false); openReview(); }} />
+                </div>
+                {renderFinding(selectedReviewFinding, true)}
+              </section>}
               {mode === "edit" && (
-                <>
-                  <span className="rws-page-count">
-                    {rendering ? (
-                      <LoaderCircle size={12} className="is-spinning" />
-                    ) : (
-                      <FileText size={12} />
-                    )}
-                    {pageInfo.pages} {pageInfo.pages === 1 ? "page" : "pages"}
+                <div className="rws-canvas-tools resume-view-tools" ref={viewTools} role="group" aria-label="Document view" data-fit-mode={zoom === "page" ? "page" : zoom === "fit" ? "width" : "custom"}>
+                  <span className="rws-page-count resume-view-tools__count" role="status" aria-busy={rendering}>
+                    Page {Math.min(currentPage, pageInfo.pages)} / {pageInfo.pages}
                   </span>
                   <IconButton
                     icon={ZoomOut}
                     label="Zoom out"
                     onClick={() => setZoom(Math.max(0.3, scale - 0.1))}
                   />
-                  <button
-                    className="rws-zoom-value"
-                    onClick={() => setZoom("fit")}
-                    title="Fit page width"
-                  >
-                    {zoom === "fit" ? "Fit" : Math.round(scale * 100) + "%"}
-                  </button>
                   <IconButton
                     icon={ZoomIn}
                     label="Zoom in"
@@ -1927,8 +2301,9 @@ function App() {
                   />
                   <IconButton
                     icon={Maximize}
-                    label="Fit page width"
-                    onClick={() => setZoom("fit")}
+                    label={fitLabel}
+                    data-view-fit
+                    onClick={toggleFit}
                   />
                   <IconButton
                     className="rws-canvas-toggle"
@@ -1938,23 +2313,9 @@ function App() {
                     aria-pressed={canvasMode === "light"}
                     onClick={() => setCanvasMode(value => value === "dark" ? "light" : "dark")}
                   />
-                </>
+                </div>
               )}
-              {mode === "pdf" && exported && (
-                <span className="rws-verified">
-                  <ShieldCheck size={14} />
-                  {exported.signature === signature && exported.renderVersion === RESUME_RENDER_VERSION ? "Current PDF" : "Historical PDF"} / v{exported.version}
-                </span>
-              )}
-              {mode === "source" && (
-                <span className="rws-verified">
-                  <LockKeyhole size={14} />
-                  Original bytes
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="rws-canvas" data-canvas={canvasMode} ref={canvas}>
+          <div className="rws-canvas resume-canvas" data-canvas={canvasMode} ref={canvas}>
             {(mode === "edit" || proposalVisit?.destination === "source") && (
               <div
                 className="rws-paper-footprint"
@@ -1968,9 +2329,11 @@ function App() {
                   ref={frame}
                   title="Editable resume canvas"
                   srcDoc={previewHtml}
+                  inert={rendering ? "" : undefined}
                   onLoad={applyCanvasMode}
                   className="rws-paper"
                   style={{
+                    pointerEvents: rendering ? "none" : undefined,
                     width: pageInfo.width,
                     height: pageInfo.height,
                     transform: "scale(" + scale + ")",
@@ -1980,26 +2343,7 @@ function App() {
             )}
             {mode === "pdf" && exported && (
               <div className="rws-pdf-view">
-                <div className="rws-artifact-bar">
-                  <span>
-                    {exported.pages} pages / {fileSize(exported.bytes)} /{" "}
-                    {exported.verification.fields} fields verified
-                  </span>
-                  {doc.ats && !doc.ats.layoutAccepted ? <button className="rws-text-button" onClick={() => setDialog('migration-layout')}><FileCheck2 size={15} />Review migrated layout</button> : <a
-                    href={fileHref("resumes/" + doc.id + "/exports/" + exported.id, true)}
-                    download
-                  >
-                    <Download size={15} />
-                    Download this PDF
-                  </a>}
-                </div>
-                <ResumePdfViewer label="Verified exported PDF" url={fileHref("resumes/" + doc.id + "/exports/" + exported.id)} />
-                <details className="rws-reading-order">
-                  <summary>Parser reading order / {exported.layout?.itemCount || 0} text fragments</summary>
-                  <p>This is a positional text reconstruction, not a Workday or other vendor acceptance test.</p>
-                  {exported.layout?.flags.map(flag => <p key={flag.label}>{flag.label}: {flag.note}</p>)}
-                  <pre>{exported.layout?.linearized || exported.extractedText}</pre>
-                </details>
+                <ResumePdfViewer ref={pdfViewer} onReadyChange={setPdfReady} label="Verified exported PDF" controls={false} controlsTarget={pdfControlsHost} url={fileHref("resumes/" + doc.id + "/exports/" + exported.id)} />
               </div>
             )}
             {mode === "source" && original && (
@@ -2033,65 +2377,13 @@ function App() {
               </div>
             )}
           </div>
+          </div>
         </main>
         <aside className="rws-inspector" id="rws-properties" aria-label="Resume properties">
-          <div
-            className="rws-inspector-resizer"
-            role="separator"
-            aria-label="Resize properties panel"
-            aria-orientation="vertical"
-            aria-controls="rws-properties"
-            aria-valuemin={290}
-            aria-valuemax={inspectorMaximum}
-            aria-valuenow={displayedInspectorWidth}
-            aria-valuetext={`${displayedInspectorWidth} pixels`}
-            tabIndex={0}
-            title="Resize properties panel"
-            onPointerDown={event => {
-              if (event.button !== 0 || !event.isPrimary) return;
-              event.preventDefault();
-              event.currentTarget.focus({ preventScroll: true });
-              inspectorDrag.current = { x: event.clientX, initial: displayedInspectorWidth, width: displayedInspectorWidth, preference: inspectorWidth, pointerId: event.pointerId };
-              setResizingInspector(true);
-              event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={event => {
-              const drag = inspectorDrag.current;
-              if (!drag || drag.pointerId !== event.pointerId) return;
-              drag.width = Math.round(Math.max(290, Math.min(inspectorMaximum, drag.initial + drag.x - event.clientX)));
-              setInspectorWidth(drag.width);
-            }}
-            onPointerUp={finishInspectorResize}
-            onPointerCancel={event => finishInspectorResize(event, true)}
-            onLostPointerCapture={cancelInspectorResize}
-            onDoubleClick={() => storeInspectorWidth(inspectorDefault)}
-            onKeyDown={event => {
-              if (event.key === "Escape" && inspectorDrag.current) { event.preventDefault(); finishInspectorResize(event, true); }
-              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || inspectorDrag.current) return;
-              event.preventDefault();
-              storeInspectorWidth(event.key === "Home" ? inspectorDefault : event.key === "End" ? inspectorMaximum : displayedInspectorWidth + (event.key === "ArrowLeft" ? 16 : -16));
-            }}
-          />
-          <div
-            className="rws-inspector-tabs"
-            role="tablist"
-            aria-label="Workspace panels"
-          >
-            {tabs.map(([id, Icon, label]) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={pane === id}
-                onClick={() => {
-                  if (id === "review" && proposalVisit) { returnToProposal(); return; }
-                  setPane(id);
-                  setSheetOpen(true);
-                }}
-              >
-                <Icon size={16} />
-                <span>{label}</span>
-              </button>
-            ))}
+          <PanelResizer label="Resize properties panel" panelId="rws-properties" className="rws-inspector-resizer"
+            width={displayedInspectorWidth} preference={inspectorWidth} minimum={290} maximum={inspectorMaximum} defaultWidth={inspectorDefault} direction={-1}
+            onPreview={setInspectorWidth} onCommit={storeInspectorWidth} onResizing={setResizingInspector} />
+          <div className="rws-inspector-dismiss rws-small-screen">
             <IconButton
               icon={X}
               label="Close properties"
@@ -2099,165 +2391,9 @@ function App() {
               onClick={() => setSheetOpen(false)}
             />
           </div>
-          {proposalVisit?.destination === "field" && (
-            <div className="rws-proposal-return-bar">
-              <button className="rws-text-button rws-proposal-return" onClick={returnToProposal}>
-                <ArrowLeft size={14} />{Number.isInteger(proposalVisit.findingIndex) ? "Back to review" : "Back to suggestion"}
-              </button>
-            </div>
-          )}
-          <div className="rws-inspector-content" ref={inspectorContent}>
+          <div className="rws-inspector-content" id="rws-panel-content" role="tabpanel" aria-labelledby={"rws-panel-tab-" + pane}>
             {pane === "content" && (
-              <>
-                <div className="rws-panel-heading">
-                  <h2>Content</h2>
-                  <IconButton
-                    icon={Plus}
-                    label="Add a section"
-                    onClick={() => setDialog("section")}
-                  />
-                </div>
-                <select
-                  className="rws-select"
-                  aria-label="Resume section"
-                  value={group}
-                  onChange={(event) => {
-                    setGroup(event.target.value);
-                    setSelectedField(null);
-                  }}
-                >
-                  <option value="Profile">Profile</option>
-                  <option value="Contact">Contact</option>
-                  {doc.model.sections.map((section) => (
-                    <option key={section.id} value={section.id}>
-                      {section.heading}
-                    </option>
-                  ))}
-                </select>
-                {currentSection && (
-                  <div className="rws-section-actions">
-                    <span>{currentSection.kind}</span>
-                    <IconButton
-                      icon={ArrowUp}
-                      label="Move section up"
-                      disabled={doc.model.sections[0].id === group}
-                      onClick={() => moveSection(-1)}
-                    />
-                    <IconButton
-                      icon={ArrowDown}
-                      label="Move section down"
-                      disabled={doc.model.sections.at(-1).id === group}
-                      onClick={() => moveSection(1)}
-                    />
-                    <IconButton
-                      icon={Trash2}
-                      label="Remove section"
-                      onClick={() => setDialog("remove-section")}
-                    />
-                  </div>
-                )}
-                {renderFields(
-                  fields.filter(
-                    (field) =>
-                      field.group === group &&
-                      (!currentSection || field.owner === currentSection),
-                  ),
-                )}
-                {currentSection?.items && !['experience', 'education'].includes(currentSection.kind) && <label className="rws-field"><span>Entry columns</span><select aria-label="Entry columns" disabled={doc.design.layout !== "hybrid"} title={doc.design.layout === "hybrid" ? "Columns for this section" : "Available in Hybrid layout"} value={currentSection.columns || 1} onChange={event => mutate(next => { next.model.sections.find(section => section.id === group).columns = Number(event.target.value); }, "Changed entry columns")}><option value={1}>One</option><option value={2}>Two</option><option value={3}>Three</option></select></label>}
-                {(currentSection?.groups || currentSection?.items || []).map(
-                  (entry, index, entries) => (
-                    <fieldset className="rws-entry-fields" key={entry.id}>
-                      <legend>
-                        {entry.org ||
-                          entry.school ||
-                          entry.label ||
-                          entry.title ||
-                          "Entry " + (index + 1)}
-                      </legend>
-                      <div className="rws-entry-actions">
-                        <IconButton
-                          icon={ArrowUp}
-                          label="Move entry up"
-                          disabled={index === 0}
-                          onClick={() =>
-                            moveEntry(currentSection.id, entry.id, -1)
-                          }
-                        />
-                        <IconButton
-                          icon={ArrowDown}
-                          label="Move entry down"
-                          disabled={index === entries.length - 1}
-                          onClick={() =>
-                            moveEntry(currentSection.id, entry.id, 1)
-                          }
-                        />
-                        <IconButton
-                          icon={Trash2}
-                          label="Remove entry"
-                          onClick={() =>
-                            removeEntry(currentSection.id, entry.id)
-                          }
-                        />
-                      </div>
-                      {renderFields(entryFields(entry))}
-                    </fieldset>
-                  ),
-                )}
-                {currentSection?.kind === "experience" &&
-                  currentSection.items.map((item) => (
-                    <button
-                      className="rws-add-row"
-                      key={item.id}
-                      onClick={() =>
-                        mutate(
-                          (next) =>
-                            next.model.sections
-                              .find((section) => section.id === group)
-                              .items.find((entry) => entry.id === item.id)
-                              .bullets.push({
-                                id: crypto.randomUUID(),
-                                text: "",
-                              }),
-                          "Added achievement",
-                        )
-                      }
-                    >
-                      <Plus size={15} />
-                      Achievement / {item.org || "new role"}
-                    </button>
-                  ))}
-                {currentSection && currentSection.kind !== "text" && (
-                  <button
-                    className="rws-add-row"
-                    onClick={() => addItem(currentSection)}
-                  >
-                    <Plus size={15} />
-                    {currentSection.kind === "experience"
-                      ? "Add role"
-                      : "Add entry"}
-                  </button>
-                )}
-                {group === "Contact" && (
-                  <button
-                    className="rws-add-row"
-                    onClick={() =>
-                      mutate(
-                        (next) =>
-                          next.model.contact.links.push({
-                            id: crypto.randomUUID(),
-                            label: "",
-                            url: "",
-                          }),
-                        "Added contact link",
-                      )
-                    }
-                  >
-                    <Link size={15} />
-                    Add link
-                  </button>
-                )}
-                {group === "Contact" && doc.model.contact.links.map(link => <button key={link.id} className="rws-add-row" onClick={() => mutate(next => { next.model.contact.links = next.model.contact.links.filter(item => item.id !== link.id); }, "Removed contact link")}><Trash2 size={15} />Remove {link.label || "link"}</button>)}
-              </>
+              <ResumeDocumentPanel document={doc} group={group} selectedField={selectedField} onSelect={selectDocumentField} onEditContact={openContact} onAddContact={() => openContact()} onAddSection={() => setDialog("section")} onAddItem={addItem} onRemoveSection={id => { setGroup(id); setDialog("remove-section"); }} mutate={mutate} />
             )}
             {pane === "design" && (
               <>
@@ -2383,187 +2519,72 @@ function App() {
                 {!rendering && pageInfo.layoutError && <p className="rws-inline-warning" role="status"><CircleAlert size={14} />{pageInfo.layoutError}</p>}
               </>
             )}
-            {pane === "review" && (
-              <>
-                <div className="rws-panel-heading">
-                  <h2>Document review</h2>
-                  {!hosted && <IconButton icon={BookOpen} label="AI review rubric" onClick={() => setDialog("rubric")} />}
-                </div>
-                <button
-                  className="rws-target"
-                  onClick={() => {
-                    setTargetInput(structuredClone(doc.target));
-                    setDialog("target");
-                  }}
-                >
-                  <span>
-                    Target role
-                    <strong>{doc.target.role || "General purpose"}</strong>
-                    <small>
-                      {doc.target.company || "No job description selected"}
-                    </small>
-                  </span>
-                  <Pencil size={14} />
-                </button>
-                <div className="rws-review-state">
-                  <span className={fresh ? "rws-verified" : "rws-muted"}>
-                    {fresh ? (
-                      <>
-                        <Check size={13} />
-                        Current version
-                      </>
-                    ) : assessment ? (
-                      <>
-                        <Clock3 size={13} />
-                        Edited since review
-                      </>
-                    ) : (
-                      "Not yet assessed"
-                    )}
-                  </span>
-                  <button className="rws-text-button" disabled={!!busy} onClick={runAssessment}>
-                    <RefreshCw size={13} />
-                    {hosted ? 'Re-check ATS' : 'Run checks'}
-                  </button>
-                </div>
-                {doc.ats && <details className="rws-inline-warning" data-ats-migration><summary>Migration and original record</summary>{doc.ats.warnings.map(warning => <p key={warning}>{warning}</p>)}<p>Saved ATS record: {doc.ats.entryId}. Original score: {doc.ats.historicalReview.result?.score ?? 'Not assessed'}.</p>{doc.sourceIds.length ? <button className="rws-text-button" onClick={() => { setMode('source'); setSourceId(doc.sourceIds[0]); setSheetOpen(false); }}>Compare original file</button> : <button className="rws-text-button" onClick={() => fileInput.current.click()}>Attach source file</button>}<button className="rws-text-button" onClick={() => setPane('design')}>Review layout</button></details>}
-                <section className="rws-assessment-section rws-ai-review">
-                  <div className="rws-panel-heading"><h3><BookOpen size={17} />{hosted ? 'ATS assessment' : 'Role evidence review'}</h3>{!hosted && <button className="rws-text-button" disabled={!!busy} onClick={openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review with AI"}</button>}</div>
+          </div>
+        </aside>
+        <aside className="rws-review-panel rws-left-panel" aria-label="Resume review" hidden={libraryView || mode === "pdf" || leftPane !== "review"}>
+          {reviewHeading}
+          <div className="rws-inspector-content" ref={inspectorContent}>
+                {candidateEnabled && <button className="rws-text-button" disabled={!!busy} onClick={() => setDialog("candidate-assessment")}><ScanText size={13} />Preview candidate assessment</button>}
+                <section className={"rws-assessment-section rws-ai-review" + (atsReview ? " rws-ats-review" : "")}>
+                  {atsReview ? <>
+                    <div className="resume-score-summary">
+                      {reviewContext}
+                      <div className="ats__ring resume-score-dial" style={{ "--p": hasAtsScore ? Math.max(0, Math.min(100, atsReview.score)) : 0 }} role="img" aria-label={hasAtsScore ? `ATS score ${atsReview.score} out of 100` : "ATS score unavailable"}>
+                        <span aria-hidden="true">{hasAtsScore ? atsReview.score : "--"}</span>
+                      </div>
+                      <div className="resume-score-copy">
+                        <h2>{atsReview.band || "ATS assessment"}</h2>
+                        <div className="resume-score-context">{scoreContext ? `ATS + ${scoreContext} fit` : "General ATS check"}</div>
+                        {atsReview.summary && <p>{atsReview.summary}</p>}
+                      </div>
+                    </div>
+                    <div className="rws-score-actions"><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review again</button></div>
+                  </> : <><div className="rws-panel-heading"><h3><BookOpen size={17} />Resume review</h3>{reviewContext}</div><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review resume"}</button></>}
                   {busy?.startsWith("ai-") && <div className="rws-inline-actions"><span role="status">Review in progress</span><button className="rws-text-button" onClick={cancelAiReview}>Cancel</button></div>}
                   {doc.aiReview ? <>
-                    <p className="rws-review-meta">{doc.aiReview.method}{doc.aiReview.provider ? ' / ' + doc.aiReview.provider + ' / ' + doc.aiReview.model : ''}</p>
-                    {doc.aiReview.kind === 'ats' && <><div className="rws-score"><strong>{doc.aiReview.score}<small>/100</small></strong><span>{doc.aiReview.band}</span></div><p>{doc.aiReview.summary}</p></>}
-                    {doc.aiReview.signature !== signature && <p role="status" className="rws-inline-warning">Document or evidence changed. This review is historical.</p>}
-                    {doc.aiReview.findings.length ? <><p className="rws-review-meta">{reviewFindings.filter(item => !item.decision).length} active / {reviewFindings.filter(item => item.decision).length} set aside</p>{reviewFindings.filter(item => !item.decision).map(renderFinding)}{reviewFindings.some(item => item.decision) && <details className="rws-set-aside"><summary>Set aside ({reviewFindings.filter(item => item.decision).length})</summary>{reviewFindings.filter(item => item.decision).map(renderFinding)}</details>}</> : <p>No consequential revisions identified in this review.</p>}
-                    {doc.aiQuestion && <section className="rws-review-finding"><h4>Evidence needed</h4><p>{doc.aiQuestion.question}</p><p>{doc.aiQuestion.reason}</p><TextField label="Your supporting evidence" multiline value={evidenceAnswer} onChange={setEvidenceAnswer} /><button className="rws-secondary" disabled={!!busy || !evidenceAnswer.trim() || doc.aiQuestion.signature !== signature} onClick={saveEvidenceAnswer}><Plus size={13} />Save evidence</button></section>}
-                    {doc.aiReview.kind === 'ats' ? <details><summary>ATS signals and limits</summary>{(doc.aiReview.result?._breakdown || []).map(part => <p key={part.key}>{part.label}: {part.value}</p>)}<p>{doc.aiReview.signals?.semMode || 'Historical semantic mode not recorded'}. Heuristic assessment, not an employer ATS result or hiring probability.</p></details> : <details><summary>Historical rubric / not comparable to ATS</summary>{doc.aiReview.breakdown.map(part => <section className="rws-review-finding" key={part.id}><h4>{part.label}</h4><p>{part.rating === null ? "Unknown" : part.rating + "/4"} / {part.status}</p><p>{part.reason}</p></section>)}<p>{doc.aiReview.score === null ? "Overall not assessed" : "Rubric total: " + doc.aiReview.score + "/100"} / assessed weight {doc.aiReview.coverage}%</p><p>{doc.aiReview.method}</p></details>}
+                    {doc.aiReview.signature !== signature && <p role="status" className="rws-inline-warning">Resume, target or source changed. This review is historical; review again for an updated assessment.</p>}
+                    {doc.aiReview.findings.length ? <><p className="rws-review-meta">{reviewFindings.filter(item => !item.decision).length} to consider / {archivedSuggestions.length} archived</p>
+                    {reviewSections.suggestions.length > 0 && <div className="resume-review-suggestions" aria-label="Suggestions">
+                      {reviewSections.suggestions.map(category => <section className="resume-suggestion-group" key={category.id} data-review-category={category.id}>
+                        <h3 className="resume-review-group-heading"><span>{category.suggestionLabel}</span><small>{category.items.length}</small></h3>
+                        {category.items.map(item => renderFinding(item))}
+                      </section>)}
+                    </div>}
+                    {reviewSections.assessments.length > 0 && <h3 className="resume-review-section-heading">Deeper review</h3>}
+                    {reviewSections.assessments.map(category => <details className="resume-review-category" key={category.id} data-review-category={category.id} open={category.items.some(item => item.index === focusedFinding)}>
+                      <summary><span>{category.label}</span><small>{category.items.length}</small></summary>
+                      <p className="resume-review-category__intro">{category.detail}</p>
+                      {category.items.map(item => renderFinding(item))}
+                    </details>)}</> : <p>No consequential revisions identified in this review.</p>}
+                    {doc.aiQuestion && !reviewFindings.some(item => item.index === doc.aiQuestion.findingIndex) && renderEvidenceQuestion()}
+                    {doc.aiReview.kind !== 'ats' && <details className="resume-review-category"><summary>Deeper checks</summary>{doc.aiReview.breakdown.map(part => <section className="rws-review-passage" key={part.id}><h4>{part.label}</h4><p>{part.reason}</p></section>)}</details>}
                   </> : <p>Not yet evaluated against the target job.</p>}
+                {(missingSkills.length > 0 || coveredSkills.length > 0) && <details className="resume-review-category" open data-review-keywords>
+                  <summary><span>Job language</span><small>{missingSkills.length} not mentioned</small></summary>
+                  <p className="resume-review-category__intro">Add a skill only when your experience supports it.</p>
+                  <div className="atsv__kw">
+                    {missingSkills.length > 0 && <div className="atsv__kwrow"><span className="atsv__kwlbl">Not mentioned</span>{missingSkills.map(term => <span className="atsv__chip atsv__chip--miss" key={term}>{term}</span>)}</div>}
+                    {coveredSkills.length > 0 && <div className="atsv__kwrow"><span className="atsv__kwlbl">Covered</span>{coveredSkills.map(term => <span className="atsv__chip" key={term}>{term}</span>)}</div>}
+                  </div>
+                </details>}
+                {!!doc.aiReview?.result?.checks?.length && <details className="resume-review-category"><summary>Resume essentials</summary>{doc.aiReview.result.checks.map((check, index) => <div className="rws-check-row" key={index}>{check.status === "pass" ? <Check size={14} /> : <CircleAlert size={14} />}<span><strong>{check.label}</strong><small>{check.note}</small></span></div>)}</details>}
                 </section>
-                <section className="rws-assessment-section">
-                  <h3><ScanText size={17} />{hosted ? 'Measured diagnostics' : 'Measured readiness'}</h3>
-                  {fresh && assessment.measured ? <details><summary>Local diagnostic breakdown</summary>
-                    {!hosted && <div className="rws-score"><strong>{assessment.measured.score}<small>/100</small></strong><span>{assessment.targetBasis}<small>Provisional local score</small></span></div>}
-                    <dl className="rws-score-parts">{assessment.measured.breakdown.map(part => <div key={part.key}><dt>{part.key === "semantic" ? "Lexical context" : part.key === "parse" ? "PDF layout heuristic" : part.label}</dt><dd>{part.value}<small>{Math.round(part.weight / assessment.measured.breakdown.reduce((sum, item) => sum + item.weight, 0) * 100)}% weight</small></dd></div>)}</dl>
-                    <p>{hosted ? 'Deterministic diagnostics for this version. The ATS assessment above includes AI judgment; missing signals are not assumed to pass.' : 'This local diagnostic excludes AI judgment. Role evidence is reviewed separately above. Unavailable signals are excluded and weights renormalized. This is not a hiring probability or an ATS vendor score.'}</p>
-                  </details> : <p>Run checks for the current document and target.</p>}
-                </section>
-                <section className="rws-assessment-section">
-                  <h3>
-                    <FileCheck2 size={17} />
-                    PDF integrity
-                  </h3>
-                  <strong>
-                    {fresh && assessment.pdf?.complete
-                      ? "Text completeness verified"
-                      : "Not yet verified"}
-                  </strong>
-                  <p>
-                    {fresh && assessment.pdf?.complete
-                      ? assessment.pdf.fields +
-                        " authored fields found across " +
-                        assessment.pdf.pages +
-                        " exported pages."
-                      : "Requires an exported PDF. No parse score is assumed."}
-                  </p>
-                  <button
-                    className="rws-text-button"
-                    onClick={() => renderPdf(false)}
-                    disabled={!!busy}
-                  >
-                    Inspect PDF
-                    <ChevronRight size={13} />
-                  </button>
-                </section>
-                <section className="rws-assessment-section">
-                  <h3>
-                    <Search size={17} />
-                    Role coverage
-                  </h3>
-                  <strong>
-                    {fresh && assessment.matchRate != null
-                      ? assessment.matchRate + "% mentioned"
-                      : doc.target.jd || doc.target.role
-                        ? "Awaiting current check"
-                        : "No target job"}
-                  </strong>
-                  <p>
-                    Term coverage is not evidence of expertise or an ATS pass.
-                  </p>
-                  {fresh && (
-                    <div className="rws-keywords">
-                      {assessment.coverage.map((term) => (
-                        <button
-                          key={term.term}
-                          disabled={!term.fields.length}
-                          onClick={() => { const field = fields.find(field => field.id === term.fields[0]); if (field) { selectGroup(field.group); setSelectedField(field.id); } }}
-                          className={
-                            term.state === "mentioned" ? "is-mentioned" : ""
-                          }
-                          title={
-                            term.state === "mentioned"
-                              ? "Mentioned in resume; verify supporting experience"
-                              : "Not evidenced in this resume"
-                          }
-                        >
-                          {term.state === "mentioned" ? (
-                            <Check size={10} />
-                          ) : (
-                            <Plus size={10} />
-                          )}
-                          {term.term}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {fresh && <details className="rws-evidence-gaps"><summary>Missing requirements / highest weight first</summary>{assessment.coverage.filter(term => term.state !== "mentioned").map(term => <div key={term.term}><strong>{term.term}</strong><small>Weight {term.weight}. Add only with supporting experience; a missing term is not permission to invent it.</small></div>)}</details>}
-                </section>
-                <section className="rws-assessment-section">
-                  <h3>
-                    <List size={17} />
-                    Writing & structure
-                  </h3>
-                  {fresh ? (
-                    (assessment.measuredChecks || assessment.checks.map(check => ({ ...check, label: check.title, note: check.detail }))).map((check) => (
-                      <div className="rws-check-row" key={check.label}>
-                        {check.status === "pass" ? (
-                          <Check size={14} />
-                        ) : (
-                          <CircleAlert size={14} />
-                        )}
-                        <span>
-                          <strong>{check.label}</strong>
-                          <small>{check.note}</small>
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p>Run checks against the current document.</p>
-                  )}
-                  <p className="rws-muted">
-                    Role-fit judgment: not independently evaluated.
-                  </p>
-                </section>
-                <section className="rws-assessment-section">
+                {(standaloneProposals.length > 0 || (sampleTools && !doc.aiReview)) && <section className="rws-assessment-section">
                   <div className="rws-suggestions-heading">
-                    <h3>Suggestions</h3>
-                    <div className="rws-suggestion-tools" role="group" aria-label="Suggestion actions">
-                      <button className="rws-secondary" title="Propose an evidence-backed revision" disabled={!doc.sourceIds.length} onClick={composeProposal}>
+                    <h3>Proposed changes</h3>
+                    {sampleTools && <div className="rws-suggestion-tools" role="group" aria-label="Suggestion actions">
+                      <button className="rws-secondary" title="Propose a revision" disabled={!doc.sourceIds.length} onClick={composeProposal}>
                         <Pencil size={14} />
                         <span>Add revision</span>
                       </button>
-                      {!hosted && <button className="rws-secondary" title="Load fictional sample suggestions" onClick={reviewProposals}>
+                      <button className="rws-secondary" title="Load fictional sample suggestions" onClick={reviewProposals}>
                         <RefreshCw size={14} />
                         <span>Load sample</span>
-                      </button>}
-                    </div>
+                      </button>
+                    </div>}
                   </div>
-                  {proposals
-                    .filter((proposal) => !doc.dismissed?.includes(proposal.id))
-                    .map((proposal) => (
+                  {standaloneProposals.map((proposal) => (
                       <article className="rws-proposal" key={proposal.id} data-proposal-id={proposal.id}>
-                        <span className="rws-method-tag">
-                          {proposal.origin === "ai" ? "AI PROPOSAL / VERIFY CLAIMS" : proposal.origin === "manual" ? "USER-AUTHORED PROPOSAL" : "EVIDENCE-BACKED SAMPLE"}
-                        </span>
                         <h4 tabIndex={-1}>{proposal.title}</h4>
                         <p>{proposal.reason}</p>
                         {proposal.signature !== signature ? <p role="status">Document changed. Review a fresh suggestion.</p> : proposal.impact && <div className="rws-projection"><strong>{proposal.impact.before} to {proposal.impact.after} /100</strong><small>Measured projection, excludes PDF and AI judgment. {Math.abs(proposal.impact.wordDelta)} words {proposal.impact.wordDelta > 0 ? "added" : "removed"}.</small></div>}
@@ -2586,7 +2607,7 @@ function App() {
                         <details>
                           <summary>
                             <BookOpen size={13} />
-                            Supporting evidence
+                            View context
                           </summary>
                           {proposal.evidence.map((reference, index) => {
                             const source = linkedSources.find(source => source.id === reference.sourceId);
@@ -2630,78 +2651,43 @@ function App() {
                         </div>
                       </article>
                     ))}
-                  {!proposals.filter(
-                    (proposal) => !doc.dismissed?.includes(proposal.id),
-                  ).length && (
+                  {!standaloneProposals.length && (
                     <p className="rws-muted">
                       No pending proposals.
                     </p>
                   )}
-                </section>
-              </>
-            )}
-            {pane === "sources" && (
-              <>
-                <div className="rws-panel-heading">
-                  <h2>Sources</h2>
-                  <IconButton
-                    icon={Upload}
-                    label="Import source file"
-                    onClick={() => fileInput.current.click()}
-                  />
-                </div>
-                {doc.sourceAssessment ? <details className="rws-evidence-gaps"><summary>Original source check / {time(doc.sourceAssessment.at)}</summary><p>{doc.sourceAssessment.characters.toLocaleString()} extracted characters. {doc.sourceAssessment.target.role || "No role target"}.</p><p>{doc.sourceAssessment.matchRate == null ? "No JD match measured." : doc.sourceAssessment.matchRate + "% keyword coverage against the captured JD."}</p><p>Extraction and lexical coverage only. Original layout, AI judgment and vendor parsing are not assessed.</p></details> : <button className="rws-text-button" disabled={!originalFiles.length} onClick={() => {
-                  const text = originalFiles.map(source => source.text).join("\n");
-                  const reference = createResume({ model: { name: "", title: "", summary: text, contact: {}, sections: [] }, target: doc.target });
-                  mutate(next => { next.sourceAssessment = { at: Date.now(), sourceIds: originalFiles.map(source => source.id), target: structuredClone(doc.target), characters: text.length, matchRate: assessResume(reference).matchRate }; }, "Captured original source check");
-                }}><ScanText size={15} />Capture original source check</button>}
-                <section className="rws-assessment-section" aria-label="Original files"><h3>Original files</h3>{originalFiles.map(renderSource)}{!originalFiles.length && <p className="rws-muted">No original files linked.</p>}</section>
-                {!!revisionEvidence.length && <section className="rws-assessment-section" aria-label="Revision evidence"><h3>Revision evidence</h3>{revisionEvidence.map(renderSource)}</section>}
-                {!!availableSources.length && <details className="rws-available-sources"><summary>Available files ({availableSources.length})</summary>{availableSources.map(renderSource)}</details>}
-                <section className="rws-assessment-section">
-                  <h3>Export history</h3>
-                  {currentRow?.exports
-                    ?.slice()
-                    .reverse()
-                    .map((entry) => (
-                      <button
-                        className="rws-export-row"
-                        key={entry.id}
-                        onClick={() => {
-                          setExported(entry);
-                          setMode("pdf");
-                          setSheetOpen(false);
-                        }}
-                      >
-                        <FileCheck2 size={17} />
-                        <span>
-                          Version {entry.version}
-                          <small>
-                            {entry.pages} pages / {time(entry.at)}
-                          </small>
-                        </span>
-                        <ChevronRight size={14} />
-                      </button>
-                    ))}
-                  {!currentRow?.exports?.length && (
-                    <p className="rws-muted">No exported versions yet.</p>
-                  )}
-                </section>
-                <button
-                  className="rws-text-button rws-archive-action"
-                  onClick={() => setDialog("archive")}
-                >
-                  <Archive size={15} />
-                  {doc.archived
-                    ? "Restore from archive"
-                    : "Archive this resume"}
-                </button>
-              </>
-            )}
+                </section>}
+                <details className="rws-set-aside resume-review-category" data-archived-suggestions>
+                  <summary><span>Archived suggestions</span><small>{archivedSuggestions.length}</small></summary>
+                  {!archivedSuggestions.length && <p className="rws-muted">No archived suggestions yet.</p>}
+                  {archivedSuggestions.map((decision, index) => {
+                    const current = reviewFindings.find(item => item.decision === decision);
+                    return current ? <div key={decision.at + "-" + index}>
+                      {renderFinding(current)}
+                      <button className="rws-text-button" disabled={!!busy} onClick={() => saveFindingDecision(doc.aiReview, current.index, { reason: "reopen" })}><Undo2 size={13} />Restore suggestion</button>
+                    </div> : <section className="rws-review-finding resume-finding" key={decision.at + "-" + index} data-archived-review>
+                      <h4>{decision.action}</h4>
+                      <small>Earlier review / {time(decision.reviewAt)}</small>
+                      {decision.archived?.explanation && <p>{decision.archived.explanation}</p>}
+                      <p>{REVIEW_DECISION_REASONS[decision.reason]}</p>
+                      {decision.note && <p>{decision.note}</p>}
+                      {decision.evidence && <div className="rws-review-passage"><small>{decision.evidence.label} / evidence recorded then</small><blockquote>{decision.evidence.text}</blockquote></div>}
+                      {decision.archived?.proposal && <div className="rws-diff"><span>Original</span><p>{decision.archived.proposal.before}</p><span>Proposed then</span><p>{decision.archived.proposal.after}</p></div>}
+                      <button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review current resume</button>
+                    </section>;
+                  })}
+                </details>
           </div>
         </aside>
       </div>
       <nav className="rws-mobile-panels" aria-label="Mobile workspace panels">
+        {[["review", ScanText, "Review"]].map(([id, Icon, label]) => (
+          <button key={id} aria-pressed={leftPane === id && libraryOpen} onClick={() => {
+            setLeftPane(id);
+            setLibraryOpen(current => leftPane === id ? !current : true);
+            setSheetOpen(false);
+          }}><Icon size={17} /><span>{label}</span></button>
+        ))}
         {tabs.map(([id, Icon, label]) => (
           <button
             key={id}
@@ -2717,37 +2703,6 @@ function App() {
           </button>
         ))}
       </nav>
-      <footer className={"adm__statusbar rws-status is-" + saveState}>
-        <span className="rws-save-status">
-          {indicator}
-          <span>
-            {saveState === "saved"
-              ? (hosted ? "Saved to Cloudflare" : "Saved to preview server")
-              : saveState === "conflict"
-                ? "Version conflict / edits retained"
-                : saveState === "error"
-                  ? "Not saved / edits retained locally"
-                  : (hosted ? "Saving to Cloudflare..." : "Saving to preview server...")}
-          </span>
-        </span>
-        <span className="rws-status-version">v{version}</span>
-        {["error", "conflict"].includes(saveState) && (
-          <button
-            className="rws-text-button"
-            onClick={() =>
-              conflict ? setDialog("conflict") : persist().catch(() => {})
-            }
-          >
-            {conflict ? "Compare" : "Retry save"}
-          </button>
-        )}
-        <span className="rws-status-end">
-          <LockKeyhole size={14} className="rws-lock" />
-          <span>No live changes</span>
-          <span className="rws-status-separator" />
-          <span>{hosted ? "AI on request" : "AI: 0 tokens"}</span>
-        </span>
-      </footer>
       <input
         ref={fileInput}
         type="file"
@@ -2942,15 +2897,6 @@ function App() {
           </p>
         </Dialog>
       )}
-      {dialog === "rubric" && (
-        <Dialog wide title="AI review rubric" onClose={() => setDialog(null)} actions={<button className="btn" onClick={() => setDialog(null)}>Close</button>}>
-          <p className="pass__sub">Review with AI uses the rubric below through a configured transport. Run checks remains separate provisional local diagnostics.</p>
-          {REVIEW_RUBRIC.map(part => <section className="rws-assessment-section" key={part.id}><h3>{part.label} / {part.weight}%</h3><p>{part.detail}</p></section>)}
-          <section className="rws-assessment-section"><h3>Evidence and uncertainty</h3><p>Each criterion has a 0-4 evidence anchor and a reason. Original excerpts are resolved locally from cited IDs. Required gaps remain visible. An unassessable criterion or missing JD leaves the overall score incomplete, not automatically perfect or failed.</p></section>
-          <section className="rws-assessment-section"><h3>Separate parsing report</h3><p>Text completeness, reading order, links and fonts are measured on the exported PDF. They do not establish universal ATS acceptance. Employer upload instructions take precedence.</p></section>
-          <section className="rws-assessment-section"><h3>Validation limits</h3><p>The model evaluates evidence; code validates citations, ratings, completeness and arithmetic. These checks do not prove semantic truth, impartiality or real-world calibration. No automatic rewrite, fixed score ceiling or guaranteed improvement.</p></section>
-        </Dialog>
-      )}
       {dialog === 'migration-layout' && <Dialog wide title="Confirm migrated layout" onClose={() => setDialog(null)} actions={<><button className="btn btn--ghost" onClick={() => setDialog(null)}>Keep reviewing</button><button className="btn btn--primary" disabled={!!busy || exported?.signature !== resumeSignature(doc)} onClick={async () => {
         setBusy('migration-layout'); setError('');
         try { mutate(next => { next.ats.layoutAccepted = true; }, 'Accepted migrated PDF layout'); await persist(); setDialog(null); }
@@ -2962,25 +2908,38 @@ function App() {
         {doc.sourceIds.length > 0 && <button className="rws-text-button" onClick={() => { setDialog(null); setMode('source'); setSourceId(doc.sourceIds[0]); }}>Compare original file</button>}
         {error && <p role="alert">{error}</p>}
       </Dialog>}
+      {candidateEnabled && <ResumeCandidateReview key={doc.id} open={dialog === "candidate-assessment"} Dialog={Dialog} onClose={() => setDialog(null)}
+        document={doc} version={version} sources={originalFiles} getRecord={() => live.current} connection={studioHost?.resumeAI} prepareExport={prepareCandidateExport} applyRevision={applyCandidateRevision}
+        readSource={async (source, signal) => {
+          if (!source || !/^[a-f0-9]{64}$/.test(source.id)) throw new Error("Select a valid attached original.");
+          signal.throwIfAborted();
+          let blob;
+          if (hosted) blob = await hostedClient.file("sources/" + source.id, source.type, { signal });
+          else {
+            const response = await fetch("/__resume/sources/" + source.id, { signal });
+            if (!response.ok) throw new Error("The original file could not be read.");
+            blob = await response.blob();
+          }
+          const bytes = new Uint8Array(await blob.arrayBuffer()); signal.throwIfAborted(); return bytes;
+        }} />}
       {dialog === 'ats-check' && <Dialog wide title="Re-check ATS" onClose={cancelAiReview} actions={<><button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button><button className="btn btn--primary" disabled={!!busy || !aiConsent || !aiConfiguration?.available} onClick={runHostedAssessment}>Run ATS check</button></>}>
         <p className="pass__sub">{aiConfiguration?.available ? aiConfiguration.provider + ' / ' + aiConfiguration.model : 'Configure AI in Studio before running a check.'}</p>
-        <p>The current saved resume will be rendered to PDF and checked against this target. Earlier reviews remain in history. This is a paid AI request using your Studio configuration.</p>
-        <details><summary>Resume and target sent for assessment</summary><pre>{resumeText(doc)}</pre><pre>{doc.target.jd || doc.target.level}</pre></details>
-        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume and target to be sent for an ATS check.</label>
+        <p>The current saved resume will be rendered to PDF and reviewed, with proposed revisions prepared in the same request. Supporting sources can inform revisions, not raise the current resume score. Nothing is applied automatically. Earlier reviews remain in history. This is a paid AI request using your Studio configuration.</p>
+        <details><summary>Resume, target and supporting sources sent for review</summary><pre>{resumeText(doc)}</pre><pre>{doc.target.jd || doc.target.level}</pre>{linkedSources.map(source => <details key={source.id}><summary>{source.name}</summary><pre>{source.text}</pre></details>)}</details>
+        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume, target and selected supporting sources to be sent for review and proposed revisions.</label>
         {busy && <p role="status">Checking current PDF...</p>}{error && <p role="alert" className="rws-inline-warning">{error}</p>}
       </Dialog>}
-      {dialog === "ai-review" && <Dialog wide title={revisionFinding === null ? "Review target requirements" : "Prepare evidence-backed revision"} onClose={cancelAiReview} actions={<>
+      {dialog === "ai-review" && <Dialog wide title="Review target requirements" onClose={cancelAiReview} actions={<>
         <button className="btn btn--ghost" onClick={cancelAiReview}>Cancel</button>
-        {revisionFinding !== null ? <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !aiConsent || !aiPacket || !canReviseReview(doc, doc.aiReview)} onClick={() => runAiReview("revision", revisionFinding)}>Approve revision request</button> : <>
           <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !aiConsent || !aiPacket || !doc.target.jd.trim()} onClick={() => runAiReview("requirements")}>Build requirements</button>
           {doc.reviewManifest && <button className="btn btn--primary" disabled={!!busy || !aiConfiguration?.available || !requirementsConsent || !aiConsent || !aiPacket} onClick={() => runAiReview("assessment")}>Approve and review</button>}
-        </>}
       </>}>
-        <p className="pass__sub">{aiConfiguration?.available ? `${aiConfiguration.provider} / ${aiConfiguration.model}. ${hosted ? 'Paid revision request using your Studio configuration.' : 'Remaining reserved budget: $' + Number(aiConfiguration.remaining ?? 0).toFixed(2) + '.'}` : "Configure AI in Studio before requesting a revision."}</p>
+        <p className="pass__sub">{aiConfiguration?.available ? `${aiConfiguration.provider} / ${aiConfiguration.model}. Remaining reserved budget: $${Number(aiConfiguration.remaining ?? 0).toFixed(2)}.` : "Configure AI in Studio before reviewing."}</p>
+        <p>The review also prepares proposed revisions or specific questions where facts are missing. Supporting sources inform revisions, not the current resume score. Nothing is applied automatically.</p>
         {hosted && !aiConfiguration?.available && aiConfiguration?.models && <div className="rws-form-grid"><label className="rws-field"><span>Review model</span><select aria-label="Review model" value={aiModel} onChange={event => setAiModel(event.target.value)}>{aiConfiguration.models.filter(model => Number.isFinite(model.pricing?.input) && Number.isFinite(model.pricing?.output)).map(model => <option key={model.id} value={model.id}>{model.id} / ${model.pricing.input} input, ${model.pricing.output} output per million tokens</option>)}</select></label><button className="btn btn--ghost" disabled={!aiModel || !!busy} onClick={async () => { try { setAiConfiguration(await api("ai/connect", { method: "POST", body: JSON.stringify({ model: aiModel, approved: true }) })); } catch (failure) { setError(failure.message); } }}>Authorize $1 review budget</button></div>}
         <details className="rws-reading-order"><summary>Data sent for this review</summary><h3>Target job</h3><pre>{doc.target.jd}</pre><h3>Resume evidence</h3><pre>{aiPacket?.excerpts.map(excerpt => excerpt.text).join("\n")}</pre><h3>Supporting sources for revisions</h3>{linkedSources.map(source => <details key={source.id}><summary>{source.name}</summary><pre>{source.text}</pre></details>)}</details>
         <label className="chk"><input type="checkbox" checked={aiConsent} onChange={event => setAiConsent(event.target.checked)} />Allow these job, resume and selected source texts to be sent to this provider. Contact fields are excluded; other text may still contain personal information.</label>
-        {doc.reviewManifest && revisionFinding === null && <>
+        {doc.reviewManifest && <>
           <h3>Job requirements</h3>{doc.reviewManifest.requirements.map(requirement => <section className="rws-review-finding" key={requirement.id}><h4>{requirement.label}</h4><label className="rws-field"><span>Priority</span><select aria-label={"Priority: " + requirement.label} value={requirement.importance} disabled={!!busy} onChange={event => { const importance = event.target.value; change({ ...live.current.document, reviewManifest: { ...doc.reviewManifest, requirements: doc.reviewManifest.requirements.map(item => item.id === requirement.id ? { ...item, importance } : item) } }, "Corrected requirement priority", false); setRequirementsConsent(false); }}><option value="required">Required</option><option value="responsibility">Responsibility</option><option value="preferred">Preferred</option></select></label><blockquote>{requirement.quote}</blockquote></section>)}
           <details><summary>Non-scoring job context</summary>{doc.reviewManifest.segments.filter(segment => segment.disposition !== "criteria").map(segment => <p key={segment.id}>{segment.id}: {segment.disposition}. {segment.reason}</p>)}</details>
           <label className="chk"><input type="checkbox" checked={requirementsConsent} onChange={event => setRequirementsConsent(event.target.checked)} />I reviewed the requirement inventory against the job description.</label>
@@ -2992,12 +2951,18 @@ function App() {
         <Dialog
           wide
           title="Version history"
+          className={"rws-history-dialog" + (historyPreview ? " has-preview" : "")}
+          headingActions={<div className="adm__hm-seg rws-history-toggle" role="group" aria-label="Version preview">
+            <button className={historyPreview ? "is-on" : ""} aria-pressed={historyPreview} disabled={!compareVersion} onClick={() => setHistoryPreview(true)}>Preview ON</button>
+            <button className={!historyPreview ? "is-on" : ""} aria-pressed={!historyPreview} onClick={() => setHistoryPreview(false)}>Preview OFF</button>
+          </div>}
           onClose={() => setDialog(null)}
           actions={
             <>
               <button className="btn" onClick={() => setDialog(null)}>
                 Close
               </button>
+              <button className="btn" disabled={!compareVersion || historyPdfBusy || compareVersion.document.ats && !compareVersion.document.ats.layoutAccepted && !historyLayoutAccepted} onClick={downloadHistoryPdf}><Download size={15} />Download PDF</button>
               {compareVersion && compareVersion.number !== version && (
                 <button
                   className="btn btn--primary"
@@ -3009,50 +2974,45 @@ function App() {
             </>
           }
         >
-          <div className="rws-checkpoint"><TextField label="Restore point name" value={input} onChange={setInput} /><button className="btn" disabled={!input.trim() || !!busy} onClick={async () => { setBusy("checkpoint"); try { await checkpoint(input.trim()); setInput(""); await showVersions(); } catch (failure) { setError(failure.message); } finally { setBusy(null); } }}><Plus size={15} />Save restore point</button></div>
           <div className="rws-versions-layout">
+            <div className="rws-version-sidebar">
+            <div className="rws-checkpoint"><TextField label="Restore point name" value={input} onChange={setInput} /><button className="btn" disabled={!input.trim() || !!busy} onClick={async () => { setBusy("checkpoint"); try { await checkpoint(input.trim(), "manual"); setInput(""); await showVersions(); } catch (failure) { setError(failure.message); } finally { setBusy(null); } }}><Plus size={15} />Save restore point</button></div>
             <div className="rws-version-list">
+              {!versions.length && <p role="status">No checkpoints yet. Export a PDF or save a restore point.</p>}
               {versions.map((entry) => (
                 <button
                   className={
                     compareVersion?.number === entry.number ? "is-active" : ""
                   }
                   key={entry.number}
+                  aria-pressed={compareVersion?.number === entry.number}
                   onClick={() => setCompareVersion(entry)}
                 >
-                  <History size={15} />
+                  {entry.checkpoint === "export" ? <FileCheck2 size={15} /> : <History size={15} />}
                   <span>
                     <strong>
                       v{entry.number} / {entry.label}
                     </strong>
-                    <small>{time(entry.at)}</small>
+                    <small>{time(entry.at)}{entry.label !== "PDF exported" && currentRow?.exports?.some(pdf => pdf.version === entry.number) ? " / PDF exported" : ""}</small>
                   </span>
                   {entry.number === version && <Check size={14} />}
+                  <ChevronRight size={16} />
                 </button>
               ))}
             </div>
-            <div className="rws-version-preview">
-              {compareVersion ? (
-                <>
-                  <h3>Version {compareVersion.number}</h3>
-                  <p>
-                    {compareVersion.document.design.size.toUpperCase()} /{" "}
-                    {RESUME_FONTS[compareVersion.document.design.font]?.name} /{" "}
-                    {compareVersion.document.design.margin} margins
-                  </p>
-                  <pre>{resumeText(compareVersion.document)}</pre>
-                </>
-              ) : (
-                <p className="rws-muted">
-                  Select a version to inspect its content and design before
-                  restoring.
-                </p>
-              )}
             </div>
+            {historyPreview && <div className="rws-version-preview">
+              {historyPdfBusy && <p role="status">Preparing version preview...</p>}
+              {historyPdf && historyPdf.entry.version === compareVersion?.number && <ResumePdfViewer url={historyPdf.url} label={"Version " + compareVersion.number + " PDF preview"} controls={false} initialFit="page-fit" />}
+            </div>}
           </div>
+          <p className="rws-history-note">{compareVersion ? `Saved content and design from version ${compareVersion.number}. Your current draft is unchanged until you choose Restore.` : "Edits are autosaved without adding history checkpoints."}</p>
+          {compareVersion?.document.ats && !compareVersion.document.ats.layoutAccepted && <label className="chk"><input type="checkbox" checked={historyLayoutAccepted} disabled={!historyPdf} onChange={event => setHistoryLayoutAccepted(event.target.checked)} />I have reviewed this regenerated migrated layout before downloading.</label>}
+          {historyPdfError && <p role="alert" className="rws-inline-warning">{historyPdfError}</p>}
+          {error && <p role="alert" className="rws-inline-warning">{error}</p>}
         </Dialog>
       )}
-      {dialog === "finding-decision" && findingDecision && <Dialog wide title="Set aside finding" onClose={() => setDialog(null)} actions={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn--primary" disabled={!!busy || findingDecision.reason === "evidenced" && !findingDecision.fieldId} onClick={() => saveFindingDecision(findingDecision.review, findingDecision.findingIndex, findingDecision)}>Set aside</button></>}>
+      {dialog === "finding-decision" && findingDecision && <Dialog wide title="Archive suggestion" onClose={() => setDialog(null)} actions={<><button className="btn" disabled={!!busy} onClick={() => setDialog(null)}>Cancel</button><button className="btn btn--primary" disabled={!!busy || findingDecision.reason === "evidenced" && !findingDecision.fieldId} onClick={() => saveFindingDecision(findingDecision.review, findingDecision.findingIndex, findingDecision)}>Archive suggestion</button></>}>
         <p>{findingDecision.review.findings[findingDecision.findingIndex].action}</p>
         <label className="rws-field"><span id="rws-finding-reason">Reason</span><select aria-labelledby="rws-finding-reason" value={findingDecision.reason} onChange={event => setFindingDecision({ ...findingDecision, reason: event.target.value })}>{Object.entries(REVIEW_DECISION_REASONS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label className="rws-field"><span id="rws-finding-evidence">Existing evidence</span><select aria-labelledby="rws-finding-evidence" value={findingDecision.fieldId} onChange={event => setFindingDecision({ ...findingDecision, fieldId: event.target.value })}><option value="">Choose a passage</option>{fields.filter(field => field.id !== "name" && field.group !== "Contact" && field.value.trim()).map(field => <option key={field.id} value={field.id}>{field.label} / {field.value.slice(0, 100)}</option>)}</select></label>
@@ -3155,6 +3115,7 @@ function App() {
             The original file stays byte-for-byte. Creating a resume imports
             editable text, not the original document's design.
           </p>
+          <p>Attaching adds a source without replacing your draft or earlier files. Existing reviews stay tied to their original inputs; review again after attaching a different file.</p>
           {!!imported.unmappedGlyphs && <p className="rws-error" role="alert">{imported.unmappedGlyphs} characters have no readable mapping in this PDF. They remain marked in the extracted text and need comparison with the original.</p>}
           {!!imported.unresolvedMarkers && <p className="rws-error" role="alert">{imported.unresolvedMarkers} bullet markers could not be matched to a line. Check their positions against the original.</p>}
           <ul aria-label="Recognized sections">
@@ -3168,4 +3129,30 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("resume-root")).render(<App />);
+function CandidateIntake() {
+  const [input, setInput] = useState(null), [error, setError] = useState('');
+  const close = () => {
+    try { studioBridge.close(window); }
+    catch (failure) { setError(failure.message); }
+  };
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        if (!candidateEnabled || !studioBridge?.candidateInput) throw new Error('Open the local candidate review from ATS setup or the original review.');
+        const value = structuredClone(await studioBridge.candidateInput(window, controller.signal));
+        if (active) setInput(value);
+      } catch (failure) { if (active) setError(failure.message); }
+    })();
+    return () => { active = false; controller.abort(); };
+  }, []);
+  if (!candidateEnabled || !studioBridge?.candidateInput) return <main role="alert">Open the local candidate review from ATS setup or the original review.</main>;
+  if (error || !input) return <Dialog title="Candidate assessment" onClose={close} actions={<button className="btn btn--ghost" onClick={close}>Close</button>}>
+    <p role={error ? 'alert' : 'status'}>{error || 'Opening selected file review...'}</p>
+  </Dialog>;
+  return <ResumeCandidateReview open Dialog={Dialog} onClose={close} target={input.target} connection={studioHost.resumeAI}
+    externalInput={{ label: input.label, read: async signal => structuredClone(await studioBridge.candidateInput(window, signal, true)) }} />;
+}
+
+createRoot(document.getElementById("resume-root")).render(new URLSearchParams(location.search).has("intake") ? <CandidateIntake /> : <App />);

@@ -4,8 +4,39 @@ export const RESUME_DESIGN = Object.freeze({ font: 'inter', size: 'a4', accent: 
 const copy = value => structuredClone(value);
 export const resumeSignature = document => JSON.stringify([document.id, document.name, document.target, document.model, document.design, document.sourceIds]);
 
-export function extractResumePdfText(content) {
+export function validateResumeCheckpoint(kind = null) {
+  if (kind !== null && kind !== 'manual' && kind !== 'export') throw Object.assign(new Error('Invalid resume checkpoint type.'), { status: 400 });
+  return kind;
+}
+
+export function resumeHistoryCheckpoints(record) {
+  const exports = new Set((record.exports || []).map(entry => entry.version));
+  const comparable = document => JSON.stringify({ ...document, updatedAt: 0 });
+  return (record.versions || []).flatMap((entry, index, versions) => {
+    let kind = Object.hasOwn(entry, 'checkpoint') ? validateResumeCheckpoint(entry.checkpoint) : undefined;
+    if (exports.has(entry.number)) kind = 'export';
+    if (kind === undefined) {
+      // Older named checkpoints were identical adjacent saves without a type marker.
+      if (entry.label === 'PDF exported') kind = 'export';
+      else if (index && !/^(?:Before (?:suggestion|candidate revision):|Created |Edited |Verified |Restored |Recovered |Applied |Undo|Redo)/.test(entry.label) &&
+        comparable(entry.document) === comparable(versions[index - 1].document)) kind = 'manual';
+    }
+    return kind === 'manual' || kind === 'export' ? [{ ...entry, checkpoint: kind }] : [];
+  });
+}
+
+export function resumePdfRunGap(firstHeight, secondHeight) {
+  return Math.max(24, Math.min(firstHeight || 10, secondHeight || 10) * 3);
+}
+
+export function extractResumePdfText(content, { separateDistantRuns = false, capturePositions = false } = {}) {
   const items = content.items.filter(item => typeof item.str === 'string');
+  const indices = capturePositions ? new Map(content.items.map((item, index) => [item, index])) : null;
+  // Trimming/repositioning an assembled line must also adjust its original item offsets.
+  const crop = (spans, start, end, offset = 0) => spans.filter(span => span.start < end && span.end > start).map(span => ({
+    ...span, start: Math.max(start, span.start) - start + offset, end: Math.min(end, span.end) - start + offset,
+    sourceStart: span.sourceStart + Math.max(0, start - span.start), sourceEnd: span.sourceEnd - Math.max(0, span.end - end),
+  }));
   const atBaseline = (first, second) => Math.abs(first.transform[5] - second.transform[5]) <= Math.max(1, Math.min(first.height || 10, second.height || 10) * .2);
   const markers = items.filter(item => /^[\u2022\u25e6\u25aa\u2023]$/.test(item.str) && !items.some(other => other.str.trim() && other !== item && atBaseline(item, other) && other.transform[4] < item.transform[4] - 1));
   const markerSet = new Set(markers), lines = [];
@@ -15,9 +46,11 @@ export function extractResumePdfText(content) {
     if (markerSet.has(item)) continue;
     if (item.str) {
       const text = item.str.replace(/\u0000/g, () => { unmappedGlyphs++; return '\ufffd'; });
-      if (current && (!atBaseline(current, item) || item.transform[4] < current.right - 2)) flush();
-      if (!current) current = { text: '', transform: item.transform, height: item.height || 10, right: item.transform[4] };
+      if (current && (!atBaseline(current, item) || item.transform[4] < current.right - 2 ||
+          (separateDistantRuns && item.transform[4] - current.right > resumePdfRunGap(current.height, item.height)))) flush();
+      if (!current) current = { text: '', transform: item.transform, height: item.height || 10, right: item.transform[4], ...(capturePositions ? { spans: [] } : {}) };
       if (current.text && !/\s$/.test(current.text) && !/^\s/.test(text) && item.transform[4] - current.right > current.height * .2) current.text += ' ';
+      if (capturePositions) current.spans.push({ start: current.text.length, end: current.text.length + text.length, item: indices.get(item), sourceStart: 0, sourceEnd: text.length });
       current.text += text; current.right = item.transform[4] + item.width;
     }
     if (item.hasEOL) flush();
@@ -25,17 +58,23 @@ export function extractResumePdfText(content) {
   flush();
   for (const marker of markers) {
     const line = lines.find(line => atBaseline(marker, line) && line.transform[4] > marker.transform[4] && line.transform[4] - marker.transform[4] <= marker.height * 2.5);
-    if (line) { line.text = marker.str + ' ' + line.text.trimStart(); line.marker = true; }
-    else lines.push({ text: marker.str, transform: marker.transform, height: marker.height, unresolvedMarker: true });
+    if (line) {
+      if (capturePositions) line.spans = [{ start: 0, end: marker.str.length, item: indices.get(marker), sourceStart: 0, sourceEnd: marker.str.length },
+        ...crop(line.spans, line.text.length - line.text.trimStart().length, line.text.length, marker.str.length + 1)];
+      line.text = marker.str + ' ' + line.text.trimStart(); line.marker = true;
+    } else lines.push({ text: marker.str, transform: marker.transform, height: marker.height, unresolvedMarker: true,
+      ...(capturePositions ? { spans: [{ start: 0, end: marker.str.length, item: indices.get(marker), sourceStart: 0, sourceEnd: marker.str.length }] } : {}) });
   }
-  let text = '';
+  let text = ''; const spans = [];
   for (const [index, line] of lines.entries()) {
     const previous = lines[index - 1];
     const gap = previous && previous.transform[5] - line.transform[5];
     const paragraph = previous && (gap > Math.max(previous.height, line.height) * 1.65 || gap < -2);
-    text += (text ? paragraph ? '\n\n' : '\n' : '') + line.text.trim();
+    text += text ? paragraph ? '\n\n' : '\n' : '';
+    if (capturePositions) spans.push(...crop(line.spans, line.text.length - line.text.trimStart().length, line.text.trimEnd().length, text.length));
+    text += line.text.trim();
   }
-  return { text, unmappedGlyphs, bullets: markers.length, unresolvedMarkers: lines.filter(line => line.unresolvedMarker).length };
+  return { text, unmappedGlyphs, bullets: markers.length, unresolvedMarkers: lines.filter(line => line.unresolvedMarker).length, ...(capturePositions ? { spans } : {}) };
 }
 
 export function structureResumeText(text) {
@@ -173,6 +212,7 @@ export function createResumeHistory(document, limit = 60) {
     get canUndo() { return past.length > 1; },
     get canRedo() { return future.length > 0; },
     refresh(next) { past[past.length - 1] = copy(next); },
+    discard() { if (past.length > 1) past.pop(); future = []; },
     record(next) { if (historySignature(next) === historySignature(past.at(-1))) return; past.push(copy(next)); if (past.length > limit) past.shift(); future = []; },
     undo() { if (past.length < 2) return null; future.push(past.pop()); return copy(past.at(-1)); },
     redo() { if (!future.length) return null; const next = future.pop(); past.push(next); return copy(next); }
@@ -215,9 +255,18 @@ export function projectResumeProposal(document, proposal, sources) {
   return { before: before.measured.score, after: after.measured.score, delta: after.measured.score - before.measured.score, keywordBefore: before.matchRate, keywordAfter: after.matchRate, wordDelta: proposal.after.trim().split(/\s+/).length - proposal.before.trim().split(/\s+/).length };
 }
 
+export function normalizeResumePdfText(value) {
+  return String(value).normalize('NFKC').replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\s\u00ad\u200b]+/g, '').toLowerCase();
+}
+
+export function resumePdfTextPattern(value) {
+  // Only an authored soft hyphen may disappear or become a printed line-break hyphen.
+  const parts = String(value).split('\u00ad').map(normalizeResumePdfText).filter(Boolean);
+  return parts.map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('-?');
+}
+
 export function validatePdfText(document, text) {
-  const normalize = value => String(value).normalize('NFKC').replace(/[\u2018\u2019\u02bc]/g, "'").replace(/\s+/g, '').toLowerCase();
-  const actual = normalize(text);
-  const missing = resumeFields(document.model).filter(field => !field.id.endsWith('.url') && field.value.trim() && !actual.includes(normalize(field.value))).map(field => ({ id: field.id, label: field.label, text: field.value }));
+  const actual = normalizeResumePdfText(text);
+  const missing = resumeFields(document.model).filter(field => !field.id.endsWith('.url') && field.value.trim() && !new RegExp(resumePdfTextPattern(field.value)).test(actual)).map(field => ({ id: field.id, label: field.label, text: field.value }));
   return { complete: !missing.length, missing, fields: resumeFields(document.model).filter(field => !field.id.endsWith('.url') && field.value.trim()).length };
 }

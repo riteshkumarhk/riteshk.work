@@ -19,6 +19,10 @@ import {
 } from "./admin-core.js";
 import { WORLD_LAND } from "./worldland.js";
 import { sanitizeRichHtml } from "./rich-html.mjs";
+import { resumeSaveFailureFeedback, observeResumeViewControls, RESUME_CANVAS_STORAGE_KEY, readResumeCanvasMode, saveResumeCanvasMode } from "./resume-hosted.mjs";
+import { RESUME_ICON_PATHS as RB_ICON_SVG, RESUME_FILLED_ICONS as RB_ICON_FILL } from "./resume-icons.mjs";
+import { readResumePdf, verifyResumePdf } from "./resume-pdf.mjs";
+import { resumeRevisionEvidence } from "./resume-review.mjs";
 import { contentRevision, publicationConflict, gitContentRevision } from "./content-revision.mjs";
 import { atsKeywordMatch, atsModelChecks, atsFactsBlock, atsParseLayout, atsSemanticFit, atsEmbedScore, atsBlendScore, atsParseScore, atsStructFromChecks, atsBand, atsScoreModel } from "./ats-core.js";
 import { draftComposition } from "./slide-merge-ai.mjs";
@@ -36,12 +40,17 @@ import { presentStudioDeck } from "./slide-studio-player.mjs";
 import { openPresenterTab } from "./presenter-tab.mjs";
 import { assertOwnerMediaResolved } from "./slide-studio-owner.mjs";
 import { createAiCatalog, aiProviderScope } from "./ai-model-catalog.mjs";
+import { createAssessmentBudgetClient } from "./resume-assessment-budget-client.mjs";
+import { createAssessmentHistoryClient } from "./resume-assessment-history-client.mjs";
+import { historyHash } from "./resume-assessment-history.mjs";
 import { createAiOrchestrator } from "./ai-orchestrator.mjs";
 import { AI_TASKS } from "./ai-model-router.mjs";
 import { parseCompositionResponse, compositionRevision, COMPOSITION_RESPONSE_SCHEMA } from "./slide-merge-ai.mjs";
 import { mountAiRoutingPanel } from "./ai-routing-panel.mjs";
 import { aiEvaluationSuite } from "./ai-model-evaluations.mjs";
 import { AI_AGENT_LIMITS, createAiTaskAgent, agentRequestOptions, prepareRequestOptions } from "./ai-task-agent.mjs";
+import { AI_TEXT_REQUEST_ATTEMPTS } from "./ai-request-limits.mjs";
+import { assessmentRequestPolicy } from "./resume-assessment-request-policy.mjs";
 import { AI_SESSION_KEY, siteAiSession, mountAiSession } from "./ai-session.mjs";
 import { createPresenterMetadataSync } from "./presenter-metadata-sync.mjs";
 import { aiRibbonIcon, mountAiRibbon } from "./ai-ribbon.mjs";
@@ -53,8 +62,12 @@ import { CASE_LIMITS, caseSources, caseSourcePrompt, caseRevision, parseCaseResp
 import { graphFromWorkflow, workflowItems } from "./workflow-core.mjs";
 import { loadWorkflow } from "./workflow-loader.mjs";
 import { createRefreshGate } from "./studio-refresh.mjs";
-import { boundedResumeCompletion } from "./resume-review.mjs";
+import { boundedResumeCompletion, resumeCompletionReservation } from "./resume-review.mjs";
+import { assessmentProviderReceipt, captureAssessmentSource, createAssessmentPilot } from "./resume-assessment-pilot.mjs";
+import { assessmentFileType, captureAssessmentInput } from "./resume-assessment-input.mjs";
+import { assertAssessmentCurrent } from "./resume-assessment.mjs";
 import { assessAtsResume, atsMigrationIdentity } from "./resume-ats.mjs";
+import { resumeReviewSections, observeResumeContext, observeResumeInfo } from "./resume-review-presentation.mjs";
 import { resumeSignature } from "./resume-workspace.mjs";
 import { journeyRoleIndex, journeyEntryKey, journeyRoles, journeyRoleStories as orderedRoleStories } from "./journey-core.mjs";
 import { WHITEBOARD_ROLES, whiteboardConversation, whiteboardConversationSystem, whiteboardSurpriseRoles, applyWhiteboardReply } from "./whiteboard-conversation.mjs";
@@ -673,6 +686,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function narrate() {
     if (publishing) return;
     var s = root && root.querySelector(".adm__status"); if (!s) return;
+    if (s.hasAttribute('data-resume-state')) return;
     if (draftFull || lastPublishError) {
       s.textContent = draftFull ? "Draft not saved on this device. Free storage or download a backup before leaving." : lastPublishError;
       s.title = s.textContent; s.classList.remove("ok"); nativeSlideSession?.editor?.notify(s.textContent); return;
@@ -764,7 +778,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     var k = (e.key || "").toLowerCase();
     if (k !== "z" && k !== "y") return;
     if (!document.documentElement.classList.contains("adm-lock")) return;   // studio isn't the active surface
-    if (document.querySelector(".pass, .rbz, .pjp")) return;
+    if (document.querySelector(".pass, .rbz, .pjp, .atsv, .adm__resume-host")) return;
     if (histNativeTarget(e.target)) return;                                 // let the focused field's native undo win
     e.preventDefault();
     if (k === "y" || e.shiftKey) histRedo(); else histUndo();
@@ -904,6 +918,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   // Every chrome icon renders through svgIco so the whole studio reads as one coherent set.
   function svgIco(paths, w) { w = w || 14; return '<svg viewBox="0 0 24 24" width="' + w + '" height="' + w + '" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events:none">' + paths + '</svg>'; }
   const IC = {
+    sun: svgIco('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>', 16),
+    moon: svgIco('<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.462.402.806a6.25 6.25 0 0 0 8.268 8.268c.344-.215.828-.004.803.398"/>', 16),
     sectionsLocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0v3"/>', 18),
     sectionsUnlocked: svgIco('<path data-lock-stack d="M20 12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9"/><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M13 9V6a4 4 0 0 1 8 0v1"/>', 18),
     up: svgIco('<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>'),
@@ -1743,6 +1759,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         '<div class="cl__row2"><input type="text" class="cl__company" placeholder="Company / role (optional, sharpens it)" value="' + escAttr(atsState.company) + '" /></div>' +
       '</div>' +
       '<div class="imgblk__row"><button class="btn btn--primary" data-act="ats-check"' + (canCheck ? "" : " disabled") + ">Check ATS rating</button></div>" +
+      (resumeCandidateEnabled() ? '<div class="imgblk__row"><button type="button" class="btn btn--ghost" data-act="ats-candidate">Preview candidate assessment</button></div>' : '') +
       (canCheck ? "" : '<div class="af__hint">' + (srcFile ? "Browse to a text-based PDF / DOCX r\u00e9sum\u00e9 to run the check." : "Add your r\u00e9sum\u00e9 to the site first, or switch to \u201cCheck a different file\u201d.") + '</div>') +
       '<div class="ats__out" data-ats-out>' + atsOutRestore() + '</div>' +
       '</div>' +
@@ -2440,7 +2457,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   }
   const PREP_SYNC_KEY = "rk:prep:sync";
   let prepOutbox = Object.fromEntries(Object.entries(prepRead(PREP_SYNC_KEY)).filter(([key,item]) => item && ['ats','cl','iprep','story','wb'].includes(item.tool) && typeof item.id === 'string' && item.id.length > 0 && typeof item.revision === 'string' && ['put','del'].includes(item.action) && key === item.tool + '/' + item.id).map(([key,item]) => [key,{tool:item.tool,id:item.id,action:item.action,revision:item.revision,acknowledged:item.action === 'del' && item.acknowledged === true}]));
-  function prepStorageHtml(tool = "", id = "") { return '<div class="prep-storage" data-prep-storage data-prep-tool="' + escAttr(tool) + '" data-prep-id="' + escAttr(id) + '" role="status"><span></span><button class="btn btn--ghost" type="button" data-prep-retry>Retry save and sync</button></div>'; }
+  function prepStorageHtml(tool = "", id = "") { return '<div class="prep-storage" data-prep-storage data-prep-tool="' + escAttr(tool) + '" data-prep-id="' + escAttr(id) + '" role="status"><span></span><button class="btn btn--ghost" type="button" data-prep-retry>' + (tool === "ats" ? "Retry" : "Retry save and sync") + '</button></div>'; }
   function prepPaintStorage() {
     const pending = Object.values(prepOutbox || {}).some(item => !item.acknowledged) && !!prepSess();
     if (!pending) {
@@ -2456,10 +2473,21 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         const confirmed = entry && prepCloudSaved.get(key)?.session === session && prepCloudSaved.get(key)?.signature === JSON.stringify(entry);
         const pending = host.dataset.prepDirty === "true" || !!prepOutbox[key] && !prepOutbox[key].acknowledged;
         const error = prepCloudErrors.get(key) || prepSyncError;
+        const failure = resumeSaveFailureFeedback({ status: error?.status, offline: navigator.onLine === false });
         host.hidden = false;
-        host.querySelector("span").textContent = !session ? "Not saved to Cloudflare. Sign in to sync this resume." : confirmed && !pending ? "Saved to Cloudflare." + (prepPendingWrites.has(PREP_HIST_KEY) ? " Local copy unavailable." : "") : error ? "Not saved to Cloudflare. Retry before closing." : pending ? "Saving to Cloudflare..." : "Cloud copy not confirmed. Retry save and sync.";
-        host.querySelector("button").hidden = !!session && (confirmed && !pending || pending && !error);
+        host.querySelector("span").textContent = !session ? "Sign in to save this review to your account. Keep this tab open." : confirmed && !pending ? "Saved to your account." + (prepPendingWrites.has(PREP_HIST_KEY) ? " A copy could not be saved on this device." : "") : error ? failure.message : pending ? "Saving this review..." : "We couldn't confirm this review was saved. Keep this tab open and try again.";
+        host.querySelector("button").hidden = !session || confirmed && !pending || pending && !error || !!error && !failure.actionLabel;
         host.querySelector("button").disabled = prepSyncing;
+        if (host.__resumeFeedback) {
+          const saved = !!session && confirmed && !pending, localFailure = saved && prepPendingWrites.has(PREP_HIST_KEY);
+          const state = !session ? 'auth' : localFailure ? 'warning' : saved ? 'saved' : error ? 'error' : pending ? 'saving' : 'unconfirmed';
+          host.__resumeFeedback.paint({
+            state, text: saved ? 'Saved' : state === 'saving' ? 'Saving...' : state === 'unconfirmed' ? 'Save not confirmed' : 'Not saved',
+            message: state === 'saved' || state === 'saving' ? '' : localFailure ? 'A copy could not be saved on this device.' : host.querySelector("span").textContent,
+            actionLabel: localFailure || !host.querySelector("button").hidden ? 'Retry' : '', busy: prepSyncing
+          }, prepRetryStorage);
+          host.hidden = true;
+        }
         return;
       }
       const message = prepPendingWrites.size ? "Not saved on this device. Your changes are kept in this tab; free storage and retry before closing." : prepSyncError || (showPending ? "Saved on this device. Cloud sync pending." : "");
@@ -2641,7 +2669,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     labelFields();
     const observer = new MutationObserver(labelFields); observer.observe(modal,{childList:true,subtree:true});
     const onKey = event => {
-      if (event.key !== 'Tab' || modal.getAttribute('aria-modal') === 'false' || [...document.querySelectorAll('.pass,.atsv')].filter(element => element.getClientRects().length).at(-1) !== modal) return;
+      if (event.key !== 'Tab' || modal.inert || modal.getAttribute('aria-modal') === 'false' || [...document.querySelectorAll('.pass,.atsv')].filter(element => element.getClientRects().length).at(-1) !== modal) return;
       const items = controls(), index = items.indexOf(document.activeElement);
       if (!items.length) { event.preventDefault(); modal.focus(); }
       else if (index < 0 || event.shiftKey && index === 0 || !event.shiftKey && index === items.length - 1) { event.preventDefault(); items[event.shiftKey ? items.length - 1 : 0].focus(); }
@@ -2691,7 +2719,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
             const outgoing = item.action === "put" && item.tool === "ats" && payload.payload?.resumeDocument
               ? {...payload, payload:{...payload.payload, resumeDocument:await resumeSourceForSync(payload.payload.resumeDocument)}} : payload;
             const response = await fetch(ADMIN_WORKER + "/admin/prep/" + item.action, {method:"POST",headers:{Authorization:"Bearer " + session,"Content-Type":"application/json"},body:JSON.stringify(outgoing),signal:AbortSignal.timeout(20000)});
-            if (!response.ok) throw new Error("Saved on this device. Cloud sync failed (" + response.status + "). Retry when connected.");
+            if (!response.ok) throw Object.assign(new Error("Saved on this device. Cloud sync failed (" + response.status + "). Retry when connected."), {status:response.status});
             if (item.tool === "ats") {
               if ((await response.json()).ok !== true) throw new Error("Cloudflare did not confirm the resume save.");
               if (item.action === "put") prepCloudSaved.set(key,{session,signature:JSON.stringify(payload)});
@@ -2705,7 +2733,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
           }
         } catch (error) {
           if (item.tool !== "ats") throw error;
-          if (prepOutbox[key]?.revision === item.revision) prepCloudErrors.set(key,error.message);
+          if (prepOutbox[key]?.revision === item.revision) prepCloudErrors.set(key,error);
           prepSyncError = "Cloud sync failed. Retry save and sync before closing.";
         }
       }
@@ -2838,7 +2866,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     modal.__prepRefresh();
     if (tool === 'ats') refreshAtsResumes();
     prepCloudPull(tool, function () { var el = modal.querySelector('[data-' + tool + '-hist]'); if (el) el.innerHTML = (tool === 'ats') ? atsHistHtml() : clHistHtml(); modal.__prepLaunch?.refresh(); });
-    function onEsc(e) { if (e.key === "Escape" && !document.querySelector('.atsv')) close(); }
+    function onEsc(e) { if (e.key === "Escape" && !modal.inert && !document.querySelector('.atsv')) close(); }
     function close() { document.removeEventListener("keydown", onEsc); modal.__prepLaunch?.dispose(); lifetime.dispose(); modal.remove(); }
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-prep-close]")) close(); });
     document.addEventListener("keydown", onEsc);
@@ -2853,6 +2881,41 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   var atsNeuralFallbackOk = false; // user OK'd running on the lexical estimate when neural is unreachable (this session)
   function atsUpdateCheckBtn(panel) { if (!panel) return; var has = !!(data.contact && data.contact.resume), srcFile = (atsState.source === "file") || !has, can = srcFile ? !!atsPickedFile : has; var b = panel.querySelector('[data-act="ats-check"]'); if (b) b.disabled = !can; }
   function atsLevelName(l) { return ({ senior: "Senior", staff: "Principal / Staff", leader: "Design leadership" })[l] || l; }
+  function resumeCandidateEnabled() {
+    return ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) && new URLSearchParams(location.search).get("candidate") === "1";
+  }
+  function openAtsCandidate(panel, reviewContext = null) {
+    if (!resumeCandidateEnabled()) { status("Candidate assessment is available only in an explicitly enabled local Studio."); return; }
+    if (resumeFrame) { status("Close the current Resume Studio view before starting a candidate check."); return; }
+    if (reviewContext?.documentBusy) { status("Wait for the original-file operation to finish before reviewing it."); return; }
+    const lifetime = reviewContext?.lifetime || panel?.closest('.prep-dialog')?.__prepLifetime;
+    const fromFile = atsState.source === "file" || !data.contact?.resume;
+    const selected = reviewContext ? reviewContext.file || reviewContext.review.resumeDocument : fromFile ? atsPickedFile : data.contact?.resume;
+    if (!selected) { status("Choose the original resume file first. Saved review text is not a substitute."); return; }
+    const reviewBefore = reviewContext?.sessionId ? JSON.stringify(prepGet('ats', reviewContext.sessionId)) : null;
+    let file = reviewContext?.file || (fromFile && !reviewContext ? atsPickedFile : null);
+    const validate = () => {
+      lifetime?.signal.throwIfAborted();
+      const current = reviewContext ? reviewContext.file || reviewContext.review.resumeDocument : (atsState.source === "file" || !data.contact?.resume) ? atsPickedFile : data.contact?.resume;
+      if (current !== selected || reviewContext?.documentBusy) throw new Error("The selected original changed. Reopen its candidate review.");
+      if (reviewBefore !== null && reviewBefore !== JSON.stringify(prepGet('ats', reviewContext.sessionId))) throw new Error("The original review changed. Reopen it before another candidate assessment.");
+    };
+    const getTarget = () => {
+      validate();
+      const state = reviewContext ? prepGet('ats', reviewContext.sessionId)?.payload?.state : atsState;
+      const mode = state?.mode || (reviewContext?.review.jd?.trim() ? "job" : "general");
+      return { mode, role: "", level: reviewContext?.level || atsLevel,
+        company: reviewContext ? reviewContext.review.company || "" : panel.querySelector('.cl__company')?.value.trim() || "",
+        jd: mode === "job" ? (reviewContext ? reviewContext.review.jd || "" : panel.querySelector('.cl__jd')?.value || "") : "",
+        url: mode === "job" ? (reviewContext ? state?.url || "" : panel.querySelector('.cl__url')?.value.trim() || "") : "" };
+    };
+    openResumeStudio({ candidate: { label: (reviewContext ? "Retained original: " : "Selected resume: ") + (selected.name || "Site resume"), getTarget,
+      getFile: async signal => {
+        validate(); signal?.throwIfAborted();
+        if (!file) file = reviewContext ? await readResumeSource(reviewContext.review.resumeDocument) : await resumeToFile(selected);
+        validate(); signal?.throwIfAborted(); return file;
+      } } });
+  }
   async function resumeToFile(url, options = {}) {
     var p = parseDataUri(url);
     if (p) {
@@ -2877,7 +2940,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (!url) throw new Error("Add your r\u00e9sum\u00e9 above first \u2014 upload a PDF or paste its URL.");
     return await fbExtractFile(await resumeToFile(url));
   }
-  function atsSystem(level) {
+  function atsSystem(level, prepareActions = false) {
     var lvl = {
       senior: "TARGET LEVEL: Senior Product Designer. Weight craft, execution quality, shipped outcomes and clear ownership; expect concrete UX/interaction work with impact metrics.",
       staff: "TARGET LEVEL: Staff / Principal Product Designer. Weight scope, ambiguity, systems thinking, cross-team influence, strategy and leverage over hands-on pixels; expect evidence of driving direction across teams.",
@@ -2898,15 +2961,17 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       '{"score":0,"band":"Strong|Good|Needs work|At risk","summary":"one honest sentence","checks":[{"label":"short label","status":"pass|warn|fail","note":"one line"}],"fixes":[{"priority":"high|med|low","point":"what to change","how":"a concrete rewrite or action","anchor":{"type":"quote|section|global","quote":"the EXACT text from the resume this refers to, copied verbatim (only when type=quote)","section":"the section heading it concerns, e.g. Experience (only when type=section)","replacement":"a ready-to-paste rewrite of the quoted text (optional)"}}],"keywords":{"present":["..."],"missing":["..."]}}',
       "Give 6\u20139 checks spanning BOTH parseability (layout, format, contact, headings, dates, fonts) AND content/fit (impact, keywords, level/JD match); the 0\u2013100 score reflects all of it. Give 5\u20139 fixes ordered high-to-low priority, each genuinely actionable with a paste-ready anchor.replacement wherever possible; LEAD with anything that would break parsing or lose content.",
       "For EACH fix, set anchor.type to one of: 'quote' when the fix is about a specific phrase or line — copy that phrase into anchor.quote EXACTLY as written above (verbatim, no paraphrase; a few words up to about one line) so it can be pinned on the page; 'section' when it concerns a whole section — put the section heading in anchor.section; 'global' for document-wide issues such as length, column/table layout, a missing section, overall tone, or keywords. Include anchor.replacement whenever you can give a concrete rewrite of the quoted text.",
+      ...(prepareActions ? ['Also include top-level "responseVersion":1 and a "response" in EVERY fix. Use {"kind":"revision","text":"replacement for the exact anchor.quote","reason":"why this helps","evidence":["supporting source excerpt ID, only if used"]} only when the quote occurs exactly once and the replacement is supported by that passage or explicitly cited supporting evidence; retain attribution and never add unsupported facts, skills, qualifications or numbers. Use an empty evidence array if only the existing passage is needed. Supporting evidence may inform proposed revisions ONLY, never the score or findings about what the current resume demonstrates. Use {"kind":"question","question":"one specific missing-fact question for the author","reason":"why it matters"} when a truthful revision needs new facts. Use {"kind":"guidance","reason":"specific manual layout or structural action"} when no single passage edit is appropriate. Prepare the useful response now; do not tell the author to request a suggestion later.'] : []),
       "Output ONE compact JSON object and nothing else. Do not wrap it in markdown fences, and do not put literal newlines inside any string value; keep every note and how on a single line."
     ].join("\n");
   }
-  function atsUser(text, level, jd, company, facts) {
+  function atsUser(text, level, jd, company, facts, supportingEvidence = []) {
     return "TARGET LEVEL: " + atsLevelName(level) +
       (company ? "\nCOMPANY / ROLE: " + String(company).trim() : "") +
       (jd ? "\n\nTARGET JOB DESCRIPTION (score the resume as a match for THIS posting):\n\n" + String(jd).trim().slice(0, 8000) : "\n\n(No job description provided \u2014 score against the target level generically.)") +
       "\n\nRESUME TEXT (extracted from the candidate's file):\n\n" + String(text).slice(0, 12000) +
-      (facts || "");
+      (facts || "") +
+      (supportingEvidence.length ? "\n\nSUPPORTING EVIDENCE (for proposed revisions only; NOT evidence in the current resume):\n" + JSON.stringify(supportingEvidence) : "");
   }
   function atsRenderHtml(res, level, thin) {
     var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
@@ -3023,7 +3088,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
           try { jd = await clFetchJd(atsState.url); if (jdEl) jdEl.value = jd; atsState.jd = jd; } catch (e2) {}
         }
       }
-      const checked = await atsEvaluate(text, f, atsLevel, company, jd, signal);
+      const checked = await atsEvaluate(text, f, atsLevel, company, jd, signal, undefined, { prepareActions: true });
       var { res, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout } = checked;
       atsLast = { file: f, res: res, level: atsLevel, company: company, text: text, jd: jd, kw: _kw, sem: _sem, semMode: _semMode, layout: _layout, source:prepSourceSnapshot(text,jd,[],atsState.preparationBrief), resumeDocument, resumeDocumentOrigin:"original" };
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
@@ -3044,11 +3109,20 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       btnIdle(btn, was);
     }
   }
-  async function atsEvaluate(text, file, level, company, jd, signal) {
+  async function baselineAssessmentInput(text, file, level, company, jd) {
+    return { version: 1, artifactSha256: file ? await historyHash(new Uint8Array(await file.arrayBuffer())) : null,
+      text, target: { level, company, jd } };
+  }
+  async function atsEvaluate(text, file, level, company, jd, signal, baselineAccounting, { prepareActions = false, supportingEvidence = [] } = {}) {
+    const prepared = prepareActions && !baselineAccounting;
+    if (baselineAccounting) {
+      await verifyBaselineAccounting(baselineAccounting, aiCfg('txt'));
+      await baselineAccounting.verifyInput(await baselineAssessmentInput(text, file, level, company, jd));
+    }
     return assessAtsResume({ text, level, company, jd, signal }, {
       readPages: () => file ? atsPdfPages(file) : Promise.resolve(null),
       semantic: async () => {
-        const neural = await atsSemNeural(text, jd);
+        const neural = baselineAccounting ? await baselineAccounting.semantic(text, jd, signal) : await atsSemNeural(text, jd);
         signal?.throwIfAborted();
         if (neural.failed && !atsNeuralFallbackOk) {
           if (resumeFrame) throw new Error('The configured neural model is unavailable. Return to ATS Check to approve lexical fallback or fix the Studio AI connection.');
@@ -3058,7 +3132,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         }
         return neural;
       },
-      complete: async input => csgenParse(await prepareAiText(aiCfg('txt'), atsSystem(level), atsUser(text, level, jd, company, atsFactsBlock(input.kw, input.flags, input.sem)), { task: 'analysis', json: true, temperature: 0, signal }))
+      complete: async input => {
+        const result = csgenParse(await prepareAiText(aiCfg('txt'), atsSystem(level, prepared), atsUser(text, level, jd, company, atsFactsBlock(input.kw, input.flags, input.sem), prepared ? supportingEvidence : []), { task: 'analysis', json: true, temperature: 0, signal, ...(baselineAccounting ? { baselineAccounting } : {}) }));
+        if (prepared && (result?.responseVersion !== 1 || !Array.isArray(result.fixes) || result.fixes.some(finding => !['revision', 'question', 'guidance'].includes(finding.response?.kind)))) throw new Error('The review did not return complete proposed revisions or guidance. Your previous review and resume are unchanged.');
+        return result;
+      }
     });
   }
   async function atsFetchToPanel(panel) {
@@ -3198,15 +3276,6 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   // Minimal line icons (Lucide geometry) for the PDF contact line + experience meta. Rasterized once
   // at high DPI into crisp PNGs (per colour) so they look crafted + perfectly aligned; drawn decoratively
   // beside the REAL text (ATS still reads the email/phone/dates text — the icon is just a picture).
-  var RB_ICON_SVG = {
-    email: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
-    phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
-    loc: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
-    linkedin: '<path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>',
-    site: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
-    cal: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>'
-  };
-  var RB_ICON_FILL = { linkedin: true }; // brand glyphs are rendered as a filled silhouette, not a stroked line
   var RB_ICON_CACHE = {};
   // Inline SVG icon (currentColor) for the résumé contact line + experience meta — crisp in the editor AND the print/PDF.
   function rbIco(kind) { var p = RB_ICON_SVG[kind]; if (!p) return ""; return '<svg class="rbz__ico" viewBox="0 0 24 24" aria-hidden="true"' + (RB_ICON_FILL[kind] ? ' fill="currentColor"' : ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"') + ">" + p + "</svg>"; }
@@ -3458,7 +3527,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   async function atsRebuildOpen(ctx) {
     const id = ctx?.sessionId || atsvSessId;
     if (!id) { status("Open a saved ATS review first."); return; }
-    openResumeStudio({ entryId: id });
+    openResumeStudio({ entryId: id, reviewNavigation: atsvEditorNavigation(ctx) });
   }
   /* ---------- editable résumé workspace: edit the structured model in-place, re-check ATS
      live, then generate the vector PDF from the edited model. One model, three consumers
@@ -4307,6 +4376,87 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   var atsvSessId = prepDraftGet("ats")?.reviewId || null;
   var atsvActive = null; // { close } of the open review viewer, so the workspace flow can dismiss it (one overlay at a time)
   function atsvCloseActive() { if (atsvActive && atsvActive.close) { try { atsvActive.close(); } catch (e) {} } }
+  function mountResumeStorageFeedback(workspace) {
+    const footer = root.querySelector('.adm__statusbar'), label = footer.querySelector('.adm__status');
+    const banner = document.createElement('div'), message = document.createElement('span'), button = document.createElement('button');
+    banner.className = 'rk-flash is-on is-error resume-save-banner'; banner.setAttribute('role', 'alert'); banner.hidden = true;
+    button.type = 'button'; button.className = 'rk-flash__action';
+    banner.append(message, button); root.append(banner);
+    const tools = workspace.querySelector('.atsv__tools');
+    const controls = tools ? observeResumeViewControls(tools, [banner]) : null;
+    let current = { state: 'loading', text: 'Opening resume...', message: '' }, action = null;
+    function render() {
+      const active = !workspace.inert && workspace.isConnected;
+      banner.hidden = !active || !current.message;
+      if (!active) { controls?.fit(); return; }
+      label.dataset.resumeState = current.state;
+      if (label.textContent !== current.text) label.textContent = current.text;
+      label.title = current.text;
+      label.classList.toggle('ok', current.state === 'saved');
+      if (message.textContent !== current.message) message.textContent = current.message;
+      banner.title = current.detail || '';
+      button.textContent = current.actionLabel || ''; button.hidden = !current.actionLabel;
+      button.disabled = !!current.busy;
+      controls?.fit();
+    }
+    button.onclick = async () => {
+      if (!action || button.disabled) return;
+      button.disabled = true;
+      try { await action(); }
+      catch (error) { current = { ...current, state: 'error', text: 'Not saved', message: error.message, busy: false }; }
+      finally { render(); }
+    };
+    return {
+      paint(next, retry) {
+        if (next.state === 'saving' && current.message && !next.message) next = { ...next, message: current.message, detail: current.detail, actionLabel: current.actionLabel, busy: true };
+        current = next; action = retry; render();
+      },
+      render,
+      fit() { banner.style.bottom = Math.max(0, innerHeight - footer.getBoundingClientRect().top + 12) + 'px'; controls?.fit(); },
+      dispose() { controls?.dispose(); banner.remove(); label.removeAttribute('data-resume-state'); }
+    };
+  }
+  function mountResumeStudioWorkspace(workspace, leave) {
+    const covered = [...root.querySelectorAll(':scope > .adm__main,:scope > .adm__workbar,:scope > .prep-dialog,:scope > .atsv')].filter(element => element !== workspace)
+      .map(element => ({ element, inert: element.inert, visibility: element.style.visibility }));
+    const chrome = [...root.querySelectorAll(':scope > .adm__bar,:scope > .adm__statusbar')].map(element => ({ element, inert: element.inert }));
+    covered.forEach(({element}) => { element.inert = true; element.style.visibility = 'hidden'; element.__resumeFeedback?.render(); });
+    chrome.forEach(({element}) => { element.inert = false; });
+    workspace.__resumeFeedback = mountResumeStorageFeedback(workspace);
+    workspace.__resumeFeedback.render();
+    function fit() {
+      const top = root.querySelector('.adm__bar').getBoundingClientRect().bottom;
+      const bottom = root.querySelector('.adm__statusbar').getBoundingClientRect().top;
+      workspace.style.top = top + 'px'; workspace.style.bottom = Math.max(0, innerHeight - bottom) + 'px';
+      workspace.style.height = Math.max(0, bottom - top) + 'px';
+      workspace.__resumeFeedback.fit();
+    }
+    let leaving = false;
+    async function navigate(event) {
+      const target = event.target.closest('.adm__tab,[data-exit-save],[data-return-site]');
+      if (!target || [...root.querySelectorAll(':scope > .atsv,:scope > .adm__resume-host')].at(-1) !== workspace) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (leaving) return;
+      leaving = true;
+      try {
+        if (!await leave()) return;
+        atsvCloseActive();
+        root.querySelector('.prep-dialog .ats')?.closest('.prep-dialog')?.querySelector('[data-prep-close]')?.click();
+        if (target.isConnected) target.click();
+      } catch (error) { status(error.message); }
+      finally { leaving = false; }
+    }
+    const observer = new ResizeObserver(fit);
+    chrome.forEach(({element}) => observer.observe(element));
+    window.addEventListener('resize', fit); root.addEventListener('click', navigate, true); fit();
+    return () => {
+      observer.disconnect(); window.removeEventListener('resize', fit); root.removeEventListener('click', navigate, true);
+      workspace.__resumeFeedback.dispose(); delete workspace.__resumeFeedback;
+      covered.forEach(({element,inert,visibility}) => { element.inert = inert; element.style.visibility = visibility; element.__resumeFeedback?.render(); });
+      chrome.forEach(({element,inert}) => { element.inert = inert; });
+      narrate();
+    };
+  }
   async function atsvRecheck(ctx) {
     if (ctx.documentBusy) return;
     if (!aiHasKey("txt")) { aiKeyModal("txt", function () { atsvRecheck(ctx); }); return; }
@@ -4318,7 +4468,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       if (!text && ctx.file) text = ((await fbExtractFile(ctx.file)) || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 40) throw new Error("Couldn\u2019t read enough r\u00e9sum\u00e9 text to re-check.");
       var level = ctx.level || atsLevel, company = ctx.review.company || "", jd = ctx.review.jd || "";
-      const checked = await atsEvaluate(text, ctx.file, level, company, jd, signal);
+      const checked = await atsEvaluate(text, ctx.file, level, company, jd, signal, undefined, { prepareActions: true });
       var { res, kw: _kw, sem: _sem } = checked;
       ctx.res = res; Object.assign(ctx.review,{res,text,kw:_kw,sem:_sem}); atsLast = ctx.review;
       var _sc = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
@@ -4341,31 +4491,54 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     var res = atsLast.res, file = atsLast.file, level = atsLast.level || atsLevel;
     var modal = atsvEl("div", "atsv");
     modal.innerHTML =
-      '<div class="atsv__bar">' +
-        '<div class="atsv__ttl"><span class="ats__badge">ATS</span> Résumé review <span class="atsv__lvl">' + escHtml(atsLevelName(level)) + '</span></div>' +
-        '<div class="atsv__mid"><button class="atsv__regen" type="button" data-atsv-regen title="Re-run the ATS check for fresh fixes"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Regenerate</button></div>' +
-        '<div class="atsv__tools">' +
-          '<span class="atsv__pageno" data-atsv-pageno></span>' +
-          '<button class="atsv__tbtn" data-atsv-zoom="out" title="Zoom out">−</button>' +
-          '<button class="atsv__tbtn" data-atsv-zoom="fit" title="Fit width">Fit</button>' +
-          '<button class="atsv__tbtn" data-atsv-zoom="in" title="Zoom in">+</button>' +
-          '<button class="atsv__tbtn atsv__x" data-atsv-close title="Close (Esc)">×</button>' +
-        '</div>' +
+      '<div class="adm__workbar atsv__bar">' +
+        '<div class="studio-worknav" role="group" aria-label="Workspace navigation"><span class="studio-worknav__back">' +
+        '<button class="adm__hist-btn adm__workback" type="button" data-atsv-close aria-label="Back to ATS check" title="Back to ATS check (Esc)">' + IC.back + '</button>' +
+        '</span><span class="studio-worknav__history" aria-hidden="true"></span></div>' +
+        '<div class="atsv__mid">' +
+        (resumeCandidateEnabled() ? '<button class="btn btn--ghost" type="button" data-atsv-candidate>Candidate original recheck</button>' : '') +
+        '<div class="atsv__rebuild" data-atsv-editor-action></div></div>' +
       '</div>' +
       '<div class="atsv__body">' +
-        '<div class="atsv__rail" data-atsv-rail></div>' +
-        '<div class="atsv__stage" data-atsv-stage><div class="atsv__loading">Rendering your résumé…</div></div>' +
+        '<aside class="atsv__navigation" aria-label="Resume review"><h2 class="atsv__ttl">Résumé review <span class="atsv__lvl">' + escHtml(atsLevelName(level)) + '</span></h2><div class="atsv__rail" data-atsv-rail></div></aside>' +
+        '<main class="atsv__document" aria-label="Original resume">' +
+        '<div class="atsv__tools resume-view-tools" role="group" aria-label="Document view">' +
+          '<span class="atsv__pageno resume-view-tools__count" data-atsv-pageno role="status"></span>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="out" aria-label="Zoom out" title="Zoom out" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M8 10.5h5"/></svg></button>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="in" aria-label="Zoom in" title="Zoom in" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M8 10.5h5M10.5 8v5"/></svg></button>' +
+          '<button class="atsv__tbtn" data-atsv-zoom="fit" aria-label="Fit page" title="Fit page" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>' +
+          '<button class="atsv__tbtn" data-atsv-canvas aria-label="Light canvas" aria-pressed="false" title="Switch to light canvas">' + IC.sun + '</button>' +
+        '</div>' +
+        '<div class="atsv__stage resume-canvas" data-atsv-stage><div class="atsv__loading">Rendering your résumé…</div></div></main>' +
       '</div>';
-    document.body.appendChild(modal);
+    root.appendChild(modal);
     const lifetime = prepDialogLifetime(modal,'Resume review');
-    function onKey(e) { if (e.key === "Escape") close(); }
+    const canvas = modal.querySelector('[data-atsv-stage]'), canvasToggle = modal.querySelector('[data-atsv-canvas]');
+    function paintCanvas(mode) {
+      const light = mode === 'light';
+      canvas.dataset.canvas = mode;
+      canvasToggle.setAttribute('aria-pressed', String(light));
+      canvasToggle.title = light ? 'Switch to dark canvas' : 'Switch to light canvas';
+      canvasToggle.innerHTML = light ? IC.moon : IC.sun;
+    }
+    paintCanvas(readResumeCanvasMode());
+    canvasToggle.addEventListener('click', () => {
+      const mode = canvas.dataset.canvas === 'light' ? 'dark' : 'light';
+      paintCanvas(mode); saveResumeCanvasMode(mode);
+    });
+    window.addEventListener('storage', event => {
+      if (event.storageArea === localStorage && (event.key === RESUME_CANVAS_STORAGE_KEY || event.key === null)) paintCanvas(readResumeCanvasMode());
+    }, { signal: lifetime.signal });
+    modal.setAttribute('aria-modal','false');
+    const restoreStudio = mountResumeStudioWorkspace(modal, () => { close(); return true; });
+    function onKey(e) { if (e.key === "Escape" && !modal.inert && modal.contains(e.target)) close(); }
     function close() {
-      document.removeEventListener("keydown", onKey); lifetime.dispose(); atsvActive = null; modal.remove();
+      document.removeEventListener("keydown", onKey); restoreStudio(); lifetime.dispose(); atsvActive = null; modal.remove();
       ctx?.renderTask?.cancel();
       (ctx?.pdf || ctx?.loadingTask)?.destroy()?.catch?.(() => {});
     }
     document.addEventListener("keydown", onKey);
-    atsvActive = { close: close };
+    atsvActive = { close: close, modal };
     modal.addEventListener("click", function (e) { if (e.target === modal || e.target.closest("[data-atsv-close]")) close(); });
 
     var ctx = { modal: modal, res: res, file: file, level: level, scale: 1, pdf: null, pages: [], located: {}, onPage: [], overall: [], lifetime, review:{...atsLast}, sessionId:atsvSessId };
@@ -4402,9 +4575,13 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     }
     if (first || ctx._needFit) {
       var page1 = await ctx.pdf.getPage(1), vp1 = page1.getViewport({ scale: 1 });
-      var avail = Math.max(360, (stage.clientWidth || 760) - 52);
-      ctx.scale = Math.min(2.2, Math.max(0.5, avail / vp1.width));
+      const style = getComputedStyle(stage);
+      const width = Math.max(1, stage.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+      const height = Math.max(1, stage.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom));
+      ctx.fitMode = ctx._needFit || "width";
+      ctx.scale = Math.min(2.2, width / vp1.width, ctx.fitMode === "page" ? height / vp1.height : Infinity);
       ctx._needFit = false;
+      stage.scrollTop = 0; stage.scrollLeft = 0;
     }
     stage.innerHTML = "";
     ctx.pages = [];
@@ -4441,7 +4618,12 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       atsvPaintRail(ctx);
     }
     atsvPaintPins(ctx);
+    if (ctx.contextPanel) atsvShowContext(ctx, ctx.selectedFinding);
     atsvUpdatePageNo(ctx);
+    const fitButton = ctx.modal.querySelector('[data-atsv-zoom="fit"]');
+    const fitLabel = ctx.fitMode === "page" ? "Fit width" : "Fit page";
+    fitButton.title = fitLabel; fitButton.setAttribute("aria-label", fitLabel);
+    ctx.modal.querySelector('.atsv__tools').dataset.fitMode = ctx.fitMode;
   }
 
   function atsvPaintPins(ctx) {
@@ -4468,57 +4650,81 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     var pr = fx.priority === "high" ? "high" : fx.priority === "low" ? "low" : "med";
     var badge = anchored ? '<span class="atsv__num atsv__num--' + pr + '">' + num + '</span>' : '<span class="atsv__dot atsv__dot--' + pr + '"></span>';
     var loc = anchored ? "" : (a.type === "section" && a.section ? '<span class="atsv__loc">' + escHtml(a.section) + '</span>' : (a.type === "quote" && a.quote ? '<span class="atsv__loc atsv__loc--miss">couldn’t pinpoint</span>' : ''));
-    var rep = a.replacement ? '<div class="atsv__rep"><code>' + escHtml(a.replacement) + '</code><button class="atsv__copy" type="button" data-atsv-copy>Copy</button></div>' : "";
-    return '<div class="atsv__item atsv__item--' + pr + '" data-fi="' + fi + '">' +
+    return '<div class="atsv__item resume-finding atsv__item--' + pr + '" data-fi="' + fi + '" tabindex="0" aria-label="' + escHtml(fx.point || 'Review finding') + '">' +
       '<div class="atsv__ihead">' + badge + '<span class="atsv__pri atsv__pri--' + pr + '">' + pr + '</span>' + loc + '</div>' +
       '<div class="atsv__point">' + escHtml(fx.point || "") + '</div>' +
-      (fx.how ? '<div class="atsv__how">' + escHtml(fx.how) + '</div>' : "") + rep + '</div>';
+      (fx.how ? '<div class="atsv__how">' + escHtml(fx.how) + '</div>' : "") + '</div>';
   }
 
   function atsvPaintRail(ctx) {
     var res = ctx.res, level = ctx.level;
-    var score = Math.max(0, Math.min(100, Math.round(+res.score || 0)));
-    var band = res.band || (score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
-    var tone = score >= 80 ? "good" : score >= 65 ? "ok" : score >= 45 ? "warn" : "bad";
+    var numericScore = typeof res.score === "number" || typeof res.score === "string" && res.score.trim() !== "" ? Number(res.score) : NaN;
+    var score = Number.isFinite(numericScore) ? Math.max(0, Math.min(100, Math.round(numericScore))) : null;
+    var band = res.band || (score === null ? "Not assessed" : score >= 80 ? "Strong" : score >= 65 ? "Good" : score >= 45 ? "Needs work" : "At risk");
     var fitT = (atsLast && atsLast.company) ? (escHtml(atsLast.company) + " fit") : (escHtml(atsLevelName(level)) + " fit");
-    var html = '<div class="atsv__score atsv__score--' + tone + '"><div class="ats__ring" style="--p:' + score + '"><span>' + score + '</span></div><div class="atsv__score-x"><b>' + escHtml(band) + '</b><span>ATS + ' + fitT + '</span>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div></div>';
+    var html = '<div class="resume-score-summary"><div class="ats__ring resume-score-dial" style="--p:' + (score ?? 0) + '" role="img" aria-label="' + (score === null ? 'ATS score unavailable' : 'ATS score ' + score + ' out of 100') + '"><span aria-hidden="true">' + (score ?? '--') + '</span></div><div class="resume-score-copy"><h2>' + escHtml(band) + '</h2><div class="resume-score-context">ATS + ' + fitT + '</div>' + (res.summary ? '<p>' + escHtml(res.summary) + '</p>' : '') + '</div><button type="button" class="resume-review-info-button" aria-label="Review information" title="Review information" popovertarget="atsv-review-info">' + svgIco('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/>') + '</button></div>';
+    const saved = prepGet("ats", ctx.sessionId)?.payload || {};
+    const target = saved.target || saved.source?.brief || saved.state?.preparationBrief || {};
+    const source = ctx.review.resumeDocument;
+    html += '<section id="atsv-review-info" class="resume-review-info" popover="auto" aria-label="Review information"><p class="resume-review-info__label">Target role</p><div class="resume-review-target"><div><h3>' + escHtml(target.role || atsLevelName(level)) + '</h3><p>' + escHtml(ctx.review.company || 'No company selected') + '</p></div><button class="btn btn--ghost" type="button" data-atsv-edit-role>Edit role</button></div>' +
+      '<details class="resume-source-options"><summary>Source options</summary><h4>Original files</h4>' +
+      (source ? '<p class="resume-source-name">' + escHtml(source.name) + '</p><small>' + Math.ceil(source.size / 1024) + ' KB</small><div class="resume-source-actions"><button class="rws-text-button" type="button" data-atsv-view-source>View original</button><button class="rws-text-button" type="button" data-atsv-attach>Reupload source</button><button class="rws-text-button" type="button" data-atsv-download-source>Download</button></div>' : '<button class="rws-text-button" type="button" data-atsv-attach>Upload source</button>') +
+      '<p data-atsv-source-feedback role="status"></p></details></section>' +
+      '<div class="rws-score-actions"><button class="rws-text-button" type="button" data-atsv-regen>' + IC.refresh + 'Review again</button></div>';
     if (ctx.review.resumeDocumentOrigin && ctx.review.resumeDocumentOrigin !== "original") html += '<p class="atsv__empty" data-atsv-recovered>Recovered PDF matches the saved text. The earlier file and layout could not be verified.</p>';
     html += prepStorageHtml("ats",ctx.sessionId || "");
     var _ws = atsvSessId ? prepList("ats").filter(function (e2) { return e2.kind === "workspace" && e2.payload && e2.payload.reviewId === atsvSessId; })[0] : null;
     ctx.wsId = _ws ? _ws.id : null;
     ctx.resumeId = (atsResumeSession === adminSession() ? atsResumeRows : []).find(row => !row.document.archived && row.document.ats?.reviewId === ctx.sessionId)?.document.id || null;
-    if (_ws || ctx.resumeId) html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-continue>Continue editing resume</button></div>';
-    else html += '<div class="atsv__rebuild"><button class="btn btn--primary" type="button" data-atsv-rebuild>Edit resume</button></div>';
-    html += '<div class="atsv__grp"><div class="atsv__grptitle">On the page <span>' + ctx.onPage.length + '</span></div>';
-    html += ctx.onPage.length ? ctx.onPage.map(function (fi, n) { return atsvItemHtml(ctx, fi, n + 1, true); }).join("") : '<div class="atsv__empty">No fixes mapped to an exact spot on the page.</div>';
-    html += '</div>';
-    var checks = (Array.isArray(res.checks) ? res.checks : []).filter(function (c) { return c.status === "warn" || c.status === "fail"; });
-    var kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean), pres = (kw.present || []).filter(Boolean);
-    var count = ctx.overall.length + checks.length + (miss.length || pres.length ? 1 : 0);
-    html += '<div class="atsv__grp"><div class="atsv__grptitle">Overall <span>' + count + '</span></div>';
-    ctx.overall.forEach(function (fi) { html += atsvItemHtml(ctx, fi, null, false); });
-    if (checks.length) html += '<div class="atsv__checks">' + checks.map(function (c) {
-      var s = c.status === "fail" ? "fail" : "warn";
-      return '<div class="atsv__chk atsv__chk--' + s + '"><span class="atsv__chki">' + (s === "fail" ? "✕" : "!") + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
-    }).join("") + '</div>';
-    if (miss.length || pres.length) {
-      html += '<div class="atsv__kw">';
-      if (miss.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Add for ' + escHtml((atsLast && atsLast.company) ? "this role" : atsLevelName(level)) + '</span>' + miss.map(function (k) { return '<span class="atsv__chip atsv__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
-      if (pres.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Covered</span>' + pres.map(function (k) { return '<span class="atsv__chip">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+    ctx.modal.querySelector("[data-atsv-editor-action]").innerHTML = _ws || ctx.resumeId
+      ? '<button class="btn btn--primary" type="button" data-atsv-continue>Continue editing resume</button>'
+      : '<button class="btn btn--primary" type="button" data-atsv-rebuild>Rebuild your resume</button>';
+    const sections = resumeReviewSections((res.fixes || []).map((finding, index) => ({ finding, index })));
+    if (sections.suggestions.length) {
+      html += '<div class="resume-review-suggestions" aria-label="Suggestions">';
+      sections.suggestions.forEach(function (category) {
+        html += '<section class="resume-suggestion-group" data-review-category="' + category.id + '"><h3 class="resume-review-group-heading"><span>' + escHtml(category.suggestionLabel) + '</span><small>' + category.items.length + '</small></h3>';
+        category.items.forEach(function (item) { html += atsvItemHtml(ctx, item.index, ctx.onPage.indexOf(item.index) + 1, !!ctx.located[item.index]); });
+        html += '</section>';
+      });
       html += '</div>';
     }
-    html += '</div>';
+    if (sections.assessments.length) html += '<h3 class="resume-review-section-heading">Deeper review</h3>';
+    sections.assessments.forEach(function (category) {
+      html += '<details class="resume-review-category" data-review-category="' + category.id + '"><summary><span>' + escHtml(category.label) + '</span><small>' + category.items.length + '</small></summary><p class="resume-review-category__intro">' + escHtml(category.detail) + '</p>';
+      category.items.forEach(function (item) { html += atsvItemHtml(ctx, item.index, ctx.onPage.indexOf(item.index) + 1, !!ctx.located[item.index]); });
+      html += '</details>';
+    });
+    if (!sections.suggestions.length && !sections.assessments.length) html += '<p class="atsv__empty">No revisions identified in this saved review.</p>';
+    var checks = (Array.isArray(res.checks) ? res.checks : []);
+    var kw = res.keywords || {}, miss = (kw.missing || []).filter(Boolean), pres = (kw.present || []).filter(Boolean);
+    if (checks.length) html += '<details class="resume-review-category"><summary><span>Resume essentials</span><small>' + checks.length + '</small></summary>';
+    if (checks.length) html += '<div class="atsv__checks">' + checks.map(function (c) {
+      var s = c.status === "fail" ? "fail" : c.status === "pass" ? "pass" : "warn";
+      return '<div class="atsv__chk atsv__chk--' + s + '"><span class="atsv__chki">' + (s === "fail" ? "✕" : s === "pass" ? "✓" : "!") + '</span><div><b>' + escHtml(c.label || "") + '</b>' + (c.note ? '<span>' + escHtml(c.note) + '</span>' : '') + '</div></div>';
+    }).join("") + '</div>';
+    if (checks.length) html += '</details>';
+    if (miss.length || pres.length) {
+      html += '<details class="resume-review-category"><summary><span>Job language</span><small>' + miss.length + ' not mentioned</small></summary><p class="resume-review-category__intro">Mentions are not proof of experience. Add a term only when your experience supports it.</p>';
+      html += '<div class="atsv__kw">';
+      if (miss.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Not mentioned</span>' + miss.map(function (k) { return '<span class="atsv__chip atsv__chip--miss">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      if (pres.length) html += '<div class="atsv__kwrow"><span class="atsv__kwlbl">Covered</span>' + pres.map(function (k) { return '<span class="atsv__chip">' + escHtml(k) + '</span>'; }).join("") + '</div>';
+      html += '</div></details>';
+    }
+    ctx.infoCleanup?.();
     ctx.modal.querySelector("[data-atsv-rail]").innerHTML = html;
+    ctx.infoCleanup = observeResumeInfo(ctx.modal.querySelector('[popovertarget="atsv-review-info"]'), ctx.modal.querySelector("#atsv-review-info"));
+    ctx.modal.querySelector('[data-prep-storage]').__resumeFeedback = ctx.modal.__resumeFeedback;
     prepPaintStorage();
   }
 
   async function atsvRecoverDocument(ctx, kind, selectedFile) {
     if (ctx.documentBusy) return;
     const signal = ctx.lifetime.signal, entry = prepGet("ats", ctx.sessionId), before = JSON.stringify(entry);
-    const message = ctx.modal.querySelector("[data-atsv-source-status]");
+    const message = ctx.modal.querySelector("[data-atsv-source-status]") || ctx.modal.querySelector("[data-atsv-source-feedback]");
     let candidatePdf = null;
     ctx.documentBusy = true;
-    ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen]").forEach(button => { button.disabled = true; });
+    ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen],[data-atsv-candidate]").forEach(button => { button.disabled = true; });
     try {
       if (!entry || entry.kind !== "review") throw new Error("Reopen this review from history before attaching a document.");
       let file = selectedFile;
@@ -4553,11 +4759,14 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       atsLast = ctx.review; ctx.file = file; ctx.pdf = candidatePdf; ctx.documentError = "";
       await atsvBuild(ctx,true);
     } catch (error) {
-      if (!signal.aborted && message) message.textContent = error.message || "The document could not be restored. Nothing was replaced.";
+      if (!signal.aborted) {
+        if (message) message.textContent = error.message || "The document could not be restored. Nothing was replaced.";
+        status(error.message || "The document could not be restored. Nothing was replaced.");
+      }
     } finally {
       if (candidatePdf && candidatePdf !== ctx.pdf) await candidatePdf.destroy();
       ctx.documentBusy = false;
-      ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen]").forEach(button => { button.disabled = false; });
+      ctx.modal.querySelectorAll("[data-atsv-attach],[data-atsv-recover],[data-atsv-regen],[data-atsv-candidate]").forEach(button => { button.disabled = false; });
     }
   }
 
@@ -4567,48 +4776,120 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     ctx.modal.querySelectorAll('[data-fi="' + fi + '"]').forEach(function (x) { x.classList.add("is-active"); });
   }
   function atsvFocusPin(ctx, fi) {
+    ctx.selectedFinding = Number(fi);
     var pin = ctx.modal.querySelector('.atsv__pin[data-fi="' + fi + '"]');
     if (pin) pin.scrollIntoView({ behavior: "smooth", block: "center" });
     atsvActivate(ctx, fi);
     var item = ctx.modal.querySelector('.atsv__item[data-fi="' + fi + '"]');
+    if (item?.closest("details")) item.closest("details").open = true;
     if (item) item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    atsvShowContext(ctx, Number(fi));
+    ctx.contextPanel?.focus({ preventScroll: true });
+  }
+  function atsvCloseContext(ctx) {
+    ctx.contextCleanup?.(); ctx.contextCleanup = null;
+    ctx.contextPanel?.remove(); ctx.contextPanel = null;
+  }
+  function atsvShowContext(ctx, index) {
+    atsvCloseContext(ctx);
+    const finding = ctx.res.fixes?.[index];
+    if (!finding) return;
+    const stage = ctx.modal.querySelector(".atsv__document");
+    const panel = atsvEl("section", "resume-context");
+    panel.setAttribute("role", "region"); panel.setAttribute("aria-label", "Finding details"); panel.tabIndex = -1;
+    const priority = ["high", "low"].includes(finding.priority) ? finding.priority : "med";
+    panel.innerHTML = '<div class="resume-context__heading"><span class="atsv__pri atsv__pri--' + priority + '">' + priority + '</span><button type="button" aria-label="Close finding details" data-atsv-context-close>' + IC.close + '</button></div>' +
+      '<h3>' + escHtml(finding.point || "Review finding") + '</h3>' +
+      '<p>' + escHtml(finding.how || "Review this recommendation in the context of your experience.") + '</p>' +
+      (!ctx.located[index] && finding.anchor?.quote ? '<details><summary>View passage</summary><blockquote>' + escHtml(finding.anchor.quote) + '</blockquote></details>' : '') +
+      '<button type="button" class="btn btn--primary" data-atsv-address>Address in editor</button>';
+    stage.append(panel); ctx.contextPanel = panel;
+    ctx.contextCleanup = observeResumeContext(panel, stage, () => stage.querySelector('.atsv__hl[data-fi="' + index + '"]')?.getBoundingClientRect());
+  }
+  function atsvEditorNavigation(ctx) {
+    const finding = ctx?.res?.fixes?.[ctx.selectedFinding];
+    return ctx ? { reviewId: ctx.sessionId, ...(finding ? { finding: clone(finding) } : {}) } : null;
   }
   function atsvWire(ctx) {
     var modal = ctx.modal, stage = modal.querySelector("[data-atsv-stage]"), rail = modal.querySelector("[data-atsv-rail]");
+    const closeContext = () => {
+      atsvCloseContext(ctx);
+      rail.querySelector('.atsv__item[data-fi="' + ctx.selectedFinding + '"]')?.focus({ preventScroll: true });
+    };
+    ctx.lifetime.signal.addEventListener("abort", () => { atsvCloseContext(ctx); ctx.infoCleanup?.(); }, { once: true });
+    modal.addEventListener("click", event => {
+      if (event.target.closest("[data-atsv-regen]")) atsvRecheck(ctx);
+      if (event.target.closest("[data-atsv-edit-role]")) {
+        modal.querySelector("#atsv-review-info")?.hidePopover();
+        openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : ctx.resumeId ? { resumeId: ctx.resumeId } : { entryId: ctx.sessionId }), reviewNavigation: { reviewId: ctx.sessionId, editRole: true } });
+      }
+      if (event.target.closest("[data-atsv-attach]")) {
+        const input = document.createElement("input"); input.type = "file"; input.accept = ".pdf,application/pdf";
+        input.onchange = () => { if (input.files?.[0]) atsvRecoverDocument(ctx, "file", input.files[0]); }; input.click();
+      }
+      if (event.target.closest("[data-atsv-view-source],[data-atsv-download-source]")) {
+        const download = !!event.target.closest("[data-atsv-download-source]");
+        (async () => {
+          try {
+            const file = ctx.file || await readResumeSource(ctx.review.resumeDocument);
+            ctx.lifetime.signal.throwIfAborted();
+            const url = URL.createObjectURL(file), link = document.createElement("a");
+            link.href = url;
+            if (download) link.download = file.name || "resume.pdf";
+            else { link.target = "_blank"; link.rel = "noopener"; }
+            link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+          } catch (error) { if (!ctx.lifetime.signal.aborted) status("Original file could not be opened: " + error.message); }
+        })();
+      }
+      if (event.target.closest("[data-atsv-context-close]")) closeContext();
+      if (event.target.closest("[data-atsv-address]")) {
+        if (ctx.wsId || ctx.resumeId) openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: atsvEditorNavigation(ctx) });
+        else atsRebuildOpen(ctx);
+      }
+    }, { signal: ctx.lifetime.signal });
+    modal.addEventListener("keydown", event => {
+      if (event.key === "Escape" && modal.querySelector("#atsv-review-info:popover-open")) { event.preventDefault(); event.stopPropagation(); modal.querySelector("#atsv-review-info").hidePopover(); modal.querySelector('[popovertarget="atsv-review-info"]').focus(); return; }
+      if (event.key === "Escape" && ctx.contextPanel) { event.preventDefault(); event.stopPropagation(); closeContext(); }
+    }, { capture: true, signal: ctx.lifetime.signal });
     rail.addEventListener("click", function (e) {
       if (e.target.closest("[data-prep-retry]")) { prepRetryStorage(); return; }
-      if (e.target.closest("[data-atsv-continue]")) { if (ctx.wsId) atsHistRestore(ctx.wsId); else if (ctx.resumeId) openResumeStudio({ resumeId: ctx.resumeId }); return; }
+      if (e.target.closest("[data-atsv-continue]")) { openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: atsvEditorNavigation(ctx) }); return; }
       if (e.target.closest("[data-atsv-rebuild]")) { atsRebuildOpen(ctx); return; }
-      var cp = e.target.closest("[data-atsv-copy]");
-      if (cp) { var it = cp.closest(".atsv__item"), code = it && it.querySelector("code"); if (code) { try { navigator.clipboard.writeText(code.textContent); } catch (x) {} cp.textContent = "Copied"; setTimeout(function () { cp.textContent = "Copy"; }, 1200); } return; }
       var item = e.target.closest(".atsv__item"); if (item && item.dataset.fi) atsvFocusPin(ctx, item.dataset.fi);
     });
+    rail.addEventListener("keydown", function (event) {
+      if (event.target.matches(".atsv__item") && ["Enter", " "].includes(event.key)) { event.preventDefault(); atsvFocusPin(ctx, event.target.dataset.fi); }
+    });
     stage.addEventListener("click", function (e) {
-      if (e.target.closest("[data-atsv-attach]")) {
-        const input = document.createElement("input"); input.type = "file"; input.accept = ".pdf,application/pdf";
-        input.onchange = () => { if (input.files?.[0]) atsvRecoverDocument(ctx,"file",input.files[0]); }; input.click(); return;
-      }
       const recovery = e.target.closest("[data-atsv-recover]");
       if (recovery) { atsvRecoverDocument(ctx,recovery.dataset.atsvRecover); return; }
-      var pin = e.target.closest(".atsv__pin"); if (pin) atsvFocusPin(ctx, pin.dataset.fi);
+      var pin = e.target.closest(".atsv__pin,.atsv__hl"); if (pin) atsvFocusPin(ctx, pin.dataset.fi);
     });
     stage.addEventListener("mouseover", function (e) { var t = e.target.closest(".atsv__pin,.atsv__hl"); if (t) atsvActivate(ctx, t.dataset.fi); });
     stage.addEventListener("scroll", function () { atsvUpdatePageNo(ctx); });
     modal.querySelectorAll("[data-atsv-zoom]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var z = b.dataset.zoom;
-        if (z === "fit") ctx._needFit = true;
-        else ctx.scale = Math.min(3, Math.max(0.4, ctx.scale * (z === "in" ? 1.2 : 1 / 1.2)));
-        atsvBuild(ctx, false).catch(error => { if (!ctx.lifetime.signal.aborted) status("PDF zoom failed: " + error.message); });
+      b.addEventListener("click", async function () {
+        if (ctx.zoomBusy || !ctx.pdf) return;
+        ctx.zoomBusy = true;
+        modal.querySelector('.atsv__tools').setAttribute('aria-busy', 'true');
+        var z = b.dataset.atsvZoom;
+        if (z === "fit") ctx._needFit = ctx.fitMode === "page" ? "width" : "page";
+        else { ctx.fitMode = "custom"; ctx.scale = Math.min(3, Math.max(0.1, ctx.scale * (z === "in" ? 1.2 : 1 / 1.2))); }
+        try { await atsvBuild(ctx, false); }
+        catch (error) { if (!ctx.lifetime.signal.aborted) status("PDF zoom failed: " + error.message); }
+        finally {
+          ctx.zoomBusy = false;
+          modal.querySelector('.atsv__tools').setAttribute('aria-busy', 'false');
+        }
       });
     });
-    var _rg = modal.querySelector("[data-atsv-regen]"); if (_rg) _rg.addEventListener("click", function () { atsvRecheck(ctx); });
+    modal.querySelector("[data-atsv-candidate]")?.addEventListener("click", () => openAtsCandidate(null, ctx));
   }
   function atsvUpdatePageNo(ctx) {
     var pn = ctx.modal.querySelector("[data-atsv-pageno]"); if (!pn) return;
     if (!ctx.pdf) { pn.textContent = ""; return; }
-    var stage = ctx.modal.querySelector("[data-atsv-stage]"), mid = stage.scrollTop + stage.clientHeight / 2, cur = 1;
-    ctx.pages.forEach(function (pg) { if (pg.wrap.offsetTop <= mid) cur = pg.pageNum; });
+    var stage = ctx.modal.querySelector("[data-atsv-stage]"), mid = stage.getBoundingClientRect().top + stage.clientHeight / 2, cur = 1;
+    ctx.pages.forEach(function (pg) { if (pg.wrap.getBoundingClientRect().top <= mid) cur = pg.pageNum; });
     pn.textContent = "Page " + cur + " / " + ctx.pdf.numPages;
   }
 
@@ -7742,7 +8023,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     session.styles.forEach(link => link.remove());
     if (root) {
       root.classList.remove("is-native-slides");
-      root.querySelectorAll("[data-native-slide-toolbar],[data-native-slide-status]").forEach(slot => { slot.replaceChildren(); slot.hidden = true; });
+      root.querySelectorAll("[data-native-slide-toolbar],[data-native-slide-history],[data-native-slide-status]").forEach(slot => { slot.replaceChildren(); slot.hidden = true; });
     }
   }
   function renderNativeSlides(stage, work) {
@@ -7751,23 +8032,23 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     const container = document.createElement("div"); container.className = "studio-native-slide-root";
     const loading = document.createElement("div"); loading.className = "adm__empty"; loading.setAttribute("role", "status"); loading.textContent = "Loading slide editor...";
     container.append(loading); stage.replaceChildren(container);
-    const toolbar = root.querySelector("[data-native-slide-toolbar]"), statusbar = root.querySelector("[data-native-slide-status]");
-    toolbar.hidden = false; statusbar.hidden = false;
+    const toolbar = root.querySelector("[data-native-slide-toolbar]"), historyToolbar = root.querySelector("[data-native-slide-history]"), statusbar = root.querySelector("[data-native-slide-status]");
+    toolbar.hidden = false; historyToolbar.hidden = false; statusbar.hidden = false;
     const session = { work, container, active: true, styles: [], editor: null, reference: work.study?.nativeDeck || studioDeckReference(work.id) };
     nativeSlideSession = session;
     root.classList.add("is-native-slides");
     const current = () => session.active && nativeSlideSession === session && data.work[openStudy] === work && l2Tab === "slides" && (!work.study?.nativeDeck || work.study.nativeDeck.id === session.reference.id);
-    const styles = ["/studio/slide-lab/assets/editor.css?v=1.20", "/css/slide-studio.css?v=1.7"].map(href => new Promise((resolve, reject) => {
+    const styles = ["/studio/slide-lab/assets/editor.css?v=1.20", "/css/slide-studio.css?v=1.8"].map(href => new Promise((resolve, reject) => {
       const link = document.createElement("link"); link.rel = "stylesheet"; link.href = href;
       link.onload = resolve; link.onerror = () => reject(new Error("The native slide editor styles could not be loaded"));
       session.styles.push(link); document.head.append(link);
     }));
-    const entry = "/studio/slide-lab/assets/editor.js?v=1.41";
+    const entry = "/studio/slide-lab/assets/editor.js?v=1.42";
     session.ready = Promise.all([import(entry), ...styles]).then(async ([module]) => {
       if (!current()) return;
       container.replaceChildren();
       session.editor = module.mountSlideEditor(container, {
-        caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, statusbar,
+        caseStudyId: work.id, title: work.title || "Untitled deck", toolbar, historyToolbar, statusbar,
         coverSource: () => {
           if (!current()) throw new Error("The case-study editor session has changed");
           const source = projectCoverData(work);
@@ -7820,7 +8101,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     });
   }
   function nativeSlideClickGate(event) {
-    if (!nativeSlideSession || nativeSlideReplay || event.target.closest('.merge-shell,[data-native-slide-toolbar],[data-native-slide-status],[data-act="logs-rec"]')) return;
+    if (!nativeSlideSession || nativeSlideReplay || event.target.closest('.merge-shell,[data-native-slide-toolbar],[data-native-slide-history],[data-native-slide-status],[data-act="logs-rec"]')) return;
     const trigger = event.target.closest('.adm__tab,[data-l2-back],[data-exit-save],[data-return-site],[data-exit-discard],[data-publish],[data-act]');
     if (!trigger) return;
     if (trigger.hasAttribute("data-exit-discard")) { disposeNativeSlides(); return; }
@@ -12810,6 +13091,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (act === "ext-download") { extDownload(b); return; }
     if (act === "resume-pdf") { resumePdfDownload(b); return; }
     if (act === "phone-qr") { phoneQr(b); return; }
+    if (act === "ats-candidate") { openAtsCandidate(b.closest(".ats")); return; }
     if (act === "ats-check") { var _srcFile = (atsState.source === "file") || !(data.contact && data.contact.resume); atsRun(b.closest(".ats"), _srcFile ? atsPickedFile : null); return; }
     if (act === "ats-fetch") { atsFetchToPanel(b.closest(".ats")); return; }
     if (act === "ats-mode") { atsState.mode = b.dataset.mode; var amp = b.closest(".ats"); if (amp) { amp.querySelectorAll('[data-act="ats-mode"]').forEach(function (x) { x.classList.toggle("is-on", x === b); }); var ajd = amp.querySelector(".ats__jd"); if (ajd) ajd.hidden = (atsState.mode !== "job"); } atsSaveDraft(); return; }
@@ -16489,7 +16771,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       const result = await aiTaskAgent.run(configs, { task, system, user, options }, (selected, model, step, receipt) => {
         const usageContext = { sessionId: job.sessionId, jobId: job.id, callId: receipt.id };
         const observed = { ...step, options: { ...step.options,
-          usageContext,
+          usageContext, ...(opts.baselineAccounting ? { baselineAccounting: opts.baselineAccounting } : {}),
           onUsage: (input, output) => aiSession.recordUsage(input, output, usageContext),
           onOutput: step.role === "coordinator" || step.task === "image" ? undefined : chunk => aiSession.output(job.id, receipt.id, chunk)
         } };
@@ -16497,7 +16779,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       });
       signal.throwIfAborted();
       aiSession.finish(job.id, "complete");
-      aiQueueEvaluation(configs, task, signal);
+      if (opts.baselineAccounting) await verifyBaselineAccounting(opts.baselineAccounting, cfg);
+      else aiQueueEvaluation(configs, task, signal);
       return result;
     } catch (error) {
       aiSession.finish(job.id, signal.aborted ? "cancelled" : "error", signal.aborted ? "" : error.message);
@@ -16552,6 +16835,17 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     });
   }
   const aiNoTemperature = new Set();
+  async function verifyBaselineAccounting(accounting, cfg) {
+    if (typeof accounting?.request !== "function" || typeof accounting?.semantic !== "function" || typeof accounting?.verifyConfiguration !== "function" || typeof accounting?.verifyInput !== "function") throw new Error("The bounded baseline transport is incomplete.");
+    const routingPolicy = (await aiOrchestrator.state()).policy;
+    if (routingPolicy.autoEvaluate !== false || routingPolicy.evaluationDailyBudget !== 0 || routingPolicy.providers !== "selected") throw new Error("The bounded baseline requires its explicitly frozen selected-provider, automatic-evaluation-OFF configuration. No setting was changed.");
+    const providerScope = aiProviderScope(cfg);
+    if (providerScope !== aiProviderScope(aiCfg("txt"))) throw new Error("The baseline provider configuration changed.");
+    if (aiMode() !== "cf" || typeof aiCfKeys?.openai?.set !== "boolean" || typeof aiCfKeys?.gemini?.set !== "boolean") throw new Error("Current saved-provider metadata is required before a bounded baseline; no embedding configuration was assumed.");
+    const embeddingProvider = cfg.provider === "gemini" && aiCfKeys.gemini.set ? "gemini" : aiCfKeys.openai.set ? "openai" : aiCfKeys.gemini.set ? "gemini" : null;
+    const embedding = embeddingProvider ? { provider: embeddingProvider, id: embeddingProvider === "openai" ? "text-embedding-3-small" : "text-embedding-004" } : null;
+    await accounting.verifyConfiguration({ routingPolicy, providerScope, manualModel: aiManualModel, embedding });
+  }
   async function aiTextRequest(cfg, model, url, headers, body, signal, options = {}) {
     const sampling = cfg.provider === "gemini" ? body.generationConfig : body;
     if (options.outputPolicy === "model" && !cfg.routingMaxTokens) {
@@ -16568,9 +16862,16 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       else body.response_format = { type: "json_schema", json_schema: { name: "studio_agent_action", strict: true, schema: options.responseSchema } };
     }
     if (aiNoTemperature.has(cacheKey)) delete sampling.temperature;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < AI_TEXT_REQUEST_ATTEMPTS; attempt++) {
       signal?.throwIfAborted();
-      const response = await fetch(url, { method: "POST", headers, signal, body: JSON.stringify(body) });
+      const serialized = JSON.stringify(body);
+      const send = requestSignal => fetch(url, { method: "POST", headers, signal: requestSignal, body: serialized });
+      let response;
+      if (options.baselineAccounting) {
+        await verifyBaselineAccounting(options.baselineAccounting, cfg);
+        if (!/^[a-zA-Z0-9_-]{1,80}$/.test(options.usageContext?.callId || "")) throw new Error("A bounded baseline request needs its exact logical call identity.");
+        response = await options.baselineAccounting.request({ id: options.usageContext.callId + "-" + attempt, kind: "completion", provider: cfg.provider, model, body: serialized }, send, signal);
+      } else response = await send(signal);
       if (options.singleAttempt || attempt || ![400, 422].includes(response.status) || !Object.hasOwn(sampling, "temperature")) return response;
       const failure = await response.clone().json().catch(() => null);
       const message = failure?.error?.message || "";
@@ -16607,6 +16908,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   async function aiChatOnce(cfg, model, system, user, opts) {
     var p = cfg.provider, key = cfg.key, base = cfg.base;
     var maxTokens = cfg.routingMaxTokens || opts.maxTokens || 4096;
+    if (opts.assessmentReceipt && (!["openai", "anthropic"].includes(p) || opts.singleAttempt !== true || opts.onOutput || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 12000)) throw new Error("Candidate assessment requires one bounded non-streaming request.");
     if (typeof opts.onOutput === "function" || p === "anthropic" && maxTokens > 21333) return aiStream(cfg, model, system, user, opts);
     user = aiPromptContent(p, user);
     var temp = opts.temperature != null ? opts.temperature : 0.7;
@@ -16615,6 +16917,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       res = await aiTextRequest(cfg, model, base + "/messages", { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, { model: model, max_tokens: maxTokens, temperature: temp, system: system, messages: [{ role: "user", content: user }] }, opts.signal, opts);
       j = await res.json().catch(function () { return null; });
       if (!res.ok) return aiProviderFailure(res, j);
+      if (opts.assessmentReceipt) {
+        const receipt = assessmentProviderReceipt(p, j, res);
+        if (receipt.usage) aiUsageRecord(p, receipt.model, receipt.usage.inputTokens, receipt.usage.outputTokens, opts.usageContext);
+        return { ok: true, receipt };
+      }
       (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out, opts.usageContext); })(j && aiUsageFromJson(p, j));
       return aiAnthropicResult(j, res.status);
     }
@@ -16638,6 +16945,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     res = await aiTextRequest(cfg, model, base + "/chat/completions", { "Content-Type": "application/json", Authorization: "Bearer " + key }, ob, opts.signal, opts);
     j = await res.json().catch(function () { return null; });
     if (!res.ok) return aiProviderFailure(res, j);
+    if (opts.assessmentReceipt) {
+      const receipt = assessmentProviderReceipt(p, j, res);
+      if (receipt.usage) aiUsageRecord(p, receipt.model, receipt.usage.inputTokens, receipt.usage.outputTokens, opts.usageContext);
+      return { ok: true, receipt };
+    }
     (function (u) { if (u) aiUsageRecord(p, model, u.in, u.out, opts.usageContext); })(aiUsageFromJson(p, j));
     return { ok: true, text: ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "").trim() };
   }
@@ -20500,11 +20812,13 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         "</div>" +
       "</header>" +
       '<div class="adm__workbar">' +
+        '<div class="studio-worknav" role="group" aria-label="Workspace navigation"><span class="studio-worknav__back">' +
         '<button class="adm__hist-btn adm__workback" data-l2-back type="button" aria-label="Back to projects" title="Back to projects" hidden>' + IC.back + '</button>' +
+        '</span><div class="studio-worknav__history">' +
         '<div class="adm__hist" data-hist hidden>' +
           '<button class="adm__hist-btn" data-undo type="button" aria-label="Undo" title="Undo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg></button>' +
           '<button class="adm__hist-btn" data-redo type="button" aria-label="Redo" title="Redo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M20 9H9a5 5 0 0 0 0 10h1"/></svg></button>' +
-        "</div>" +
+        '</div><div data-native-slide-history hidden></div></div></div>' +
         '<nav class="l2tabs" data-l2tabs role="tablist" aria-label="Project editor" hidden></nav>' +
         '<div class="adm__prevgroup" data-prevgroup>' +
         '<button class="adm__bar-prev adm__section-access" data-section-access data-act="study-unlocktoggle" type="button" role="switch" aria-checked="false" aria-label="Locked: Unlock protected sections" title="Unlock protected sections" hidden>' + IC.sectionsLocked + '<span>Locked</span></button>' +
@@ -21058,7 +21372,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   window.addEventListener("rk:admin-auth", event => {
     if (!root?.classList.contains("is-open")) return;
     if (event.detail?.reason === "signed-in") {
-      document.documentElement.classList.remove("rk-session-locked"); root.inert = !!resumeFrame;
+      document.documentElement.classList.remove("rk-session-locked"); root.inert = !!resumeFrame && !!resumeContext?.candidate;
       if (resumeFrame) resumeSession = adminSessionInfo()?.sessionId || adminSession();
       aiSession.start(); autopubStart(); return;
     }
@@ -21198,7 +21512,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   }
 
 
-  let resumeFrame = null, resumeTrigger = null, resumeContext = null, resumeSession = null;
+  let resumeFrame = null, resumeTrigger = null, resumeContext = null, resumeSession = null, resumeFrameCleanup = null, resumeLeaveHandler = null;
   let atsResumeRows = [], atsResumeSession = null;
   async function refreshAtsResumes() {
     const session = adminSession();
@@ -21215,18 +21529,36 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   }
   function openResumeStudio(context = {}) {
     if (!root?.classList.contains("is-open")) return;
+    if (context.candidate && !resumeCandidateEnabled()) throw new Error("Candidate intake is not enabled.");
     if (resumeFrame) { resumeFrame.focus(); return; }
     resumeContext = context; resumeSession = adminSessionInfo()?.sessionId || adminSession();
     resumeTrigger = document.activeElement;
     resumeFrame = document.createElement("iframe");
-    resumeFrame.title = "Resume Studio";
+    resumeFrame.title = context.candidate ? "Candidate assessment" : "Resume Studio";
     resumeFrame.className = "adm__resume-host";
-    resumeFrame.src = "/studio/resume/?hosted=1";
-    document.body.appendChild(resumeFrame);
-    root.inert = true;
-    if (atsvActive?.modal) atsvActive.modal.inert = true;
-    document.querySelectorAll('.atsv').forEach(modal => { modal.inert = true; });
+    resumeFrame.src = "/studio/resume/?hosted=1" + (context.candidate ? "&candidate=1&intake=1" : "");
+    if (context.candidate) {
+      const reviews = [...document.querySelectorAll('.atsv')].map(element => ({element,inert:element.inert}));
+      document.body.appendChild(resumeFrame); root.inert = true;
+      reviews.forEach(({element}) => { element.inert = true; });
+      resumeFrameCleanup = () => { root.inert = false; reviews.forEach(({element,inert}) => { element.inert = inert; }); };
+    } else {
+      root.appendChild(resumeFrame);
+      resumeFrameCleanup = mountResumeStudioWorkspace(resumeFrame, async () => {
+        if (!resumeLeaveHandler) { status('Resume Studio is still opening. Use Back to Studio if it cannot load.'); return false; }
+        return resumeLeaveHandler();
+      });
+    }
     resumeFrame.focus();
+  }
+  function setResumeStudioLeaveHandler(caller, handler) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || typeof handler !== 'function') throw new Error('This Resume Studio session is closed.');
+    resumeLeaveHandler = handler;
+    return () => { if (resumeLeaveHandler === handler) resumeLeaveHandler = null; };
+  }
+  function resumeStudioStorageFeedback(caller, feedback, action) {
+    if (!resumeFrame || caller !== resumeFrame.contentWindow || !resumeFrame.__resumeFeedback) throw new Error('This Resume Studio workspace is closed.');
+    resumeFrame.__resumeFeedback.paint(feedback, action);
   }
   async function initializeResumeStudio(caller, resumeId = null) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
@@ -21237,7 +21569,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       const response = await resumeStudioRequest('resumes/' + context.resumeId, {}, caller);
       if (!response.ok) throw new Error('The selected resume is unavailable. No other document was opened.');
       const record = await response.json();
-      if (!record.document.ats?.legacy || record.document.ats.recoveredFrom) return { resumeId: context.resumeId };
+      if (!record.document.ats?.legacy || record.document.ats.recoveredFrom) return { resumeId: context.resumeId, reviewNavigation: context.reviewNavigation };
       retained = record.document.ats.legacy;
       context.entryId = retained.entry.id;
     }
@@ -21260,7 +21592,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (!response.ok) throw new Error(result.error || 'Migration failed. Existing records are retained.');
     if (localEntry && (await atsMigrationIdentity(prepGet('ats', context.entryId))).fingerprint !== before.fingerprint || localReview && (await atsMigrationIdentity(prepGet('ats', localReview.id))).fingerprint !== reviewBefore) throw new Error('This ATS record changed while migrating. Reopen it to compare the newer copy.');
     if (context !== resumeContext) throw new Error('This editor session changed. Reopen ATS history.');
-    return { resumeId: result.document.id };
+    return { resumeId: result.document.id, reviewNavigation: context.reviewNavigation };
   }
   async function recoverResumeLegacy(id, version, caller) {
     const context = resumeContext;
@@ -21279,24 +21611,49 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function resumeStudioConfiguration(caller) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
     const cfg = aiCfg('txt');
-    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection' };
+    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection', reviewResponseVersion: 1 };
   }
-  async function resumeStudioAssess(document, exportId, caller, signal) {
+  async function resumeStudioAssessmentSource(document, exportId, caller, signal) {
     const config = resumeStudioConfiguration(caller);
     if (!config.available) throw new Error('Configure AI in Studio before running an ATS check.');
     const response = await resumeStudioRequest('resumes/' + document.id, { signal }, caller);
     if (!response.ok) throw new Error('Save the resume before re-checking.');
     const record = await response.json(), signature = resumeSignature(document);
-    const artifact = record.exports.find(entry => entry.id === exportId && entry.signature === signature);
+    const transient = exportId && typeof exportId === 'object' ? exportId : null;
+    const artifact = transient ? transient.entry : record.exports.find(entry => entry.id === exportId && entry.signature === signature);
     if (!artifact || resumeSignature(record.document) !== signature) throw new Error('The resume or PDF changed. Re-check the current version.');
-    const pdf = await resumeStudioRequest('resumes/' + document.id + '/exports/' + exportId, { signal }, caller);
-    if (!pdf.ok) throw new Error('The verified PDF is unavailable. Export again.');
-    const file = new File([await pdf.blob()], artifact.name, { type: 'application/pdf' });
+    let blob;
+    if (transient) {
+      if (artifact.signature !== signature || !ArrayBuffer.isView(transient.bytes) || transient.bytes.byteLength < 5 || transient.bytes.byteLength > 20 * 1024 * 1024) throw new Error('The checked PDF is invalid. Prepare it again.');
+      const bytes = new Uint8Array(transient.bytes.buffer, transient.bytes.byteOffset, transient.bytes.byteLength);
+      const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
+      if (hash !== artifact.sha256) throw new Error('The checked PDF bytes changed. Prepare it again.');
+      const parsed = await readResumePdf(bytes, { signal });
+      verifyResumePdf(record.document, parsed.pages, parsed.links, artifact.pages);
+      blob = new Blob([bytes], { type: 'application/pdf' });
+    } else {
+      const pdf = await resumeStudioRequest('resumes/' + document.id + '/exports/' + exportId, { signal }, caller);
+      if (!pdf.ok) throw new Error('The verified PDF is unavailable. Export again.');
+      blob = await pdf.blob();
+    }
+    const file = new File([blob], artifact.name, { type: 'application/pdf' });
     const text = ((await fbExtractFile(file)) || '').replace(/\s+/g, ' ').trim();
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
-    const result = await atsEvaluate(text, file, document.target.level, document.target.company, document.target.jd, signal);
+    return { config, file, text, signature };
+  }
+  async function resumeStudioAssess(document, exportId, caller, signal, baselineAccounting) {
+    if (baselineAccounting && !resumeCandidateEnabled()) throw new Error('Bounded baseline execution is available only in the local candidate development workspace.');
+    const { config, file, text, signature } = await resumeStudioAssessmentSource(document, exportId, caller, signal);
+    let supportingEvidence = [];
+    if (!baselineAccounting && document.sourceIds.length) {
+      const response = await resumeStudioRequest('library', { signal }, caller);
+      if (!response.ok) throw new Error('Supporting sources could not be loaded. No review was requested.');
+      const library = await response.json();
+      supportingEvidence = resumeRevisionEvidence(document, library.sources).filter(item => item.sourceId);
+    }
+    const result = await atsEvaluate(text, file, document.target.level, document.target.company, document.target.jd, signal, baselineAccounting, { prepareActions: !baselineAccounting, supportingEvidence });
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
-    return { ...result, provider: config.provider, model: config.model, exportId, signature };
+    return { ...result, provider: config.provider, model: config.model, exportId: typeof exportId === 'object' ? exportId.entry.id : exportId, signature };
   }
   async function resumeStudioComplete(input, caller, signal) {
     const config = resumeStudioConfiguration(caller);
@@ -21306,15 +21663,48 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
     return { text };
   }
+  async function resumeStudioAssessBounded(document, exportId, caller, baselineAccounting, signal) {
+    if (!resumeCandidateEnabled() || !baselineAccounting) throw new Error('An explicit bounded baseline transport in the local candidate workspace is required.');
+    await verifyBaselineAccounting(baselineAccounting, aiCfg('txt'));
+    return resumeStudioAssess(document, exportId, caller, signal, baselineAccounting);
+  }
+  async function resumeStudioPrepareBaseline(document, exportId, caller, signal) {
+    if (!resumeCandidateEnabled()) throw new Error('Baseline preparation is available only in the local candidate workspace.');
+    const { file, text } = await resumeStudioAssessmentSource(document, exportId, caller, signal);
+    const input = await baselineAssessmentInput(text, file, document.target.level, document.target.company, document.target.jd);
+    resumeStudioConfiguration(caller); signal?.throwIfAborted();
+    return { input, inputSha256: await historyHash(input) };
+  }
   function closeResumeStudio(caller) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow) throw new Error("This Resume Studio session is closed.");
-    resumeFrame.remove(); resumeFrame = null; root.inert = false;
+    const candidate = !!resumeContext?.candidate;
+    resumeFrameCleanup?.(); resumeFrameCleanup = null; resumeLeaveHandler = null;
+    resumeFrame.remove(); resumeFrame = null;
     resumeContext = null; resumeSession = null;
-    document.querySelectorAll('.atsv').forEach(modal => { modal.inert = false; });
     if (resumeTrigger?.isConnected) resumeTrigger.focus();
-    refreshAtsResumes();
+    if (!candidate) refreshAtsResumes();
+  }
+  async function resumeCandidateInput(caller, signal, read = false) {
+    const context = resumeContext;
+    const check = () => {
+      signal?.throwIfAborted();
+      if (!resumeCandidateEnabled() || !resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") ||
+          context !== resumeContext || !context?.candidate || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error("This candidate intake session is closed or changed.");
+    };
+    check();
+    const target = context.candidate.getTarget();
+    if (!read) return { target, label: context.candidate.label };
+    const file = await context.candidate.getFile(signal);
+    check();
+    const mediaType = assessmentFileType(file);
+    if (!file.size || file.size > 20 * 1024 * 1024) throw new Error("Choose a nonempty original no larger than 20 MB.");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    check();
+    if (JSON.stringify(target) !== JSON.stringify(context.candidate.getTarget())) throw new Error("The selected target changed while reading. Prepare it again.");
+    return { kind: "upload", bytes, mediaType, target };
   }
   async function resumeStudioRequest(path, options = {}, caller) {
+    if (resumeContext?.candidate) throw new Error("Candidate intake cannot access editable resume storage.");
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !root?.classList.contains("is-open") || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error("The owner session expired. Your unsaved edits are kept in this browser.");
     if (!/^(library|migrate|sources(?:\/[a-f0-9]{64})?|resumes(?:\/[a-zA-Z0-9_-]{1,80}(?:\/(?:restore|recover-legacy|export|finalize|exports\/[a-zA-Z0-9_-]{1,80}))?)?)$/.test(path) || !["GET", "POST", "PUT"].includes(options.method || "GET")) throw new Error("Invalid Resume Studio request.");
     const headers = { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" };
@@ -21344,7 +21734,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   window.__RKStudio.toggleSections = id => toggleStudyContentAccess(data.work.findIndex(work => work.id === id));
   window.__RKStudio.unlockSections = id => decryptStudyForEdit(data.work.findIndex(work => work.id === id));
   window.__RKStudio.aiRouting = { state: () => aiOrchestrator.state(), feedback: (decisionId, feedback) => aiOrchestrator.feedback(decisionId, feedback) };
-  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, initialize: initializeResumeStudio, request: resumeStudioRequest, recoverLegacy: recoverResumeLegacy, configuration: resumeStudioConfiguration, assess: resumeStudioAssess, complete: resumeStudioComplete };
+  window.__RKStudio.resume = { open: openResumeStudio, close: closeResumeStudio, setLeaveHandler: setResumeStudioLeaveHandler, storageFeedback: resumeStudioStorageFeedback, initialize: initializeResumeStudio, candidateInput: resumeCandidateInput, request: resumeStudioRequest, recoverLegacy: recoverResumeLegacy, configuration: resumeStudioConfiguration, assess: resumeStudioAssess, complete: resumeStudioComplete };
+  window.__RKStudio.resume.baseline = Object.freeze({ version: 1, sourceSha256: typeof BASELINE_SOURCE_SHA256 === "string" ? BASELINE_SOURCE_SHA256 : null, prepare: resumeStudioPrepareBaseline, assess: resumeStudioAssessBounded });
   async function resumeAiConfiguration() {
     const configured = aiCfg("txt");
     if (configured.key) return configured;
@@ -21353,7 +21744,139 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     if (!provider || !aiSess()) throw new Error("No supported stored AI provider is available for this session.");
     return { ...configured, provider, key: aiSess(), base: ADMIN_WORKER + "/admin/ai/" + provider, proxied: true, roaming: true };
   }
+  async function resumeAssessmentRequest(action, body, signal) {
+    if (!["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) || !root?.classList.contains("is-open") || !adminSession()) throw new Error("An open local Studio and owner session are required for central assessment.");
+    if (!["budget", "approve", "reserve", "execute"].includes(action)) throw new Error("Unknown central assessment action.");
+    const response = await fetch(ADMIN_WORKER + "/admin/resume/assessment/" + action, {
+      method: action === "budget" ? "GET" : "POST", headers: { Authorization: "Bearer " + adminSession(), "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(125000)])
+    });
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || "Central assessment is unavailable. No browser fallback was used.");
+    return value;
+  }
+  async function resumeHistoryRequest(path, options = {}, signal) {
+    if (!["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) || !root?.classList.contains("is-open") || !adminSession()) throw new Error("An open local Studio and owner session are required for private history.");
+    if (!/^(records(?:\?cursor=[^#]*)?|records\/[a-zA-Z0-9_-]{1,80}|artifacts\/[a-f0-9]{64})$/.test(path)) throw new Error("Invalid private history path.");
+    const response = await fetch(ADMIN_WORKER + "/admin/resume/history/" + path, {
+      method: options.method || "GET", headers: { ...options.headers, Authorization: "Bearer " + adminSession() }, body: options.body,
+      signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(60000)])
+    });
+    if (!response.ok) { const value = await response.json(); throw new Error(value.error || "Private assessment history is unavailable."); }
+    return options.binary ? new Uint8Array(await response.arrayBuffer()) : response.json();
+  }
   window.__RKStudio.resumeAI = {
+    history: {
+      list: (...args) => createAssessmentHistoryClient(resumeHistoryRequest).list(...args),
+      read: (...args) => createAssessmentHistoryClient(resumeHistoryRequest).read(...args),
+      save: (...args) => createAssessmentHistoryClient(resumeHistoryRequest).save(...args)
+    },
+    async assessmentModels({ evidencePolicy, inventory = true, signal } = {}) {
+      if (typeof inventory !== "boolean") throw new Error("Specify whether the new assessment needs a job inventory.");
+      const catalog = await resumeAssessmentRequest("budget", undefined, signal), cfg = await resumeAiConfiguration();
+      if (catalog.provider !== cfg.provider) throw new Error("The central budget is configured for a different provider. Update its verified policy before using the selected API; no provider was switched.");
+      const isEligible = model => {
+        const registered = catalog.models.find(item => item.id === model.id);
+        const maximum = registered && [...(inventory ? [["requirements", 8000]] : []), ["assessment", 12000], ["challenge", 12000]]
+          .reduce((total, [stage, maxTokens]) => total + Math.round(resumeCompletionReservation({ stage, maxTokens, system: "", user: "" },
+            { ...registered.pricing, checkedAt: catalog.checkedAt }).maximumAmount * 1e6), 0);
+        return registered && model.provider === catalog.provider &&
+          maximum <= Math.round((catalog.approved ? catalog.remaining : catalog.ceiling) * 1e6) &&
+          registered.maxInputTokens >= 110000 && registered.contextWindow >= 122000 &&
+          typeof model.reasoning === "boolean" &&
+          registered.pricing.input === model.pricing.input && registered.pricing.output === model.pricing.output &&
+          assessmentRequestPolicy(catalog.provider, registered.id, registered.reasoning) === assessmentRequestPolicy(catalog.provider, registered.id, model.reasoning) &&
+          (!registered.structuredOutput || model.structured === true) && (!evidencePolicy || registered.structuredOutput === true);
+      };
+      const eligible = await aiOrchestrator.choices([cfg], "analysis", {
+        inputTokens: 110000, outputTokens: 12000, structured: evidencePolicy ? "required" : "preferred", signal, refresh: true, isEligible, allowEmpty: true
+      });
+      if (!eligible.length) throw new Error("No currently available model matches the task, remaining server budget, prices and verified transport capabilities. Refresh the central model policy; no assessment was sent.");
+      const recommended = eligible[0];
+      return { ...catalog, models: eligible.map(choice => catalog.models.find(model => model.id === choice.model.id)),
+        recommendation: { modelId: recommended.model.id, task: "analysis", confidence: recommended.confidence, reasons: [...recommended.reasons] } };
+    },
+    async connectAssessment({ snapshot, getCurrent, getSource, getInput, expectedFingerprint, provider, model, pricing, budget, signal, timeoutMs,
+      getBaselineInput, baselineId, expectedBaselineFingerprint, baselineHistoryId, evidencePolicy }) {
+      const open = () => {
+        if (!["127.0.0.1", "localhost", "[::1]"].includes(location.hostname) || !root?.classList.contains("is-open")) throw new Error("The candidate pilot is available only in an open local Studio.");
+      };
+      open();
+      if (budget?.approved !== true || !["browser-origin", "server"].includes(budget.scope)) throw new Error("Explicit pilot budget approval is required.");
+      pricing = structuredClone(pricing); budget = structuredClone(budget);
+      if (getInput !== undefined) {
+        if (typeof getInput !== "function" || snapshot || getCurrent || getSource || typeof expectedFingerprint !== "string") throw new Error("Supply an artifact-input getter and its expected fingerprint, not a copied snapshot.");
+        getCurrent = async () => captureAssessmentInput(await getInput());
+        snapshot = await getCurrent();
+        if (snapshot.fingerprint !== expectedFingerprint) throw new Error("The selected artifact or target changed. Prepare it again.");
+      } else if (getSource !== undefined) {
+        if (typeof getSource !== "function" || snapshot || getCurrent || typeof expectedFingerprint !== "string") throw new Error("Supply an original-source getter and its expected fingerprint, not a copied snapshot.");
+        getCurrent = async () => captureAssessmentSource(await getSource());
+        snapshot = await getCurrent();
+        if (snapshot.fingerprint !== expectedFingerprint) throw new Error("The selected original or document changed. Prepare it again.");
+      }
+      if (typeof getCurrent !== "function") throw new Error("An authoritative current-snapshot getter is required.");
+      let baseline = null;
+      if (getBaselineInput !== undefined || baselineId !== undefined || expectedBaselineFingerprint !== undefined) {
+        if (typeof getBaselineInput !== "function" || typeof baselineId !== "string" || typeof expectedBaselineFingerprint !== "string") throw new Error("A recheck needs the original captured input and saved baseline identity.");
+        const original = await captureAssessmentInput(await getBaselineInput());
+        if (original.fingerprint !== expectedBaselineFingerprint) throw new Error("The baseline artifact or extraction changed. No recheck was connected.");
+        baseline = { id: baselineId, snapshot: original };
+      }
+      if (baselineHistoryId !== undefined) {
+        if (!baseline || baselineHistoryId !== baseline.id || budget.scope !== "server") throw new Error("A saved baseline requires the central authority and matching identity.");
+        const saved = await createAssessmentHistoryClient(resumeHistoryRequest).read(baselineHistoryId, signal);
+        const original = await captureAssessmentInput(saved.input);
+        if (original.fingerprint !== expectedBaselineFingerprint) throw new Error("The durable baseline differs from the selected history.");
+        baseline = { id: baselineId, snapshot: original, result: saved.record.result };
+      }
+      open(); signal?.throwIfAborted();
+      if (budget.scope === "server") {
+        const session = adminSessionInfo()?.sessionId || adminSession();
+        const current = async () => {
+          open(); signal?.throwIfAborted();
+          if (!session || (adminSessionInfo()?.sessionId || adminSession()) !== session || !adminSession()) throw new Error("The owner session changed. Reconnect the central assessment.");
+          return getCurrent();
+        };
+        await current();
+        const catalog = await resumeAssessmentRequest("budget", undefined, signal);
+        if ((await resumeAiConfiguration()).provider !== provider) throw new Error("The selected API changed. Refresh the task recommendation before approving this assessment.");
+        const selected = catalog.models.find(item => item.id === model);
+        if (provider !== catalog.provider || !selected || selected.pricing.input !== pricing?.input || selected.pricing.output !== pricing?.output || catalog.checkedAt !== pricing?.checkedAt) throw new Error("Refresh the server model and price quote before connecting.");
+        const authority = await createAssessmentBudgetClient({ request: async (...args) => { await current(); return resumeAssessmentRequest(...args); }, budget, signal });
+        return createAssessmentPilot({ snapshot, getCurrent: current, provider, model, pricing, authority, storage: localStorage, locks: navigator.locks, budget, signal, timeoutMs, baseline, evidencePolicy });
+      }
+      const cfg = { ...await resumeAiConfiguration() }, catalog = await aiCatalog.discover(cfg);
+      open(); signal?.throwIfAborted();
+      const selected = structuredClone(catalog.models.find(item => item.id === model));
+      if (provider !== cfg.provider || !selected?.output?.includes("text") || selected.maxOutputTokens < 12000 ||
+          selected.pricing?.input !== pricing?.input || selected.pricing?.output !== pricing?.output ||
+          catalog.updatedAt !== pricing?.checkedAt) throw new Error("Verify the locked provider/model and current catalog pricing before this pilot.");
+      if (![selected.maxInputTokens, selected.contextWindow].some(value => Number.isSafeInteger(value) && value > 12000)) throw new Error("The selected model needs a known input/context capacity before this pilot.");
+      const current = async () => {
+        open(); signal?.throwIfAborted();
+        const value = await resumeAiConfiguration();
+        open(); signal?.throwIfAborted();
+        if (!value.key || value.key !== cfg.key || value.provider !== cfg.provider || value.base !== cfg.base) throw new Error("The Studio AI connection changed. Reconnect the pilot.");
+        return value;
+      };
+      return createAssessmentPilot({ snapshot, provider, model, pricing, budget, storage: localStorage, locks: navigator.locks, signal, timeoutMs, baseline, evidencePolicy,
+        getCurrent: async () => { await current(); return getCurrent(); },
+        invoke: async request => {
+          const configuration = await current();
+          assertAssessmentCurrent(snapshot, await getCurrent());
+          request.signal.throwIfAborted();
+          const { inputBound } = resumeCompletionReservation(request, pricing);
+          if (Number.isFinite(selected.maxInputTokens) && inputBound > selected.maxInputTokens ||
+              Number.isFinite(selected.contextWindow) && inputBound + request.maxTokens > selected.contextWindow) throw new Error("The complete assessment input exceeds the selected model's advertised capacity. Nothing was truncated.");
+          const result = await aiChatOnce({ ...configuration, routingModel: selected, routingMaxTokens: request.maxTokens }, model, request.system, request.user,
+            { ...request, singleAttempt: true, assessmentReceipt: true });
+          await current(); request.signal.throwIfAborted();
+          if (!result.ok) throw new Error(result.err || "The candidate provider request failed.");
+          return result.receipt;
+        }
+      });
+    },
     async models() {
       if (!root?.classList.contains("is-open")) throw new Error("Open Studio first.");
       const cfg = await resumeAiConfiguration();

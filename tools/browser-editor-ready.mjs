@@ -1,3 +1,14 @@
+export async function openIsolatedBrowserHost(page, base) {
+  const host = new URL("/__browser-test-host", base).href;
+  await page.route(host, route => route.fulfill({
+    contentType: "text/html",
+    body: '<!doctype html><html><head><meta charset="utf-8"><title>Isolated browser host</title></head><body></body></html>'
+  }));
+  await page.goto(host);
+  if (page.url() !== host) throw new Error("The isolated browser host navigated unexpectedly.");
+  return host;
+}
+
 export async function waitForSlideEditor(page, { timeout = 30000 } = {}) {
   let timer, pageError;
   const failed = new Promise((_, reject) => {

@@ -7,14 +7,14 @@ import { join } from 'node:path';
 import { deckDocumentKey } from './src/js/slide-merge-history.mjs';
 import { publicDeckPayload } from './src/js/slide-merge-visibility.mjs';
 import { MERGE_DB } from './src/js/slide-merge-core.mjs';
-import { waitForSlideEditor } from './tools/browser-editor-ready.mjs';
+import { openIsolatedBrowserHost, waitForSlideEditor } from './tools/browser-editor-ready.mjs';
 const base = process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510';
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : chromium.executablePath());
 test('standalone editor startup failures surface immediately through the real readiness contract', { timeout:30000 }, async () => {
   const browser = await chromium.launch({ executablePath, headless:true });
   try {
     const page = await browser.newPage();
-    await page.goto(base + '/404.html');
+    await openIsolatedBrowserHost(page, base);
     await page.evaluate(name => new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 1);
       request.onupgradeneeded = () => request.result.createObjectStore('decks');
@@ -39,7 +39,7 @@ test('DJ pad can use the original tab without exposing notes or opening a second
   context.on('page', candidate => candidate.on('pageerror', error => errors.push(error.message)));
   await context.addInitScript(() => { window.captureRequests = 0; navigator.mediaDevices.getDisplayMedia = () => { window.captureRequests++; return Promise.reject(new DOMException('Unexpected capture', 'NotAllowedError')); }; });
   try {
-    await page.goto(base + '/404.html');
+    await openIsolatedBrowserHost(page, base);
     await page.evaluate(() => {
       const frame = document.createElement('iframe'); frame.title = 'Presenter DJ pad'; frame.id = 'presenter-host'; frame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
       const trigger = document.createElement('button'); trigger.textContent = 'Open audience';
@@ -1222,8 +1222,8 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
       if(!live)localStorage.setItem('rk:theme','night');
       localStorage.setItem('rk:content:draft',JSON.stringify({work:[{id:'reopen',title:'Reopen section sample',study:{blocks:[live?{type:'compare',heading:'A complete section',beforeSrc,afterSrc:canvas.toDataURL()}:{...published,heading:'A complete section'}]}}]}));
       const capture=navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
-      window.captureRequests=0;window.captureStreams=[];
-      navigator.mediaDevices.getDisplayMedia=(...args)=>{window.captureRequests++;return live?capture(...args).then(stream=>{window.captureStreams.push(stream);return stream;}):Promise.reject(new DOMException('Denied','NotAllowedError'));};
+      window.captureRequests=0;window.captureStreams=[];window.captureFailures=[];
+      navigator.mediaDevices.getDisplayMedia=(...args)=>{window.captureRequests++;return live?capture(...args).then(stream=>{window.captureStreams.push(stream);return stream;},error=>{window.captureFailures.push({name:error.name,message:error.message});throw error;}):Promise.reject(new DOMException('Denied','NotAllowedError'));};
     },{live,published});
     await page.goto(base+'/studio/slide-merge-lab/');
     await waitForSlideEditor(page);
@@ -1285,7 +1285,8 @@ for (const live of [false, true]) test(`native sections remain visible in the DJ
           const popup=page.context().pages().find(candidate=>candidate!==page&&!candidate.isClosed());
           await popup?.screenshot({path:join(tmpdir(),'rk-dj-section-capture-failure.png')});
           const diagnostic=await page.evaluate(()=>{const doc=window.documentPictureInPicture.window.document,canvas=doc.querySelector('[data-pp-now] canvas'),video=doc.querySelector('video'),colors=new Map();if(canvas){const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;for(let offset=0;offset<pixels.length;offset+=40){const color=Array.from(pixels.slice(offset,offset+4)).join(',');colors.set(color,(colors.get(color)||0)+1);}}return {status:doc.querySelector('[data-pp-status]').textContent,video:video&&{state:video.readyState,width:video.videoWidth,muted:video.srcObject?.getVideoTracks()[0]?.muted},colors:[...colors].sort((left,right)=>right[1]-left[1]).slice(0,8),frame:document.querySelector('[data-pjp-frame]').getBoundingClientRect().toJSON()};});
-          throw new Error(JSON.stringify({cycle,...diagnostic}),{cause:error});
+          const capture = await page.evaluate(()=>({failures:window.captureFailures,title:document.title,visible:document.visibilityState,focused:document.hasFocus()}));
+          throw new Error(JSON.stringify({cycle,...diagnostic,capture}),{cause:error});
         });
         assert.equal(await page.evaluate(()=>window.captureStreams.at(-1).getVideoTracks()[0].readyState),'live');
         const popup=page.context().pages().find(candidate=>candidate!==page&&!candidate.isClosed());

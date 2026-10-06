@@ -113,7 +113,7 @@ export function EditorBar({ historyRef, busy, editing, onEditing, slideView, onV
     <button key="play" className="merge-bar-play" type="button" title={newTab ? "Open slideshow in a new tab" : "Slide Show"} aria-label={newTab ? "Open slideshow in a new tab" : "Slide Show"} disabled={!canPlay || busy} onClick={onPlay}><Play size={15} strokeWidth={1.5} fill="currentColor" /></button>
   ];
   return <div className="merge-editor-bar">
-    <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /></div>
+    {historyRef && <div className="merge-bar-state"><div ref={historyRef} className="merge-bar-history" /></div>}
     <div className="merge-bar-views">
       {controls}
     </div>

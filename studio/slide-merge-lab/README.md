@@ -44,8 +44,15 @@ menu uses Studio's device-popup styling, selected state and keyboard navigation.
 Native saves still complete
 before leaving the editor, and failures retain the active editing session.
 
-Back now sits before Undo/Redo in the shared workbar, separated by a subtle vertical
-line within the existing gap. The project
+Back, Undo and Redo occupy Studio's shared fixed slots, separated by a subtle
+vertical line within the existing gap. Native history mounts into the dedicated
+`historyToolbar` integration target before project tabs; the standalone editor
+retains its local history target. The shared bar uses 48px single-row height,
+34px controls and common CTA typography/spacing, including on narrow screens
+where secondary actions wrap. Empty slots remain reserved when actions do not
+apply. Case and native-slide access labels reserve the full nine-character
+state width including shared letter spacing, so Unlocking stays unclipped
+without shifting adjacent controls. The project
 title/header row is removed from the editing canvas; identity remains in preview.
 Project history controls keep their disabled state visible when there is nothing
 to undo, and native history uses the same 34px controls. The Journey heading is

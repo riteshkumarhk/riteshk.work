@@ -6,15 +6,18 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
+import { execFileSync } from "node:child_process";
 import { build } from "esbuild";
 import { chromium } from "playwright-core";
-import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
+import { openIsolatedBrowserHost, waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
+import { assertStudioToolbar, assertResumeViewTools } from "./tools/studio-toolbar-assertions.mjs";
 import { rkDecWithSek, rkUnwrapSek, rkNewSek, rkWrapSek, rkEncWithSek } from "./src/js/admin-core.js";
 import { assertStudioDeckPublishable, createStudioDeck, STUDIO_DECK_SCHEMA } from "./src/js/slide-studio-deck.mjs";
 import { AI_AGENT_SYSTEM } from "./src/js/ai-task-agent.mjs";
 import { COMPOSITION_RESPONSE_SCHEMA } from "./src/js/slide-merge-ai.mjs";
 import { contentRevision } from "./src/js/content-revision.mjs";
 import { loadProtectedBlocks } from "./src/js/project-recovery.mjs";
+import { resumeSaveFailureFeedback } from "./src/js/resume-hosted.mjs";
 import { normalizeSectionReference } from "./src/js/slide-merge-section-component.mjs";
 import { publicDeckPayload, setDeckVisibility } from "./src/js/slide-merge-visibility.mjs";
 import { Miniflare } from "miniflare";
@@ -231,6 +234,17 @@ test("native text case preserves source editing history mixed selection small ca
         if (/mixed/i.test(String(text))) window.casePaint.push({ text, font: this.font });
         return fillText.call(this, text, ...args);
       };
+      window.caseResizeEvents = [];
+      window.addEventListener('pointerdown', event => {
+        if (!event.target.matches?.('.excalidraw__canvas.interactive')) return;
+        const state = window.__slideMerge?.api.getAppState();
+        if (!state) return;
+        window.caseResizeEvents.push({
+          x: event.clientX, y: event.clientY, cursor: getComputedStyle(event.target).cursor,
+          canvas: event.target.getBoundingClientRect().toJSON(), offsetLeft: state.offsetLeft, offsetTop: state.offsetTop,
+          scrollX: state.scrollX, scrollY: state.scrollY, zoom: state.zoom.value, selection: state.selectedElementIds
+        });
+      }, true);
     });
     await page.goto((process.env.SLIDE_LAB_URL || 'http://127.0.0.1:5510') + '/studio/slide-merge-lab/');
     const ready = () => waitForSlideEditor(page);
@@ -284,12 +298,29 @@ test("native text case preserves source editing history mixed selection small ca
     assert.ok(caps.lower > 0 && caps.lower < caps.upper, 'Small caps use smaller uppercase glyphs, not ordinary uppercase');
     await page.evaluate(() => window.__slideMerge.api.updateScene({ appState: { selectedElementIds: { 'case-first': true } } }));
     await button('All caps').click();
-    const resize = await page.evaluate(() => { const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'case-first'), box = document.querySelector('.lab-canvas').getBoundingClientRect(); return { x: box.left + (text.x + text.width + state.scrollX) * state.zoom.value, y: box.top + (text.y + text.height / 2 + state.scrollY) * state.zoom.value, delta: 40 * state.zoom.value, width: text.width }; });
+    const resize = await page.evaluate(() => {
+      const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'case-first');
+      // The native side-resize band is centered 4 CSS pixels outside the element's strict inner boundary.
+      return {
+        x: state.offsetLeft + (text.x + text.width + state.scrollX) * state.zoom.value + 4,
+        y: state.offsetTop + (text.y + text.height / 2 + state.scrollY) * state.zoom.value,
+        delta: 40 * state.zoom.value, width: text.width, elementX: text.x, elementY: text.y, fontSize: text.fontSize
+      };
+    });
     await page.mouse.move(resize.x, resize.y);
     await page.mouse.down();
     await page.mouse.move(resize.x - resize.delta, resize.y, { steps: 8 });
     await page.mouse.up();
-    await page.waitForFunction(width => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first').width < width - 20, resize.width);
+    await page.waitForFunction(width => window.__slideMerge.api.getSceneElements().find(element => element.id === 'case-first').width < width - 20, resize.width).catch(async error => {
+      await page.screenshot({ path: join(tmpdir(), 'rk-native-text-case-resize-failure.png') });
+      const after = await read(), resizeTarget = await page.evaluate(() => window.caseResizeEvents);
+      throw new Error(`Native text resize failed: ${JSON.stringify({ resize, resizeTarget, after: { x: after.x, y: after.y, width: after.width, height: after.height, angle: after.angle } })}`, { cause: error });
+    });
+    assert.equal(await page.evaluate(() => window.caseResizeEvents.at(-1)?.cursor), 'ew-resize', 'The real drag starts on the horizontal resize band');
+    const resized = await read();
+    assert.equal(resized.x, resize.elementX, 'Width resize does not move the text');
+    assert.equal(resized.y, resize.elementY);
+    assert.equal(resized.fontSize, resize.fontSize, 'Width resize does not scale the font');
     assert.equal((await read()).text, 'MIXED WORDS\nNEXT LINE', 'Native width resize retains display casing');
     assert.equal((await read()).originalText, before.originalText);
     const point = await page.evaluate(() => { const api = window.__slideMerge.api, state = api.getAppState(), text = api.getSceneElements().find(element => element.id === 'case-first'), box = document.querySelector('.lab-canvas').getBoundingClientRect(); return { x: box.left + (text.x + 60 + state.scrollX) * state.zoom.value, y: box.top + (text.y + 15 + state.scrollY) * state.zoom.value }; });
@@ -1572,10 +1603,13 @@ test("Studio protected inserts share recovery-gated access across case and slide
     const bounds = await control.boundingBox();
     assert.equal(bounds.height,34);
     assert.ok(bounds.x>=0 && bounds.x+bounds.width<=width,'The labelled access toggle fits the viewport');
-    assert.equal(await control.evaluate(element=>{
+    const labelGeometry = await control.evaluate(element=>{
       const label=element.querySelector('span'),box=element.getBoundingClientRect(),labelBox=label.getBoundingClientRect();
-      return element.scrollWidth<=element.clientWidth && labelBox.width>0 && labelBox.left>=box.left && labelBox.right<=box.right && label.scrollWidth<=label.clientWidth;
-    }),true,'The label is visible and unclipped');
+      return { unclipped:element.scrollWidth<=element.clientWidth && labelBox.width>0 && labelBox.left>=box.left && labelBox.right<=box.right && label.scrollWidth<=label.clientWidth,
+        text:label.textContent,controlWidth:box.width,controlScroll:element.scrollWidth,controlClient:element.clientWidth,
+        labelWidth:labelBox.width,labelScroll:label.scrollWidth,labelClient:label.clientWidth,font:getComputedStyle(label).font,spacing:getComputedStyle(label).letterSpacing };
+    });
+    assert.equal(labelGeometry.unclipped,true,'The label is visible and unclipped: '+JSON.stringify(labelGeometry));
     return bounds.width;
   };
   try {
@@ -2366,7 +2400,7 @@ async function installPrepareReplies(page) {
         }
         else if (system.includes('ATS-optimisation expert')) {
           if (window.deferAtsReply) { await new Promise(resolve => { window.releaseAtsReply = resolve; }); window.atsReplyReturned = true; }
-          text = JSON.stringify({score:70,band:'Good',summary:'ATS_RECHECK_RESULT',checks:[],fixes:[],keywords:{present:[],missing:[]}});
+          text = JSON.stringify({score:70,band:'Good',summary:'ATS_RECHECK_RESULT',checks:[],fixes:[],keywords:{present:[],missing:[]},...(system.includes('"responseVersion":1') ? {responseVersion:1} : {})});
         }
         else text = '<p><strong>Grounded answer.</strong> Keep the original evidence.</p>';
       }
@@ -3025,10 +3059,11 @@ test("Prepare storage status stays quiet during quick sync and reports sustained
   const env = {document:{querySelectorAll:()=>[host,ats]},Date:{now:()=>now},prepPendingSince:null,prepPendingNotice:0,
     setTimeout:callback => { timer=callback; return 1; },clearTimeout:()=>{timer=null;},
     prepOutbox:{'wb/session':{acknowledged:false}},prepPendingWrites:new Map(),prepSyncError:'',prepSyncing:true,prepSess:()=> 'owner',
-    prepGet:()=>entry,prepCloudSaved:new Map(),prepCloudErrors:new Map(),PREP_HIST_KEY:'history'};
+    prepGet:()=>entry,prepCloudSaved:new Map(),prepCloudErrors:new Map(),PREP_HIST_KEY:'history',
+    navigator:{onLine:true},resumeSaveFailureFeedback};
   const paint = runInNewContext(source.slice(start,end)+';prepPaintStorage',env);
   paint(); assert.equal(host.hidden,true); assert.equal(host.button.hidden,true);
-  assert.equal(ats.hidden,false); assert.match(ats.span.textContent,/Cloud copy not confirmed/);
+  assert.equal(ats.hidden,false); assert.equal(ats.span.textContent,"We couldn't confirm this review was saved. Keep this tab open and try again.");
   now += 4999; paint(); assert.equal(host.hidden,true);
   env.prepSyncError='Immediate cloud failure'; paint(); assert.equal(host.hidden,false); assert.equal(host.span.textContent,env.prepSyncError);
   env.prepSyncError=''; paint(); assert.equal(host.hidden,true);
@@ -3041,7 +3076,40 @@ test("Prepare storage status stays quiet during quick sync and reports sustained
   env.prepPendingWrites.set('history',entry); paint();
   assert.match(host.span.textContent,/Not saved on this device/); assert.equal(host.hidden,false); assert.equal(host.button.hidden,false);
   env.prepPendingWrites.clear(); env.prepCloudSaved.set('ats/resume',{session:'owner',signature:JSON.stringify(entry)}); paint();
-  assert.equal(ats.span.textContent,'Saved to Cloudflare.'); assert.equal(ats.button.hidden,true);
+  assert.equal(ats.span.textContent,'Saved to your account.'); assert.equal(ats.button.hidden,true);
+  env.prepPendingWrites.set('history',entry); paint();
+  assert.equal(ats.span.textContent,'Saved to your account. A copy could not be saved on this device.');
+  env.prepPendingWrites.clear(); env.prepOutbox={'ats/resume':{acknowledged:false}}; paint();
+  assert.equal(ats.span.textContent,'Saving this review...'); assert.equal(ats.button.hidden,true);
+  env.prepCloudErrors.set('ats/resume','Synthetic save failure'); paint();
+  assert.equal(ats.span.textContent,'Save not confirmed. Try again.');
+  assert.equal(ats.button.hidden,false); assert.equal(ats.button.disabled,false);
+  env.prepSyncing=true; paint(); assert.equal(ats.button.disabled,true);
+  env.prepSess=()=>''; paint();
+  assert.equal(ats.span.textContent,'Sign in to save this review to your account. Keep this tab open.');
+  assert.equal(ats.button.hidden,true);
+  const htmlStart=source.indexOf('  function prepStorageHtml(');
+  const storageHtml=runInNewContext(source.slice(htmlStart,start)+';prepStorageHtml',{escAttr:value=>value});
+  assert.match(storageHtml('ats','resume'), />Retry<\/button>/);
+  assert.match(storageHtml('iprep','interview'), />Retry save and sync<\/button>/);
+  let feedback, retry;
+  env.prepRetryStorage=()=>{};
+  ats.__resumeFeedback={paint(value,action){feedback=value;retry=action;}};
+  env.prepSess=()=>'owner'; env.prepSyncing=false; paint();
+  assert.equal(ats.hidden,true); assert.equal(feedback.state,'error');
+  assert.equal(feedback.message,'Save not confirmed. Try again.'); assert.equal(feedback.actionLabel,'Retry');
+  assert.equal(retry,env.prepRetryStorage);
+  env.navigator.onLine=false; paint();
+  assert.equal(feedback.message,"You're offline. Reconnect to save.");
+  env.navigator.onLine=true;
+  env.prepCloudErrors.set('ats/resume',Object.assign(new Error('Service unavailable'),{status:503})); paint();
+  assert.equal(feedback.message,"Changes weren't saved. Try again later.");
+  env.prepCloudErrors.set('ats/resume',Object.assign(new Error('Unauthorized'),{status:401})); paint();
+  assert.equal(feedback.message,'Sign in again to save your changes.'); assert.equal(feedback.actionLabel,'');
+  env.prepCloudErrors.clear(); env.prepOutbox={}; paint();
+  assert.equal(feedback.state,'saved'); assert.equal(feedback.text,'Saved'); assert.equal(feedback.message,'');
+  env.prepSess=()=>''; paint();
+  assert.equal(feedback.state,'auth'); assert.equal(feedback.actionLabel,'');
 });
 
 test("Prepare storage failures keep generated results in memory until retry succeeds", {timeout:30000}, async () => {
@@ -3214,15 +3282,474 @@ test('Prepare resume sources reject damaged synced bytes before storage', async 
   await assert.rejects(restoreResumeSource({ version: 1, sha256: 'invalid' }), /reference is invalid/);
 });
 
-function preparePdfFixture(text) {
+function preparePdfFixture(text, { pages = 1, width = 640, height = 360 } = {}) {
   const stream = '0.1 0.5 0.4 rg 40 290 520 15 re f 0 g BT /F1 16 Tf 40 240 Td (' + text + ') Tj ET';
-  const objects = ['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 640 360] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream'];
+  const pageObject = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`;
+  const kids = ['3 0 R', ...Array.from({length:pages-1},(_,i)=>`${i+6} 0 R`)];
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>',`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages} >>`,pageObject,'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream', ...Array(pages-1).fill(pageObject)];
   let pdf = '%PDF-1.4\n'; const offsets = [0];
   objects.forEach((object,index) => { offsets.push(Buffer.byteLength(pdf)); pdf += (index+1) + ' 0 obj\n' + object + '\nendobj\n'; });
   const xref = Buffer.byteLength(pdf);
-  pdf += 'xref\n0 6\n0000000000 65535 f \n' + offsets.slice(1).map(offset => String(offset).padStart(10,'0') + ' 00000 n \n').join('') + 'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  pdf += `xref\n0 ${objects.length+1}\n0000000000 65535 f \n` + offsets.slice(1).map(offset => String(offset).padStart(10,'0') + ' 00000 n \n').join('') + `trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n` + xref + '\n%%EOF';
   return pdf;
 }
+
+test('Post-check ATS workspace keeps review left, original annotations and working zoom without changing setup', {timeout:90000}, async () => {
+  const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
+  const context = await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await openIntegratedFixture(page);
+    await page.route('**/src/js/prepare-resume.mjs', route => route.fulfill({contentType:'text/javascript',body:readFileSync(new URL('./src/js/prepare-resume.mjs',import.meta.url),'utf8')}));
+    await page.evaluate(async pdf => {
+      const { retainResumeSource } = await import('/src/js/prepare-resume.mjs');
+      const resumeDocument = await retainResumeSource(new File([pdf], 'Synthetic original.pdf', {type:'application/pdf'}));
+      const entry = {id:'coherence-review',tool:'ats',kind:'review',at:100,payload:{resumeDocument,resumeDocumentOrigin:'original',text:'Original designer resume with research and measurable outcomes.',level:'staff',state:{mode:'general',source:'site'},res:{score:72,band:'Good',summary:'Recorded synthetic assessment.',fixes:[{point:'Clarify contribution',how:'Keep existing evidence.',priority:'high',anchor:{type:'quote',quote:'Original designer',replacement:'Original product designer'}},{point:'Check overall scope',priority:'low',anchor:{type:'none'}}],keywords:{present:['research'],missing:['accessibility']}}}};
+      localStorage.setItem('rk:prep:hist', JSON.stringify({ats:[entry]}));
+    }, preparePdfFixture('Original designer resume with research and measurable outcomes.', {pages:2,width:640,height:900}));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    const setupControls = () => page.locator('.prep-dialog .ats').evaluate(root => ({
+      actions: [...root.querySelectorAll('[data-act]')].map(element => ({ action: element.dataset.act, text: element.textContent.trim(), level: element.dataset.lvl, source: element.dataset.source, mode: element.dataset.mode })),
+      fields: [...root.querySelectorAll('input, textarea, select')].map(element => ({ tag: element.tagName, type: element.type, label: element.getAttribute('aria-label') || element.closest('.af')?.querySelector('label')?.textContent, accept: element.getAttribute('accept') }))
+    }));
+    const setup = await setupControls();
+    const history = await page.evaluate(() => localStorage.getItem('rk:prep:hist'));
+    await page.locator('[data-act="ats-hist-open"][data-id="coherence-review"]').click();
+    await page.locator('.atsv__pin').waitFor();
+    const checkStudioFrame = async () => {
+      assert.equal(await page.locator('.atsv__header').count(), 0);
+      assert.equal(await page.locator('.atsv').getAttribute('aria-modal'), 'false');
+      assert.equal(await page.locator('.adm > .adm__bar').evaluate(element => element.inert), false);
+      assert.equal(await page.locator('.adm > .adm__statusbar').evaluate(element => element.inert), false);
+      assert.equal(await page.locator('.adm > .adm__statusbar').evaluate(element => {
+        const style = getComputedStyle(element), workspace = getComputedStyle(document.querySelector('.atsv'));
+        return Number(style.zIndex) > Number(workspace.zIndex) && style.borderTopStyle === 'solid' && parseFloat(style.borderTopWidth) > 0 && style.boxShadow === 'none';
+      }), true);
+      const header = await page.locator('.adm > .adm__bar').boundingBox(), footer = await page.locator('.adm > .adm__statusbar').boundingBox(), review = await page.locator('.atsv').boundingBox();
+      assert.ok(Math.abs(review.y - header.y - header.height) <= 1);
+      assert.ok(Math.abs(review.y + review.height - footer.y) <= 1);
+      const surfaces = await page.evaluate(() => {
+        const reference = document.createElement('div');
+        reference.className = 'adm is-casestage';
+        reference.style.visibility = 'hidden';
+        reference.innerHTML = '<div class="adm__workbar"></div><div class="adm__editor"><div class="story__item"></div></div>';
+        document.body.append(reference);
+        try {
+          const pairs = [
+            ['.atsv__bar', '.adm__workbar', 'backgroundColor'],
+            ['.atsv__tools', '.adm__workbar', 'backgroundColor'],
+            ['.atsv__navigation', '.adm__editor', 'borderRightColor'],
+            ['.atsv__navigation', null, 'backgroundColor'],
+            ['.atsv .resume-finding', '.story__item', 'backgroundColor']
+          ];
+          return pairs.map(([selector, target, property]) => ({selector, property,
+            actual:getComputedStyle(document.querySelector(selector))[property],
+            expected:getComputedStyle(target ? reference.querySelector(target) : reference)[property]}));
+        } finally { reference.remove(); }
+      });
+      for (const surface of surfaces) assert.equal(surface.actual, surface.expected, `${surface.selector} ${surface.property} matches Work`);
+    };
+    await checkStudioFrame();
+    assert.equal(await page.locator('.atsv__document-bar,.atsv__bar .atsv__ttl').count(),0);
+    assert.match(await page.locator('.atsv__navigation > h2').innerText(),/Résumé review\s+Principal\s*\/\s*Staff/);
+    const checkFloatingControls = async () => {
+      await assertResumeViewTools(page.locator('.atsv__tools'));
+      const metrics = await page.locator('.atsv__document').evaluate(documentView => {
+        const tools=documentView.querySelector('.atsv__tools'), box=tools.getBoundingClientRect(), canvas=documentView.getBoundingClientRect();
+        return {right:canvas.right-box.right,bottom:canvas.bottom-box.bottom,
+          topPadding:parseFloat(getComputedStyle(documentView.querySelector('.atsv__stage')).paddingTop),
+          bottomPadding:parseFloat(getComputedStyle(documentView.querySelector('.atsv__stage')).paddingBottom),
+          rem:parseFloat(getComputedStyle(document.documentElement).fontSize),
+          width:box.width,canvasWidth:canvas.width,
+          labels:[...tools.querySelectorAll('button')].map(button=>button.getAttribute('aria-label')),
+          sizes:[...tools.querySelectorAll('button')].map(button=>({width:button.getBoundingClientRect().width,height:button.getBoundingClientRect().height}))};
+      });
+      assert.ok(Math.abs(metrics.right-12)<1,'Floaty stays 12px from the canvas right edge');
+      assert.ok(Math.abs(metrics.bottom-12)<1,'Floaty stays 12px above the canvas bottom/footer');
+      assert.ok(Math.abs(metrics.topPadding-metrics.rem*1.4)<1,'PDF regains the normal top inset');
+      assert.ok(Math.abs(metrics.bottomPadding-metrics.rem*1.4)<1,'Floaty reserves no extra row beneath the PDF');
+      assert.ok(metrics.width<metrics.canvasWidth-20,'Compact controls stay inside the canvas');
+      const mode = await page.locator('.atsv__tools').getAttribute('data-fit-mode');
+      assert.deepEqual(metrics.labels,['Zoom out','Zoom in',mode === 'page' ? 'Fit width' : 'Fit page','Light canvas']);
+      assert.ok(metrics.sizes.every(size=>size.width===34 && size.height===34));
+    };
+    const fitPage = async () => {
+      if (await page.locator('[data-atsv-zoom="fit"]').getAttribute('aria-label') === 'Fit width') {
+        await page.locator('[data-atsv-zoom="fit"]').click();
+        await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+      }
+      await page.getByRole('button',{name:'Fit page',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+      assert.equal(await page.locator('[data-atsv-zoom="fit"]').getAttribute('title'),'Fit width');
+      const fit=await page.locator('.atsv__stage').evaluate(stage=>{
+        const paper=stage.querySelector('.atsv__page').getBoundingClientRect(), area=stage.getBoundingClientRect();
+        const style=getComputedStyle(stage), width=stage.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight), height=stage.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom);
+        return {fits:paper.left>=area.left && paper.right<=area.right+1 && paper.top>=area.top && paper.bottom<=area.bottom+1,width:paper.width,height:paper.height,expectedHeight:Math.min(2.2,width/640,height/900)*900};
+      });
+      assert.equal(fit.fits,true,'Fit page uses the canvas height without reserving a row for overlay controls');
+      assert.ok(Math.abs(fit.height-fit.expectedHeight)<1,'Fit page uses all available space, with no hidden floaty allowance');
+      assert.ok(Math.abs(fit.width/fit.height-640/900)<.01,'Fit preserves the page aspect ratio');
+      return fit.width;
+    };
+    const fitWidth = async () => {
+      await page.getByRole('button',{name:'Fit width',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+      assert.equal(await page.locator('[data-atsv-zoom="fit"]').getAttribute('title'),'Fit page');
+      const metrics=await page.locator('.atsv__stage').evaluate(stage=>{
+        const style=getComputedStyle(stage);
+        return {width:stage.querySelector('.atsv__page').getBoundingClientRect().width,
+          expected:Math.min(2.2*640,stage.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight))};
+      });
+      assert.ok(Math.abs(metrics.width-metrics.expected)<1,'Fit width uses available width independently of height');
+    };
+    await checkFloatingControls();
+    const checkCanvas = async mode => {
+      const styles=await page.locator('.atsv__stage').evaluate((stage,mode)=>{
+        const reference=document.createElement('div'), paper=document.createElement('div');
+        reference.className='rbz__main'; reference.dataset.canvas=mode; reference.style.cssText='position:fixed;left:-10000px';
+        paper.className='rbz__page'; reference.append(paper); stage.parentElement.append(reference);
+        const actual=getComputedStyle(stage), expected=getComputedStyle(reference);
+        const result={mode:stage.dataset.canvas,background:actual.backgroundImage,expectedBackground:expected.backgroundImage,
+          color:actual.backgroundColor,expectedColor:expected.backgroundColor,
+          shadow:getComputedStyle(stage.querySelector('.atsv__page')).boxShadow,expectedShadow:getComputedStyle(paper).boxShadow};
+        reference.remove(); return result;
+      },mode);
+      assert.equal(styles.mode,mode);
+      assert.equal(styles.background,styles.expectedBackground,'Same smooth canvas as editor, not a dot grid');
+      assert.equal(styles.color,styles.expectedColor);
+      assert.equal(styles.shadow,styles.expectedShadow,'Same page lighting as editor');
+      const toggle=page.getByRole('button',{name:'Light canvas',exact:true});
+      assert.equal(await toggle.getAttribute('aria-pressed'),String(mode==='light'));
+      assert.equal(await toggle.getAttribute('title'),mode==='light'?'Switch to dark canvas':'Switch to light canvas');
+      assert.equal(await page.evaluate(()=>localStorage.getItem('rk:resume-preview:canvas')),mode);
+    };
+    await page.getByRole('button',{name:'Light canvas',exact:true}).click(); await checkCanvas('light');
+    await page.getByRole('button',{name:'Light canvas',exact:true}).focus(); await page.keyboard.press('Enter'); await checkCanvas('dark');
+    const canvasPeer=await page.context().newPage(); await canvasPeer.goto(page.url());
+    await canvasPeer.evaluate(()=>localStorage.setItem('rk:resume-preview:canvas','light'));
+    await page.locator('.atsv__stage[data-canvas="light"]').waitFor(); await checkCanvas('light');
+    await page.getByRole('button',{name:'Light canvas',exact:true}).click();
+    assert.equal(await canvasPeer.evaluate(()=>localStorage.getItem('rk:resume-preview:canvas')),'dark');
+    await canvasPeer.close();
+    const left = await page.locator('.atsv__navigation').boundingBox(), original = await page.locator('.atsv__document').boundingBox();
+    assert.equal(left.width, 340); assert.ok(left.x + left.width <= original.x + 1);
+    const dial = page.getByRole('img', { name: 'ATS score 72 out of 100', exact: true });
+    assert.equal(await dial.innerText(), '72');
+    assert.equal(await dial.evaluate(element => element.style.getPropertyValue('--p')), '72');
+    assert.equal(await page.locator('.resume-score-copy h2').innerText(), 'Good');
+    const geometry = await page.locator('.resume-score-summary').evaluate(element => {
+      const ring = element.querySelector('.resume-score-dial').getBoundingClientRect(), copy = element.querySelector('.resume-score-copy').getBoundingClientRect();
+      return { diameter: ring.width, height: ring.height, gap: copy.left - ring.right };
+    });
+    assert.deepEqual(geometry, { diameter: 66, height: 66, gap: 14 });
+    assert.deepEqual(await page.locator('.atsv__rail > .prep-storage').evaluate(element => {
+      const status = getComputedStyle(element), score = getComputedStyle(element.parentElement.querySelector('.resume-score-summary'));
+      return { scoreDivider: score.borderBottomWidth, statusDivider: status.borderTopWidth, margin: status.marginTop, padding: status.paddingTop, role: element.getAttribute('role') };
+    }), { scoreDivider: '1px', statusDivider: '0px', margin: '0px', padding: '0px', role: 'status' });
+    const checkFailureRow = async () => {
+      const paddingBefore=await page.locator('.atsv__stage').evaluate(stage=>getComputedStyle(stage).padding);
+      await assertStudioToolbar(page.locator('.atsv__bar'), {historyVisible:false});
+      assert.equal(await page.locator('.atsv__bar .studio-worknav button').count(),1,'Read-only review has Back, not fake Undo/Redo');
+      await page.locator('.atsv').evaluate(workspace => {
+        window.reviewRetryCount=0;
+        workspace.__resumeFeedback.paint({state:'error',text:'Not saved',message:"You're offline. Reconnect to save.",actionLabel:'Retry'},()=>{window.reviewRetryCount++;});
+      });
+      const banner=page.locator('.resume-save-banner:visible');
+      assert.equal(await banner.getAttribute('role'),'alert');
+      assert.equal(await page.locator('.atsv__rail [data-prep-storage]').isVisible(),false);
+      assert.equal(await banner.getByRole('button').count(),1);
+      assert.equal(await banner.locator('span').innerText(),"You're offline. Reconnect to save.");
+      const actionGeometry=await banner.getByRole('button').evaluate(button=>{
+        const width=button.getBoundingClientRect().width, className=button.className;
+        const style=getComputedStyle(button), padding=style.padding, transform=style.textTransform;
+        button.className='btn btn--ghost';
+        const toolbarWidth=button.getBoundingClientRect().width;
+        button.className=className;
+        return {width,toolbarWidth,padding,transform,className};
+      });
+      assert.equal(actionGeometry.className,'rk-flash__action');
+      assert.equal(actionGeometry.padding,'2px 6px');
+      assert.equal(actionGeometry.transform,'none');
+      assert.ok(actionGeometry.width<actionGeometry.toolbarWidth,'Use the compact shared banner action, not a toolbar button');
+      assert.equal(await banner.evaluate(element=>element.scrollWidth<=element.clientWidth+1),true);
+      const box=await banner.boundingBox(),footer=await page.locator('.adm__statusbar').boundingBox();
+      assert.ok(box.x>=0 && box.x+box.width<=page.viewportSize().width && box.y+box.height< footer.y);
+      const tools=await page.locator('.atsv__tools').boundingBox();
+      assert.ok(Math.abs(footer.y-box.y-box.height-12)<1,'Banner retains its shared 12px footer offset');
+      assert.ok(Math.abs(box.x+box.width/2-page.viewportSize().width/2)<1,'Banner remains centred');
+      const separated=tools.x>=box.x+box.width+10 || tools.x+tools.width+10<=box.x || tools.y+tools.height+10<=box.y;
+      assert.ok(separated,'Only the floaty moves when it would overlap the banner');
+      if (page.viewportSize().width>=1200) assert.ok(Math.abs(footer.y-tools.y-tools.height-12)<1,'Desktop floaty stays in its normal corner when there is room');
+      else assert.ok(tools.y+tools.height+10<=box.y,'Narrow floaty clears the unchanged banner');
+      assert.equal(await page.locator('.atsv__stage').evaluate(stage=>getComputedStyle(stage).padding),paddingBefore,'Banner and floaty do not change PDF layout padding');
+      await page.screenshot({path:join(tmpdir(),`rk-review-overlay-banner-${page.viewportSize().width}.png`)});
+      await banner.getByRole('button',{name:'Retry',exact:true}).click();
+      assert.equal(await page.evaluate(()=>window.reviewRetryCount),1);
+      await page.locator('.atsv').evaluate(workspace=>workspace.__resumeFeedback.paint({state:'saving',text:'Saving...',message:''},()=>{}));
+      assert.equal(await banner.locator('span').innerText(),"You're offline. Reconnect to save.");
+      assert.equal(await banner.getByRole('button').isDisabled(),true);
+      await page.locator('.atsv').evaluate(workspace=>workspace.__resumeFeedback.paint({state:'saved',text:'Saved',message:''}));
+      assert.equal(await page.locator('.resume-save-banner:visible').count(),0);
+      assert.equal(await page.locator('.adm__status[data-resume-state]').innerText(),'Saved');
+      await checkFloatingControls();
+    };
+    await checkFailureRow();
+    assert.equal(await page.locator('.atsv__item').count(), 2);
+    const item = page.locator('.atsv__item[data-fi="0"]');
+    assert.equal(await item.evaluate(element => element.classList.contains('resume-finding')), true);
+    assert.equal(await item.locator('.atsv__point').innerText(), 'Clarify contribution');
+    assert.equal(await item.locator('.atsv__how').innerText(), 'Keep existing evidence.');
+    assert.equal(await item.locator('.atsv__num').innerText(), '1');
+    assert.equal(await page.locator('.atsv__rail .resume-finding-wording, .atsv__rail .atsv__rep, [data-atsv-copy]').count(), 0);
+    assert.equal(await item.getByRole('button', { name: 'Copy', exact: true }).count(), 0);
+    assert.doesNotMatch(await item.innerText(), /Original product designer|Earlier suggested wording/);
+    assert.deepEqual(await item.evaluate(element => ['.atsv__point', '.atsv__how', '.atsv__pri'].map(selector => getComputedStyle(element.querySelector(selector)).fontSize)), ['12px', '12px', '10px']);
+    assert.deepEqual(await item.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { border: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth], radius: style.borderRadius, padding: style.padding, gap: style.marginBottom, distinctSurface: style.backgroundColor !== getComputedStyle(element.closest('.atsv__navigation')).backgroundColor };
+    }), { border: ['1px', '1px', '1px', '1px'], radius: '12px', padding: '12px', gap: '12px', distinctSurface: true });
+    const titleLeft = (await item.locator('.atsv__point').boundingBox()).x;
+    await item.focus(); await page.keyboard.press('Enter');
+    assert.equal(await page.locator('.atsv__pin.is-active').count(), 1);
+    assert.equal((await item.locator('.atsv__point').boundingBox()).x, titleLeft);
+    const width = await page.locator('.atsv__page').first().evaluate(element => element.clientWidth);
+    await page.getByRole('button', {name:'Zoom in',exact:true}).click();
+    await page.waitForFunction(width => document.querySelector('.atsv__page')?.clientWidth > width, width);
+    await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+    await page.locator('.atsv__pin').waitFor();
+    const fittedWidth = await fitPage();
+    await page.locator('.atsv__pin').waitFor();
+    await page.getByRole('button', {name:'Zoom out',exact:true}).click();
+    await page.waitForFunction(width => document.querySelector('.atsv__page')?.clientWidth < width, fittedWidth);
+    await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+    await page.locator('.atsv__pin').waitFor();
+    await page.locator('.atsv__stage').evaluate(stage=>{stage.style.scrollBehavior='auto';stage.scrollTop=stage.scrollHeight;});
+    await page.waitForFunction(()=>document.querySelector('[data-atsv-pageno]').textContent==='Page 2 / 2');
+    await checkFloatingControls();
+    assert.equal(await page.locator('.atsv__navigation .atsv__lvl').isVisible(),true);
+    await fitPage();
+    assert.equal(await page.locator('[data-atsv-pageno]').innerText(),'Page 1 / 2');
+    await fitWidth();
+    await fitPage();
+    await page.screenshot({path:join(tmpdir(),'rk-review-floaty-1440.png')});
+    for (const width of [390, 320]) {
+      await page.setViewportSize({width,height:844});
+      await checkFailureRow();
+      await checkStudioFrame();
+      await checkFloatingControls();
+      await fitPage();
+      await page.getByRole('button',{name:'Light canvas',exact:true}).click(); await checkCanvas('light');
+      await page.getByRole('button',{name:'Light canvas',exact:true}).click(); await checkCanvas('dark');
+      await fitWidth();
+      await fitPage();
+      const fitButton=page.locator('[data-atsv-zoom="fit"]');
+      await fitButton.focus(); await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('.atsv__tools').getAttribute('aria-busy')!=='true');
+      assert.equal(await fitButton.evaluate(button=>document.activeElement===button),true);
+      assert.equal(await fitButton.getAttribute('aria-label'),'Fit page');
+      const bounds = await page.locator('.atsv__bar button, .atsv__tools button, .atsv__rail button').evaluateAll(buttons => buttons.filter(button => button.offsetWidth).map(button => { const b=button.getBoundingClientRect(); return {left:b.left,right:b.right}; }));
+      assert.ok(bounds.every(b => b.left >= 0 && b.right <= width), JSON.stringify(bounds));
+      assert.equal(await page.locator('.atsv__navigation').isVisible(), true);
+      assert.equal(await page.locator('.atsv__document').isVisible(), true);
+      await page.screenshot({path:join(tmpdir(),`rk-review-floaty-${width}.png`)});
+    }
+    await page.getByRole('button', {name:'Back to ATS check',exact:true}).click();
+    assert.deepEqual(await setupControls(), setup);
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), history);
+    await page.setViewportSize({width:1440,height:1000});
+    for (const score of [0, 100, null]) {
+      await page.evaluate(score => {
+        const history = JSON.parse(localStorage.getItem('rk:prep:hist'));
+        history.ats[0].payload.res.score = score;
+        history.ats[0].payload.res.band = '';
+        localStorage.setItem('rk:prep:hist', JSON.stringify(history));
+      }, score);
+      await page.locator('[data-act="ats-hist-open"][data-id="coherence-review"]').click();
+      const dial = page.getByRole('img', {name:score === null ? 'ATS score unavailable' : `ATS score ${score} out of 100`,exact:true});
+      await dial.waitFor();
+      assert.equal(await dial.innerText(), score === null ? '--' : String(score));
+      assert.equal(await dial.evaluate(element => element.style.getPropertyValue('--p')), String(score ?? 0));
+      if (score === null) assert.equal(await page.locator('.resume-score-copy h2').innerText(), 'Not assessed');
+      await page.getByRole('button', {name:'Back to ATS check',exact:true}).click();
+    }
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
+
+test('Candidate ATS intake and retained-original launcher share the assessment dialog without creating an editor', { timeout: 120000 }, async () => {
+  const mime = execFileSync('python', ['-B', '-c', 'import serve; assert serve.NoCacheHandler.extensions_map[".mjs"] == "text/javascript"; assert serve.NoCacheHandler.extensions_map[".js"] == "text/javascript"; print("text/javascript")'], { encoding: 'utf8' }).trim();
+  const { ASSESSMENT_DEVELOPMENT_CASES, createSampleAssessmentPilot } = await import('./src/js/resume-assessment-sample.mjs');
+  const reference = ASSESSMENT_DEVELOPMENT_CASES[0], sample = await createSampleAssessmentPilot(reference.id);
+  const inventory = await sample.pilot.inventory({ confirmed: true }); await sample.pilot.approveInventory({ confirmed: true });
+  await sample.pilot.approveEvidence({ confirmed: true }); const result = await sample.pilot.evaluate({ confirmed: true });
+  const quoteOnly = node => node.kind === 'atom' ? { kind: node.kind, id: node.id, segmentId: node.segmentId, quote: node.quote } : { ...node, children: node.children.map(quoteOnly) };
+  const outputs = { requirements: { ...inventory.manifest, requirements: inventory.manifest.requirements.map(item => ({ ...item, condition: quoteOnly(item.condition) })) }, assessment: result.draft, challenge: result.challenge };
+  const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }), calls = [], storageCalls = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  try {
+    await openIntegratedFixture(page);
+    // Existing shared servers are not restarted by tests; mirror the checked-in handler mapping.
+    await page.context().route('**/studio/resume-preview/assets/pdf.worker.mjs', route => route.fulfill({ contentType: mime, body: readFileSync(new URL('./studio/resume-preview/assets/pdf.worker.mjs', import.meta.url)) }));
+    await page.route('**/admin/resume/**', route => { storageCalls.push(route.request().url()); return route.abort(); });
+    await page.context().route('https://api.anthropic.com/v1/messages', async route => {
+      const request = route.request().postDataJSON();
+      const stage = request.system.includes('Inventory the job BEFORE') ? 'requirements' : request.system.includes('Independently challenge') ? 'challenge' : 'assessment';
+      calls.push({ stage, request });
+      const output = structuredClone(outputs[stage]);
+      if (output.semantic) {
+        const data = JSON.parse(request.messages.at(-1).content);
+        output.semantic.excerpts = output.semantic.excerpts.filter(item => data.evidence.some(excerpt => excerpt.id === item.id));
+      }
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'synthetic-candidate-' + calls.length, type: 'message', role: 'assistant', model: request.model,
+        stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(output) }], usage: { input_tokens: 100, output_tokens: 200 } }) });
+    });
+    await page.evaluate(() => window.__rkDevEdit('contact.resume', ''));
+    await page.locator('.adm__tab[data-tab="ai"]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    assert.equal(await page.locator('[data-act="ats-candidate"]').count(), 0);
+    await page.locator('[data-prep-launch-close]').click();
+    await page.evaluate(() => history.replaceState(null, '', location.pathname + '?devstub&candidate=1'));
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-ats-file]').setInputFiles({ name: 'Fictional intake.txt', mimeType: 'text/plain', buffer: Buffer.from(reference.text) });
+    await page.locator('[data-act="ats-mode"][data-mode="job"]').click();
+    await page.locator('.prep-dialog .cl__jd').fill(reference.jd);
+    await page.locator('.prep-dialog .cl__company').fill('Fictional target');
+    const before = await page.evaluate(() => ({ draft: JSON.stringify(window.__RKStudio.getDraft()), history: localStorage.getItem('rk:prep:hist') }));
+    const trigger = page.locator('[data-act="ats-candidate"]');
+    await trigger.click();
+    const frame = page.frameLocator('iframe[title="Candidate assessment"]'), dialog = frame.getByRole('dialog', { name: 'Candidate assessment', exact: true });
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await dialog.locator('[data-candidate-artifact-hash]').waitFor();
+    assert.equal(await frame.locator('.rws-status').count(), 0);
+    assert.equal(calls.length, 0); assert.deepEqual(storageCalls, []);
+    if (process.env.RESUME_CANDIDATE_SCREENSHOT_DIR) await dialog.locator('.pass__box').screenshot({ path: join(process.env.RESUME_CANDIDATE_SCREENSHOT_DIR, 'candidate-pre-editor-intake.png') });
+    await dialog.getByLabel('Budget authority', { exact: true }).selectOption('browser-origin');
+    await dialog.getByRole('button', { name: 'Load available models' }).click();
+    await dialog.getByLabel('Pilot model', { exact: true }).selectOption('session-model');
+    await dialog.getByLabel('Approved total budget (USD)', { exact: true }).fill('1');
+    await dialog.getByRole('checkbox', { name: 'I approve this browser-local pilot budget' }).check();
+    await dialog.getByRole('button', { name: 'Connect approved pilot' }).click();
+    await dialog.locator('[data-candidate-phase="ready"]').waitFor();
+    await dialog.getByRole('checkbox', { name: 'Allow this complete job description' }).check();
+    await dialog.getByRole('button', { name: 'Build job inventory' }).click();
+    await dialog.locator('[data-candidate-phase="inventory-review"]').waitFor();
+    await dialog.getByRole('checkbox', { name: 'I reviewed all job requirements' }).check();
+    await dialog.getByRole('button', { name: 'Approve job inventory' }).click();
+    await dialog.getByRole('checkbox', { name: 'I reviewed the included evidence' }).check();
+    await dialog.getByRole('button', { name: 'Approve included evidence' }).click();
+    await dialog.getByRole('checkbox', { name: 'Allow the selected evidence to be sent' }).check();
+    await dialog.getByRole('button', { name: 'Run assessment and challenge' }).click();
+    await dialog.locator('[data-candidate-result]').waitFor();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('rk:resume:assessment-pilot:candidate-review')).results[0]);
+    assert.equal(saved.report.binding.documentId, null);
+    assert.equal(saved.report.binding.artifactSha256, sample.snapshot.binding.artifactSha256);
+    assert.equal(calls.length, 3); assert.deepEqual(storageCalls, []);
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())), before.draft);
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), before.history);
+    await page.keyboard.press('Escape');
+    await page.locator('iframe[title="Candidate assessment"]').waitFor({ state: 'detached' });
+    assert.equal(await trigger.evaluate(element => element === document.activeElement), true);
+    await trigger.click();
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await dialog.locator('[data-candidate-artifact-hash]').waitFor();
+    await page.locator('.prep-dialog .cl__jd').evaluate(element => { element.value += '\nA newly changed target requirement.'; element.dispatchEvent(new Event('input', { bubbles: true })); });
+    await dialog.getByLabel('Budget authority', { exact: true }).selectOption('browser-origin');
+    await dialog.getByRole('button', { name: 'Load available models' }).click();
+    await dialog.getByLabel('Pilot model', { exact: true }).selectOption('session-model');
+    await dialog.getByLabel('Approved total budget (USD)', { exact: true }).fill('1');
+    await dialog.getByRole('checkbox', { name: 'I approve this browser-local pilot budget' }).check();
+    await dialog.getByRole('button', { name: 'Connect approved pilot' }).click();
+    await dialog.getByRole('alert').waitFor();
+    assert.match(await dialog.getByRole('alert').innerText(), /artifact or target changed/);
+    assert.equal(calls.length, 3);
+    await dialog.getByRole('button', { name: 'Start over', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await dialog.locator('[data-candidate-artifact-hash]').waitFor();
+    assert.equal(await dialog.getByRole('alert').count(), 0);
+    assert.equal(await dialog.getByRole('button', { name: 'Load available models' }).isEnabled(), true);
+    await dialog.getByText('Target job and recovered file text', { exact: true }).click();
+    assert.match(await dialog.innerText(), /A newly changed target requirement/);
+    await page.keyboard.press('Escape');
+    await page.locator('iframe[title="Candidate assessment"]').waitFor({ state: 'detached' });
+    await page.route('**/src/js/prepare-resume.mjs', route => route.fulfill({ contentType: 'text/javascript', body: readFileSync(new URL('./src/js/prepare-resume.mjs', import.meta.url), 'utf8') }));
+    await page.evaluate(async pdf => {
+      const { retainResumeSource } = await import('/src/js/prepare-resume.mjs');
+      const resumeDocument = await retainResumeSource(new File([pdf], 'Retained fictional original.pdf', { type: 'application/pdf' }));
+      localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: [{ id: 'candidate-retained', tool: 'ats', kind: 'review', at: 100,
+        payload: { resumeDocument, resumeDocumentOrigin: 'original', text: 'Deliberately stale cached text.', level: 'staff', state: { mode: 'general' }, res: { score: 72, band: 'Good', fixes: [] } } }] }));
+    }, preparePdfFixture('Retained original evidence with research and measurable outcomes.'));
+    await page.locator('[data-prep-launch-close]').click();
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-act="ats-hist-open"][data-id="candidate-retained"]').click();
+    await page.locator('.atsv__page canvas').waitFor();
+    const history = await page.evaluate(() => localStorage.getItem('rk:prep:hist'));
+    await page.getByRole('button', { name: 'Candidate original recheck' }).click();
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await Promise.race([dialog.locator('[data-candidate-artifact-hash]').waitFor(), dialog.getByRole('alert').waitFor()]);
+    assert.equal(await dialog.getByRole('alert').count(), 0, await dialog.innerText());
+    await dialog.getByText('Target job and recovered file text', { exact: true }).click();
+    assert.match(await dialog.innerText(), /Retained original evidence/);
+    assert.doesNotMatch(await dialog.innerText(), /Deliberately stale/);
+    const blocked = await page.evaluate(async () => {
+      const caller = document.querySelector('iframe[title="Candidate assessment"]').contentWindow;
+      const attempt = async action => { try { await action(); return ''; } catch (error) { return error.message; } };
+      const spoof = await attempt(() => window.__RKStudio.resume.candidateInput(window));
+      const storage = await attempt(() => window.__RKStudio.resume.request('library', {}, caller));
+      const controller = new AbortController(); controller.abort();
+      const cancelled = await attempt(() => window.__RKStudio.resume.candidateInput(caller, controller.signal, true));
+      const saved = localStorage.getItem('rk:prep:hist'), changed = JSON.parse(saved);
+      changed.ats[0].payload.res.score = 99;
+      let stale;
+      try {
+        localStorage.setItem('rk:prep:hist', JSON.stringify(changed));
+        stale = await attempt(() => window.__RKStudio.resume.candidateInput(caller, undefined, true));
+      } finally { localStorage.setItem('rk:prep:hist', saved); }
+      window.__closedCandidate = caller;
+      return { spoof, storage, cancelled, stale };
+    });
+    assert.match(blocked.spoof, /session is closed/); assert.match(blocked.storage, /cannot access editable/);
+    assert.match(blocked.cancelled, /abort/i);
+    assert.match(blocked.stale, /original review changed/);
+    await page.keyboard.press('Escape');
+    await page.locator('iframe[title="Candidate assessment"]').waitFor({ state: 'detached' });
+    assert.equal(await page.getByRole('img', { name: 'ATS score 72 out of 100', exact: true }).innerText(), '72');
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), history);
+    assert.match(await page.evaluate(async () => {
+      try { await window.__RKStudio.resume.candidateInput(window.__closedCandidate); return ''; } catch (error) { return error.message; }
+    }), /session is closed/);
+    await page.getByRole('button', { name: 'Back to ATS check', exact: true }).click();
+    await page.locator('[data-prep-launch-close]').click();
+    await page.evaluate(pdf => window.__rkDevEdit('contact.resume', 'data:application/pdf;base64,' + btoa(pdf)),
+      preparePdfFixture('Fictional site resume with research and measurable outcomes.'));
+    const siteDraft = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft()));
+    await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
+    await page.locator('[data-prep-launch-view="new"]').click();
+    await page.locator('[data-act="ats-source"][data-source="site"]').click();
+    await page.locator('[data-act="ats-mode"][data-mode="general"]').click();
+    await trigger.click();
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await dialog.locator('[data-candidate-artifact-hash]').waitFor();
+    await dialog.getByText('Target job and recovered file text', { exact: true }).click();
+    assert.match(await dialog.innerText(), /Fictional site resume/);
+    await page.keyboard.press('Escape');
+    await page.locator('iframe[title="Candidate assessment"]').waitFor({ state: 'detached' });
+    await page.locator('[data-act="ats-mode"][data-mode="job"]').click();
+    await page.locator('.prep-dialog .cl__jd').fill('');
+    await trigger.click();
+    await dialog.getByRole('button', { name: 'Prepare selected resume file' }).click();
+    await dialog.getByRole('alert').waitFor();
+    assert.match(await dialog.getByRole('alert').innerText(), /job-specific check needs the job description/);
+    assert.equal(await dialog.getByRole('button', { name: 'Load available models' }).count(), 0);
+    await page.keyboard.press('Escape');
+    await page.locator('iframe[title="Candidate assessment"]').waitFor({ state: 'detached' });
+    assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft())), siteDraft);
+    assert.equal(await page.evaluate(() => localStorage.getItem('rk:prep:hist')), history);
+    assert.equal(calls.length, 3); assert.deepEqual(storageCalls, []); assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});
 
 test('Prepare ATS retains the original before AI and preserves history on document-storage failure', {timeout:45000}, async () => {
   const browser = await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});
@@ -3313,6 +3840,10 @@ test('Prepare ATS recovers its original PDF, exact source bytes and retains link
     },{review,workspace,pdf});
     await showReview(page);
     await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('rk:prep:sync'))).length===0);
+    assert.deepEqual(await page.locator('[data-atsv-zoom]').evaluateAll(buttons=>buttons.map(button=>button.disabled)),[true,true,true]);
+    await page.getByRole('button',{name:'Light canvas',exact:true}).click();
+    assert.equal(await page.locator('.atsv__stage').getAttribute('data-canvas'),'light','Lighting works even when the original PDF is unavailable');
+    assert.equal(await page.locator('.atsv__nopdf b').evaluate(element=>getComputedStyle(element).color),'rgb(28, 26, 23)');
     assert.deepEqual(remote.get(workspace.id),workspace);
     assert.deepEqual(remote.get(review.id),review);
     const writesBeforeRecovery = writes;
@@ -3329,10 +3860,13 @@ test('Prepare ATS recovers its original PDF, exact source bytes and retains link
     await page.locator('[data-atsv-close]').click();releaseSource();
     assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats),[review,workspace]);
     await page.locator('[data-act="ats-hist-open"][data-id="source-review"]').click();
-    const chooser = page.waitForEvent('filechooser'); await page.locator('[data-atsv-attach]').click();
-    await (await chooser).setFiles({name:'original-layout.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
+    assert.equal(await page.locator('.atsv__stage').getAttribute('data-canvas'),'light','Review reopens with the shared preference');
+    await page.getByRole('button',{name:'Light canvas',exact:true}).click();
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.locator('.atsv__nopdf [data-atsv-attach]').click()]);
+    await chooser.setFiles({name:'original-layout.pdf',mimeType:'application/pdf',buffer:Buffer.from(pdf)});
     await page.locator('.atsv__page canvas').waitFor();
     await page.locator('.atsv__pin').waitFor();
+    assert.deepEqual(await page.locator('[data-atsv-zoom]').evaluateAll(buttons=>buttons.map(button=>button.disabled)),[false,false,false]);
     await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('rk:prep:sync'))).length===0);
     assert.equal(writes,writesBeforeRecovery+1);
     const saved = await page.evaluate(()=>JSON.parse(localStorage.getItem('rk:prep:hist')).ats.find(entry=>entry.id==='source-review'));
@@ -5012,6 +5546,7 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
     await openIntegratedFixture(page);
     await page.setViewportSize({width,height:1000});
     const original = await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work));
+    const rootToolbar = await assertStudioToolbar(page.locator('.adm > .adm__workbar'), {historyVisible:false});
     assert.equal(await page.locator('[data-l2-back]').isVisible(), false);
     await page.locator('[data-act="study-toggle"][data-index="1"]').click();
     await page.getByRole('tab',{name:'AI Options',exact:true}).click();
@@ -5040,6 +5575,8 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
     assert.equal(geometry.back.height, 34);
     assert.ok(geometry.back.right <= geometry.undo.left && Math.abs(geometry.back.y - geometry.undo.y) < 1);
     assert.equal(geometry.overflow, false);
+    const caseToolbar = await assertStudioToolbar(page.locator('.adm > .adm__workbar'));
+    assert.equal(caseToolbar.history.x,rootToolbar.history.x,'Opening a case must not move Undo/Redo');
     await page.screenshot({path:join(tmpdir(), `rk-ai-options-ready-${width}.png`)});
     await page.locator('[data-case-ai-prepare]').scrollIntoViewIfNeeded();
     await page.screenshot({path:join(tmpdir(), `rk-ai-options-ready-actions-${width}.png`)});
@@ -5062,14 +5599,21 @@ for (const width of [1440, 390]) test("AI Options use case content and keep Back
     await page.locator('[data-l2tab="slides"]').click();
     await page.locator('.merge-empty-actions').waitFor();
     const slideGeometry = await page.evaluate(() => {
-      const back = document.querySelector('[data-l2-back]').getBoundingClientRect(), history = document.querySelector('[data-native-slide-toolbar] .merge-bar-state').getBoundingClientRect(), main = document.querySelector('.adm__main').getBoundingClientRect(), preview = document.querySelector('.adm__preview').getBoundingClientRect();
+      const back = document.querySelector('[data-l2-back]').getBoundingClientRect(), history = document.querySelector('[data-native-slide-history]').getBoundingClientRect(), main = document.querySelector('.adm__main').getBoundingClientRect(), preview = document.querySelector('.adm__preview').getBoundingClientRect();
       return {ordered:back.right <= history.left, aligned:Math.abs(back.y-history.y)<2, fullCanvas:Math.abs(main.top-preview.top)<1};
     });
     assert.deepEqual(slideGeometry,{ordered:true,aligned:true,fullCanvas:true});
+    await page.locator('[data-native-slide-history] button').first().waitFor();
+    const slidesToolbar = await assertStudioToolbar(page.locator('.adm > .adm__workbar'));
+    assert.equal(slidesToolbar.history.x,caseToolbar.history.x,'Native deck history stays in the shared history slot');
+    assert.equal(await page.locator('[data-native-slide-toolbar] .merge-history-buttons').count(),0);
+    assert.equal(await page.locator('[data-native-slide-history]').evaluate(element=>!!(element.compareDocumentPosition(document.querySelector('[data-l2tabs]'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,'History precedes project tabs in keyboard order');
     assert.deepEqual(await back.evaluate(element => { const style = getComputedStyle(element, '::after'); return {width:style.width,height:style.height,pointerEvents:style.pointerEvents,content:style.content}; }), separator);
     await back.click();
     await page.locator('.merge-shell').waitFor({state:'detached'});
     assert.equal(await back.isVisible(), false);
+    await assertStudioToolbar(page.locator('.adm > .adm__workbar'), {historyVisible:false});
+    assert.equal(await page.locator('[data-native-slide-history] button').count(),0,'Disposed native controls must not remain active');
     assert.equal(await page.evaluate(() => JSON.stringify(window.__RKStudio.getDraft().work)), original);
     assert.deepEqual(errors,[]);
   } finally { await browser.close(); }
@@ -6061,7 +6605,7 @@ test("AI routing settings discover models, require spending consent and keep evi
     const routingBundle = await build({ entryPoints: [fileURLToPath(new URL("./src/js/ai-orchestrator.mjs", import.meta.url))], bundle: true, format: "iife", globalName: "RoutingStoreTest", write: false });
     const other = await page.context().newPage();
     try {
-      await other.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/404.html");
+      await openIsolatedBrowserHost(other, process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510");
       for (const target of [page, other]) await target.addScriptTag({ content: routingBundle.outputFiles[0].text });
       await page.evaluate(async budget => window.RoutingStoreTest.createAiOrchestrator().configure({ evaluationDailyBudget: budget }), saved.evaluationReserved + 0.03);
       const reservations = await Promise.allSettled([page.evaluate(() => window.RoutingStoreTest.createAiOrchestrator().reserveEvaluation(0.02)), other.evaluate(() => window.RoutingStoreTest.createAiOrchestrator().reserveEvaluation(0.02))]);
@@ -6114,7 +6658,7 @@ test("native deck storage commits original assets and rejects stale or misrouted
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage();
   try {
-    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/404.html");
+    await openIsolatedBrowserHost(page, process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510");
     await page.addScriptTag({ content: bundle.outputFiles[0].text });
     await page.addScriptTag({ content: recoveryBundle.outputFiles[0].text });
     const result = await page.evaluate(async () => {
@@ -6488,7 +7032,7 @@ test("hosted editor loads empty, uses its save adapter and disposes without lab 
   const browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   try {
-    await page.goto((process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510") + "/404.html");
+    const host = await openIsolatedBrowserHost(page, process.env.SLIDE_LAB_URL || "http://127.0.0.1:5510");
     await page.evaluate(async () => {
       const container = document.createElement("div"); container.id = "pilot";
       document.body.replaceChildren(container);
@@ -6499,6 +7043,7 @@ test("hosted editor loads empty, uses its save adapter and disposes without lab 
       window.hostedEditor = mountSlideEditor(container, { caseStudyId: "host-case", title: "Host slides", load: async () => null, save: async document => { if (window.deferHostSave) await new Promise(resolve => { window.releaseHostSave = resolve; }); window.hostSaves.push(structuredClone(document)); } });
       await window.hostedEditor.ready;
     });
+    assert.equal(page.url(), host);
     await page.locator(".merge-empty-actions button").first().click();
     await page.waitForFunction(() => window.hostSaves.at(-1)?.slides.length === 1);
     await page.getByRole("textbox", { name: "Speaker notes", exact: true }).fill("Host notes, flushed before leaving");
@@ -6575,6 +7120,11 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     });
     assert.deepEqual(savedText, ['Native canvas content'], 'Leaving flushes an active native text editor');
     await page.getByRole("textbox", { name: "Speaker notes", exact: true }).fill("FIRST PRIVATE NOTE");
+    await page.locator('[data-native-slide-history]').getByRole('button',{name:'Undo',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.merge-notes-input')?.textContent==='');
+    await page.locator('[data-native-slide-history]').getByRole('button',{name:'Redo',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.merge-notes-input')?.textContent==='FIRST PRIVATE NOTE');
+    assert.deepEqual(await page.evaluate(()=>window.__RKStudio.getDraft().work.map(work=>work.study.blocks[0].body)),['First case section','Second case section'],'Native history must not step Content Studio history');
     await page.locator("[data-l2-back]").click();
     await page.waitForSelector(".merge-shell", { state: "detached" });
     await page.locator('[data-act="study-toggle"][data-index="0"]').click();
@@ -6606,7 +7156,7 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     await page.locator('.merge-notes-input').press('Tab');
     await page.keyboard.press('Control+z');
     assert.equal(await page.locator('.merge-notes-input').innerText(), 'FIRST PRIVATE NOTE', 'Empty native Undo must not step host history');
-    for (const width of [1440, 1060, 1024, 1023, 390]) {
+    for (const width of [1440, 1060, 1024, 1023, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const geometry = await page.evaluate(() => {
@@ -6624,6 +7174,7 @@ test("Content Studio opens native slides without a preview flag and preserves ca
       assert.ok(geometry.shell.top >= geometry.bar.bottom && geometry.shell.bottom <= geometry.footer.top + 1, JSON.stringify(geometry));
       assert.ok(geometry.shell.top - geometry.bar.bottom < 80, 'The host title row must not retain the old inspector padding');
       assert.equal(geometry.overflow, false);
+      await assertStudioToolbar(page.locator('.adm > .adm__workbar'));
       await page.screenshot({ path: join(tmpdir(), `rk-studio-native-pilot-${width}.png`) });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -6653,7 +7204,10 @@ test("Content Studio opens native slides without a preview flag and preserves ca
     await page.locator('[data-act="settings-cat"][data-cat="backup"]').click();
     const downloading = page.waitForEvent('download');
     await page.locator('[data-act="backup-dl"]').click();
-    const download = await downloading;
+    const download = await downloading.catch(async error => {
+      error.message += '\nBackup status: ' + await page.locator('.adm__statusbar .adm__status').innerText();
+      throw error;
+    });
     const downloadPath = await download.path();
     const downloaded = JSON.parse(readFileSync(downloadPath, 'utf8'));
     assert.equal(downloaded.nativeDecksBackup.documents.length, 2);

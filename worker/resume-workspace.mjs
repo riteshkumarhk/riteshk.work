@@ -1,7 +1,8 @@
-import { resumeFields, resumeSignature } from '../src/js/resume-workspace.mjs';
+import { resumeFields, resumeSignature, validateResumeCheckpoint } from '../src/js/resume-workspace.mjs';
 import { renderResumeHtml, RESUME_FONTS, RESUME_RENDER_VERSION } from '../src/js/resume-render.mjs';
 import { verifyResumePdf } from '../src/js/resume-pdf.mjs';
 import { atsMigrationIdentity, atsMigrationSnapshot, migrateAtsResume } from '../src/js/resume-ats.mjs';
+import { validateResumeOrder } from '../src/js/resume-document.mjs';
 
 const fault = (message, status = 400) => Object.assign(new Error(message), { status });
 const identity = value => {
@@ -41,6 +42,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
     }
     if (model.sections.some(section => section.columns != null && ![1, 2, 3].includes(section.columns))) throw fault('Invalid resume entry columns.');
     try {
+      validateResumeOrder(model);
       for (const field of resumeFields(model)) {
         const value = field.owner[field.key];
         if (field.key === 'items' ? !Array.isArray(value) || value.some(item => typeof item !== 'string') : value != null && typeof value !== 'string') throw fault('Invalid resume fields.');
@@ -183,7 +185,8 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
       const snapshot = structuredClone(document), at = Date.now();
       return put({ document: snapshot, version: 1, versions: [{ number: 1, at, label: 'Created resume', document: snapshot }], exports: [] });
     },
-    async save(id, document, expected, label = 'Edited resume', recovering = false) {
+    async save(id, document, expected, label = 'Edited resume', recovering = false, checkpoint = null) {
+      validateResumeCheckpoint(checkpoint);
       validate(document);
       if (id !== document.id || !Number.isInteger(Number(expected)) || Number(expected) < 1) throw fault('Document identity or version is invalid.');
       const { record, etag } = await read(id);
@@ -201,7 +204,7 @@ export function createHostedResumeStore(bucket, legacyBucket = null) {
       const snapshot = structuredClone(document); snapshot.updatedAt = Date.now();
       if (record.document.ats?.legacy && !recovering) snapshot.ats = { ...structuredClone(record.document.ats), layoutAccepted: document.ats.layoutAccepted === true };
       record.version++; record.document = snapshot;
-      record.versions.push({ number: record.version, at: Date.now(), label: String(label).slice(0, 120), document: snapshot });
+      record.versions.push({ number: record.version, at: Date.now(), label: String(label).slice(0, 120), checkpoint, document: snapshot });
       return put(record, etag);
     },
     async restore(id, number, expected) {
@@ -275,14 +278,19 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
     }
     if (parts[0] === 'resumes' && parts.length === 2) {
       if (request.method === 'GET') return reply(await store.get(parts[1]));
-      if (request.method === 'PUT') { const input = await body(); return reply(await store.save(parts[1], input.document, expected, input.label)); }
+      if (request.method === 'PUT') { const input = await body(); return reply(await store.save(parts[1], input.document, expected, input.label, false, input.checkpoint)); }
     }
     if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'restore' && parts.length === 3) return reply(await store.restore(parts[1], (await body()).number, expected));
     if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'recover-legacy' && parts.length === 3) return reply(await store.recoverLegacy(parts[1], expected, await body()));
     if (request.method === 'POST' && parts[0] === 'resumes' && parts[2] === 'export' && parts.length === 3) {
-      const record = await store.get(parts[1]), document = record.document, signature = resumeSignature(document);
+      const input = await body(), record = await store.get(parts[1]);
+      const transient = input.transient === true, number = input.number ?? null;
+      if (number !== null && (!transient || !Number.isInteger(number) || number < 1)) throw fault('Invalid snapshot version.');
+      const snapshot = number === null ? { number: record.version, document: record.document } : record.versions.find(entry => entry.number === number);
+      if (!snapshot) throw fault('Version not found.', 404);
+      const document = snapshot.document, signature = resumeSignature(document);
       if (record.version !== Number(expected)) throw fault('Save the current version before exporting.', 409);
-      const existing = record.exports.findLast(entry => entry.signature === signature && entry.renderVersion === RESUME_RENDER_VERSION);
+      const existing = !transient && record.exports.findLast(entry => entry.signature === signature && entry.renderVersion === RESUME_RENDER_VERSION);
       if (existing) return reply({ entry: existing });
       if (!browser) throw fault('Checked PDF rendering is not configured.', 503);
       if (!RESUME_FONTS[document.design.font]) throw fault('The selected font is unavailable. Nothing was substituted.', 422);
@@ -307,8 +315,8 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
       if (bytes.length > 20 * 1024 * 1024 || new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-') throw fault('The renderer did not return a supported PDF.', 422);
       const current = await store.get(parts[1]);
       if (current.version !== record.version) throw fault('The resume changed while rendering. Export the current version.', 409);
-      const pending = { id: crypto.randomUUID(), documentId: document.id, version: record.version, signature, sha256: await hash(bytes), at: Date.now(), renderVersion: RESUME_RENDER_VERSION };
-      await bucket.put('pending/' + pending.id + '.pdf', bytes);
+      const pending = { id: crypto.randomUUID(), documentId: document.id, version: snapshot.number, expectedVersion: record.version, transient, bytes: bytes.length, signature, sha256: await hash(bytes), at: Date.now(), renderVersion: RESUME_RENDER_VERSION };
+      if (!transient) await bucket.put('pending/' + pending.id + '.pdf', bytes);
       await bucket.put('pending/' + pending.id + '.json', JSON.stringify(pending), metadata);
       let binary = ''; for (let offset = 0; offset < bytes.length; offset += 8192) binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
       return reply({ pending, base64: btoa(binary) });
@@ -322,9 +330,15 @@ export async function resumeWorkspaceRoute(request, bucket, headers, browser = n
         await bucket.delete(['pending/' + pendingId + '.json', 'pending/' + pendingId + '.pdf']);
         throw fault('PDF verification expired. Export again.', 409);
       }
-      if (pending.version !== Number(expected) || pending.signature !== resumeSignature(record.document) || record.version !== Number(expected)) throw fault('The resume changed. Export the current version.', 409);
+      const snapshot = pending.transient ? record.versions.find(entry => entry.number === pending.version) : { document: record.document };
+      if (!snapshot || (pending.expectedVersion ?? pending.version) !== Number(expected) || pending.signature !== resumeSignature(snapshot.document) || record.version !== Number(expected)) throw fault('The resume changed. Export the current version.', 409);
       if (pending.sha256 !== input.sha256) throw fault('PDF bytes did not match the rendered artifact.', 422);
-      const checked = verifyResumePdf(record.document, input.positions, input.links, input.expectedPages);
+      const checked = verifyResumePdf(snapshot.document, input.positions, input.links, input.expectedPages);
+      if (pending.transient) {
+        const entry = { ...checked, id: pendingId, at: Date.now(), version: pending.version, signature: pending.signature, sha256: pending.sha256, bytes: pending.bytes, renderVersion: pending.renderVersion, font: snapshot.document.design.font, size: snapshot.document.design.size, name: snapshot.document.name.replace(/[^a-z0-9 -]/gi, '').trim() + '.pdf', transient: true, verificationMethod: 'browser-pdfjs-and-worker-v1' };
+        await bucket.delete('pending/' + pendingId + '.json');
+        return reply(entry);
+      }
       const artifact = await bucket.get('pending/' + pendingId + '.pdf');
       if (!artifact) throw fault('The pending PDF is unavailable. Export again.', 404);
       const bytes = new Uint8Array(await artifact.arrayBuffer());

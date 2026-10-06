@@ -4,11 +4,69 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   inputFingerprint, parseReleaseOptions, runReleaseCommands, selectedCommands,
   testSummary, toolingChangesOnly, toolingScope, validateLocalServer
 } from './tools/release-check.mjs';
 import { browserShards, shardCommands } from './tools/browser-shards.mjs';
+
+test('preview server admits module bursts and reuses connections with exact uncached JavaScript', () => {
+  const output = execFileSync(process.platform === 'win32' ? 'python' : 'python3', ['-c', `
+import http.client,json,socket,threading
+from pathlib import Path
+from serve import PreviewHTTPServer,NoCacheHandler
+server=PreviewHTTPServer(('127.0.0.1',0),NoCacheHandler)
+clients=[]
+worker=None
+try:
+    for _ in range(32):
+        clients.append(socket.create_connection(server.server_address,timeout=5))
+    worker=threading.Thread(target=server.serve_forever,daemon=True)
+    worker.start()
+    path='tools/browser-editor-ready.mjs'
+    expected=Path(path).read_bytes()
+    for client in clients:
+        client.sendall(('GET /'+path+' HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n').encode('ascii'))
+    for client in clients:
+        with client.makefile('rb') as response:
+            headers,body=response.read().split(b'\\r\\n\\r\\n',1)
+        assert headers.startswith(b'HTTP/1.1 200'),headers
+        assert b'content-type: text/javascript' in headers.lower(),headers
+        assert b'cache-control: no-store' in headers.lower(),headers
+        assert body==expected
+    connection=http.client.HTTPConnection(*server.server_address,timeout=5)
+    try:
+        for index in range(3):
+            connection.request('GET','/'+path)
+            response=connection.getresponse()
+            assert response.status==200
+            assert response.version==11
+            assert response.read()==expected
+            assert connection.sock is not None
+            if index==0:
+                original=connection.sock
+            else:
+                assert connection.sock is original
+        connection.request('HEAD','/'+path)
+        response=connection.getresponse()
+        assert response.status==200
+        assert int(response.getheader('Content-Length'))==len(expected)
+        assert response.read()==b''
+        assert connection.sock is original
+    finally:
+        connection.close()
+    print(json.dumps({'connections':len(clients),'exactBodies':True,'reusedConnection':True}))
+finally:
+    for client in clients:
+        client.close()
+    if worker is not None:
+        server.shutdown()
+        worker.join()
+    server.server_close()
+`], { cwd: fileURLToPath(new URL('.', import.meta.url)), encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'] });
+  assert.deepEqual(JSON.parse(output), { connections: 32, exactBodies: true, reusedConnection: true });
+});
 
 test('focused release checks require explicit known coverage and reject empty or ambiguous arguments', () => {
   assert.throws(() => parseReleaseOptions([]), /Select relevant local checks/);

@@ -220,6 +220,13 @@ test("Hosted resume R2 CAS preserves concurrent versions and immutable source by
     assert.equal((await store.get(document.id)).document.design.layout, 'hybrid');
     await store.restore(document.id, 3, 4);
     assert.equal((await store.get(document.id)).document.design.layout, 'single');
+    const beforeCheckpoint = await store.get(document.id);
+    await assert.rejects(store.save(document.id, document, 5, 'Invalid', false, 'autosave'), { status: 400 });
+    assert.deepEqual(await store.get(document.id), beforeCheckpoint);
+    const named = await store.save(document.id, document, 5, 'Edited for interview', false, 'manual');
+    assert.equal(named.versions.at(-1).checkpoint, 'manual');
+    const exported = await store.save(document.id, document, 6, 'PDF exported', false, 'export');
+    assert.equal(exported.versions.at(-1).checkpoint, 'export');
   } finally { await runtime.dispose(); }
 });
 test("transactional passkey challenges allow exactly one concurrent redemption", async () => {
@@ -343,7 +350,10 @@ test("Hosted resume routes require an owner session and allowed origin without t
     assert.equal((await request('library', { headers: { Origin: '' } })).status, 403);
     const document = createResume({ id: 'route-fixture', model: { summary: 'Private text', contact: {}, sections: [] } });
     assert.equal((await request('resumes', { method: 'POST', body: JSON.stringify({ document }) })).status, 200);
-    assert.equal((await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document }) })).status, 200);
+    assert.equal((await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document, checkpoint: 'invalid' }) })).status, 400);
+    const checkpointResponse = await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document, label: 'Interview', checkpoint: 'manual' }) });
+    assert.equal(checkpointResponse.status, 200);
+    assert.equal((await checkpointResponse.json()).versions.at(-1).checkpoint, 'manual');
     assert.equal((await request('resumes/route-fixture', { method: 'PUT', headers: { 'If-Match': '1' }, body: JSON.stringify({ document }) })).status, 409);
     const response = await request('library'); assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal((await response.json()).documents[0].version, 2);
@@ -379,6 +389,17 @@ test("Hosted resume routes require an owner session and allowed origin without t
     assert.equal((await request('resumes/route-fixture/exports/' + check.id)).status, 200);
     const cached = await (await request('resumes/route-fixture/export', { method: 'POST', headers: { 'If-Match': '2' }, body: '{}' })).json();
     assert.equal(cached.entry.id, check.id); assert.equal(renders, 1);
+    const preservedRecord = await (await request('resumes/route-fixture')).text();
+    const transient = await (await request('resumes/route-fixture/export', { method: 'POST', headers: { 'If-Match': '2' }, body: JSON.stringify({ transient: true, number: 1 }) })).json();
+    assert.equal(transient.pending.version, 1);
+    assert.equal(await fixture.env.RESUMES.head('pending/' + transient.pending.id + '.pdf'), null, 'New snapshot rendering never writes PDF bytes to storage');
+    const regenerated = await finish({ ...check, id: transient.pending.id, sha256: transient.pending.sha256 });
+    assert.equal(regenerated.status, 200);
+    assert.equal((await regenerated.json()).transient, true);
+    assert.equal(await fixture.env.RESUMES.head('exports/route-fixture/' + transient.pending.id), null);
+    assert.equal(await fixture.env.RESUMES.head('pending/' + transient.pending.id + '.json'), null);
+    assert.equal(await (await request('resumes/route-fixture')).text(), preservedRecord);
+    assert.equal((await request('resumes/route-fixture/export', { method: 'POST', headers: { 'If-Match': '2' }, body: '{"transient":true,"number":999}' })).status, 404);
     assert.equal((await finish(check)).status, 404);
     assert.equal([...fixture.values.keys()].some(key => key.startsWith('prep/') || key.startsWith('resume/')), false);
   } finally { await runtime.dispose(); }

@@ -9,7 +9,7 @@ import { rootTestFiles, releaseCommands, validateLocalServer } from './tools/rel
 
 test('browser shards retain every release file and partition all test registrations exactly once', () => {
   const tasks = Object.values(browserShards).flat();
-  const expected = ['admin-session.browser.test.mjs', 'resume-workspace.test.mjs', 'ai-ribbon.test.mjs', 'ai-appearance.browser.test.mjs', 'project-recovery.browser.test.mjs', 'slide-studio-deck.test.mjs', 'slide-presenter-readonly.browser.test.mjs', 'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs', 'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs', 'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs', 'studio-capture-download.browser.test.mjs'];
+  const expected = ['admin-session.browser.test.mjs', 'resume-workspace.test.mjs', 'resume-assessment-ui.test.mjs', 'resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs', 'ai-ribbon.test.mjs', 'ai-appearance.browser.test.mjs', 'project-recovery.browser.test.mjs', 'slide-studio-deck.test.mjs', 'slide-presenter-readonly.browser.test.mjs', 'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs', 'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs', 'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs', 'studio-capture-download.browser.test.mjs'];
   assert.deepEqual([...new Set(tasks.flatMap(task => task.files))].sort(), expected.sort());
   const splitFiles = ['slide-studio-deck.test.mjs', 'project-recovery.browser.test.mjs'];
   for (const file of expected) {
@@ -53,7 +53,7 @@ test('browser shards retain every release file and partition all test registrati
 
 test('local release preflight includes every CI gate and rejects missing or live browser servers', () => {
   const commands = releaseCommands();
-  const roots = readdirSync(new URL('.', import.meta.url)).filter(file => /\.test\.(?:mjs|cjs)$/.test(file) && !file.endsWith('.browser.test.mjs') && !['slide-studio-deck.test.mjs', 'ai-ribbon.test.mjs', 'resume-workspace.test.mjs'].includes(file)).sort();
+  const roots = readdirSync(new URL('.', import.meta.url)).filter(file => /\.test\.(?:mjs|cjs)$/.test(file) && !file.endsWith('.browser.test.mjs') && !['slide-studio-deck.test.mjs', 'ai-ribbon.test.mjs', 'resume-workspace.test.mjs', 'resume-assessment-ui.test.mjs', 'resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs'].includes(file)).sort();
   assert.deepEqual(rootTestFiles(), roots);
   assert.deepEqual(commands[0][1], ['--test', '--test-concurrency=1', ...roots]);
   const scripts = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).scripts;

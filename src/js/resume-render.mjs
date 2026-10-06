@@ -1,5 +1,10 @@
 export const RESUME_FONTS = { inter: { name: 'Inter', family: 'Inter', css: 'Inter, sans-serif', files: ['inter-normal-400-latin.woff2', 'inter-normal-600-latin.woff2'] }, gelasio: { name: 'Gelasio', family: 'Gelasio', css: 'Gelasio, serif', files: ['gelasio-normal-400-latin.woff2', 'gelasio-normal-600-latin.woff2'] }, gambetta: { name: 'Gambetta', family: 'Gambetta', css: 'Gambetta, serif', files: ['gambetta-normal-300700-latin.woff2'] }, mono: { name: 'JetBrains Mono', family: 'JetBrains Mono', css: '"JetBrains Mono", monospace', files: ['jetbrainsmono-normal-400-latin.woff2', 'jetbrainsmono-normal-500-latin.woff2'] } };
-export const RESUME_RENDER_VERSION = 9;
+import { resumeFields } from './resume-workspace.mjs';
+import { resumeContactItems, resumeSectionColumn } from './resume-document.mjs';
+import { installResumeInlineEditor } from './resume-inline-editor.mjs';
+import { resumeIcon } from './resume-icons.mjs';
+
+export const RESUME_RENDER_VERSION = 13;
 export const escapeResumeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 export function resumeHref(value) {
@@ -8,17 +13,22 @@ export function resumeHref(value) {
   try { const url = new URL(/^https?:/i.test(text) ? text : 'https://' + text); return ['http:', 'https:'].includes(url.protocol) && url.hostname.includes('.') ? url.href : ''; } catch { return ''; }
 }
 
-export function resumeBody(document) {
+export function resumeBody(document, interactive = false) {
   const model = document.model, escape = escapeResumeHtml;
   const field = (id, value, tag = 'span', cls = '') => `<${tag} class="${cls}" data-field="${escape(id)}">${escape(value)}</${tag}>`;
+  const detail = (kind, id, value, cls = '') => `<span class="resume-detail ${cls}" data-detail-field="${escape(id)}">${value || interactive ? resumeIcon(kind) : ''}${field(id, value)}</span>`;
   const contact = model.contact;
-  const links = [contact.email ? `<a href="mailto:${escape(contact.email)}">${field('contact.email', contact.email)}</a>` : '', contact.phone ? field('contact.phone', contact.phone) : '', contact.location ? field('contact.location', contact.location) : '', ...contact.links.map(link => `<a href="${escape(resumeHref(link.url))}">${field(link.id + '.label', link.label || link.url)}</a>`)].filter(Boolean).join('<span class="contact-separator" aria-hidden="true"> / </span>');
+  const links = resumeContactItems(model).map(item => {
+    if (item.kind === 'email') return `<a href="mailto:${escape(item.value)}">${detail('email', item.fieldId, item.value)}</a>`;
+    if (item.kind === 'link') { const link = contact.links.find(link => link.id === item.id); return `<a href="${escape(resumeHref(link.url))}">${detail(/linkedin/i.test(link.label + ' ' + link.url) ? 'linkedin' : 'site', item.fieldId, link.label || link.url)}</a>`; }
+    return detail(item.kind === 'location' ? 'loc' : 'phone', item.fieldId, item.value);
+  }).join('<span class="contact-separator" aria-hidden="true"> / </span>');
   const header = `<header class="resume-header">${field('name', model.name, 'h1')}${field('title', model.title, 'p', 'resume-title')}<div class="resume-contact">${links}</div></header>`;
-  const summary = model.summary ? `<section class="resume-summary"><h2>Profile</h2>${field('summary', model.summary, 'p')}</section>` : '';
+  const summary = model.summary || interactive ? `<section class="resume-summary"><h2>Profile</h2>${field('summary', model.summary, 'p')}</section>` : '';
   const sectionHtml = section => {
     let body = '';
-    if (section.kind === 'experience') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.role', item.role, 'h3')}${field(item.id + '.dates', item.dates, 'span', 'dates')}</div><div class="entry-meta">${field(item.id + '.org', item.org)}${item.location ? ' / ' + field(item.id + '.location', item.location) : ''}</div><ul class="resume-import-list">${item.bullets.map(bullet => `<li><span class="resume-import-marker" aria-hidden="true">&#8226; </span>${field(bullet.id, bullet.text)}</li>`).join('')}</ul></article>`).join('');
-    else if (section.kind === 'education') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.school', item.school, 'h3')}${field(item.id + '.dates', item.dates, 'span', 'dates')}</div><p class="education-description">${field(item.id + '.credential', item.credential)}${item.note ? ' ' + field(item.id + '.note', item.note) : ''}</p></article>`).join('');
+    if (section.kind === 'experience') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.role', item.role, 'h3')}${detail('cal', item.id + '.dates', item.dates, 'dates')}</div><div class="entry-meta">${field(item.id + '.org', item.org)}${item.location || interactive ? ' / ' + detail('loc', item.id + '.location', item.location) : ''}</div><ul class="resume-import-list">${item.bullets.map(bullet => `<li><span class="resume-import-marker" aria-hidden="true">&#8226; </span>${field(bullet.id, bullet.text)}</li>`).join('')}</ul></article>`).join('');
+    else if (section.kind === 'education') body = section.items.map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.school', item.school, 'h3')}${detail('cal', item.id + '.dates', item.dates, 'dates')}</div><p class="education-description">${field(item.id + '.credential', item.credential)}${item.note || interactive ? ' ' + field(item.id + '.note', item.note) : ''}</p></article>`).join('');
     else if (section.kind === 'skills') body = section.groups.map(group => `<p class="skill-group">${field(group.id + '.label', group.label, 'strong')}${group.label ? ': ' : ''}${field(group.id + '.items', group.items.join(', '))}</p>`).join('');
     else if (section.kind === 'text') {
       body = section.text.split(/\n\s*\n/).map(paragraph => {
@@ -40,15 +50,15 @@ export function resumeBody(document) {
       body = '<div data-field="' + escape(section.id + '.text') + '">' + body + '</div>';
     }
     else {
-      const entries = (section.items || []).map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.title', item.title, 'h3')}${item.dates ? field(item.id + '.dates', item.dates, 'span', 'dates') : ''}</div>${section.kind === 'links' && resumeHref(item.meta) ? `<a href="${escape(resumeHref(item.meta))}">${field(item.id + '.meta', item.meta)}</a>` : field(item.id + '.meta', item.meta, 'p')}</article>`);
+      const entries = (section.items || []).map(item => `<article class="resume-entry"><div class="entry-heading">${field(item.id + '.title', item.title, 'h3')}${item.dates || interactive ? field(item.id + '.dates', item.dates, 'span', 'dates') : ''}</div>${section.kind === 'links' && resumeHref(item.meta) ? `<a href="${escape(resumeHref(item.meta))}">${field(item.id + '.meta', item.meta)}</a>` : field(item.id + '.meta', item.meta, 'p')}</article>`);
       const columns = document.design.layout === 'hybrid' && [2, 3].includes(section.columns) ? section.columns : 1;
       for (let index = 0; index < entries.length; index += columns) body += columns > 1 ? `<div class="resume-entry-row" style="--entry-columns:${columns}">${entries.slice(index, index + columns).join('')}</div>` : entries[index];
     }
     return `<section data-section="${escape(section.id)}">${field(section.id + '.heading', section.heading, 'h2')}${body}</section>`;
   };
   if (document.design.layout === 'sidebar') {
-    const side = model.sections.filter(section => !['experience', 'text'].includes(section.kind));
-    const main = model.sections.filter(section => ['experience', 'text'].includes(section.kind));
+    const side = model.sections.filter(section => resumeSectionColumn(section) === 'side');
+    const main = model.sections.filter(section => resumeSectionColumn(section) === 'main');
     return header + `<div class="resume-columns"><div>${summary}${main.map(sectionHtml).join('')}</div><aside>${side.map(sectionHtml).join('')}</aside></div>`;
   }
   return header + summary + model.sections.map(sectionHtml).join('');
@@ -65,16 +75,19 @@ export function renderResumeHtml(document, { interactive = false, base = '', sou
   const style = `@page{size:${size};margin:${margin};@bottom-right{content:counter(page) ' / ' counter(pages);font-family:Inter,sans-serif;font-size:8pt;color:#666}}
 *{box-sizing:border-box}html{font-size:16px}body{margin:0;color:#242628;background:white;font-family:${font.css};font-size:${10 * scale}pt;line-height:1.48;letter-spacing:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}h1,h2,h3,p,ul{margin:0}h1{font-size:${27 * scale}pt;line-height:1.15;font-weight:600}h2{font-size:${9 * scale}pt;text-transform:uppercase;font-weight:600;color:${accent};border-bottom:1px solid #d8dedc;padding-bottom:5px;margin:18px 0 9px;break-after:avoid}h3{font-size:${10.5 * scale}pt;font-weight:600;break-after:avoid}p{white-space:pre-line}.resume-header{padding-bottom:13px;border-bottom:2px solid ${accent};break-inside:avoid}.resume-title{color:${accent};font-size:${11 * scale}pt;margin-top:6px}.resume-contact{font-size:${8.1 * scale}pt;color:#53595b;margin-top:10px}.resume-contact a{color:inherit;text-decoration:none;overflow-wrap:anywhere}.contact-separator{color:#9aa2a3;margin:0 5px}.entry-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.dates{font-size:${8.5 * scale}pt;color:#586062;flex-shrink:0}.entry-meta{color:#586062;font-size:${9 * scale}pt;margin:3px 0 6px;break-after:avoid}.resume-entry{margin-bottom:13px;break-inside:${design.keepWhole ? 'avoid' : 'auto'}}ul{padding-left:16px}li{padding-left:2px;margin-bottom:5px;orphans:2;widows:2}li::marker{color:${accent}}.skill-group{margin-bottom:6px}.skill-group strong{font-weight:600}.resume-columns{display:grid;grid-template-columns:minmax(0,1fr) 30%;gap:25px}.resume-columns aside{border-left:1px solid #d8dedc;padding-left:18px}.resume-summary{break-inside:avoid}section{min-width:0}a{overflow-wrap:anywhere}[data-field]{overflow-wrap:break-word}.pagedjs_pages{display:flex;flex-direction:column;align-items:center;gap:20px}.pagedjs_page{flex:none;background:white;box-shadow:0 1px 5px #0002}.pagedjs_margin-bottom-right{color:#687073}@media print{.pagedjs_pages{display:block}.pagedjs_page{box-shadow:none;margin:0!important}}
 .resume-import-list{padding:0;list-style:none}.resume-import-list li{display:flex;gap:6px;white-space:pre-line;padding:0}.resume-import-marker{flex:0 0 auto;min-width:8px}.resume-import-paragraph+.resume-import-paragraph{margin-top:8px}
+.resume-detail{display:inline-block;max-width:100%}.resume-detail-icon{display:inline-block;width:1em;height:1em;margin-right:4px;vertical-align:-.12em;overflow:visible}
+.resume-detail-icon[data-resume-icon="email"]{vertical-align:middle}
 .resume-entry-row{display:grid;grid-template-columns:repeat(var(--entry-columns),minmax(0,1fr));gap:14px;break-inside:avoid}.resume-entry-row .resume-entry{min-width:0;break-inside:avoid}
 .entry-heading{flex-wrap:wrap;column-gap:12px;row-gap:2px;break-after:avoid}.entry-heading h3{min-width:0;flex:1 1 120px}.entry-heading .dates{max-width:100%;margin-left:auto;text-align:right;white-space:normal;overflow-wrap:anywhere}.education-description{white-space:normal}
 ${design.density === 'compact' ? 'body{line-height:1.25}h2{margin:10px 0 6px;padding-bottom:3px}.resume-header{padding-bottom:8px}.resume-title{margin-top:3px}.resume-contact{margin-top:6px}.entry-meta{margin:2px 0 3px}.resume-entry{margin-bottom:8px}li{margin-bottom:2px}.skill-group{margin-bottom:4px}.resume-import-paragraph+.resume-import-paragraph{margin-top:6px}' : ''}
 body{font-size:${bodySize}pt;line-height:${lineHeight}}
-${interactive ? '[data-field]{cursor:text;border-radius:2px}[data-field]:hover,[data-field]:focus{outline:1px solid #ba863c;outline-offset:3px;background:#d8a65712}' : ''}`;
+${interactive ? '[data-field]{cursor:text;border-radius:2px}[data-field]:hover,[data-field]:focus,.rws-active-field{outline:1px solid #ba863c;outline-offset:3px;background:#d8a65712}' : ''}`;
   if (sourceOnly) return { body: resumeBody(document), css: style };
   const signature = JSON.stringify([document.id, document.name, document.target, document.model, document.design, document.sourceIds]);
   const identity = JSON.stringify({ documentId: document.id, signature }).replace(/</g, '\\u003c');
   const fontQueries = JSON.stringify([...new Set(['400 12px "' + font.family + '"', '600 12px "' + font.family + '"', '400 12px "Inter"'])]);
-  return `<!doctype html><html><head><meta charset="utf-8"><base href="${escapeResumeHtml(base || '/')}"/><title>${escapeResumeHtml(document.name)}</title><link rel="stylesheet" href="/css/fonts.css"><style>${style}</style><script>window.PagedConfig={auto:false};</script><script src="/studio/resume-preview/assets/paged.polyfill.js"></script></head><body><template id="source">${resumeBody(document)}</template><div id="pages"></div><script>
+  const editableFields = resumeFields(document.model).map(field => ({ id: field.id, label: field.label, value: field.value, multiline: field.id === 'summary' || ['text', 'items'].includes(field.key), special: field.group === 'Contact' || field.key === 'meta' && document.model.sections.some(section => section.kind === 'links' && section.id === field.group) }));
+  return `<!doctype html><html><head><meta charset="utf-8"><base href="${escapeResumeHtml(base || '/')}"/><title>${escapeResumeHtml(document.name)}</title><link rel="stylesheet" href="/css/fonts.css"><style>${style}${interactive ? '.resume-empty-field{display:inline-block;min-width:4em;min-height:1em}.resume-empty-field::after{content:attr(data-placeholder);opacity:.5;font-size:inherit}textarea{white-space:pre-wrap}' : ''}</style><script>window.PagedConfig={auto:false};</script><script src="/studio/resume-preview/assets/paged.polyfill.js"></script></head><body><template id="source">${resumeBody(document, interactive)}</template><div id="pages"></div><script>
 (async()=>{
   const identity=${identity};
   const notify=message=>parent.postMessage({...identity,...message},new URL(document.baseURI).origin);
@@ -96,10 +109,9 @@ ${interactive ? '[data-field]{cursor:text;border-radius:2px}[data-field]:hover,[
       return [...range.getClientRects()].some(rect=>rect.width>0&&rect.height>0&&(rect.left<area.left-2||rect.right>area.right+2||rect.top<area.top-2||rect.bottom>area.bottom+2));
     });
     if(!overflow)document.documentElement.dataset.resumeVerified=String(result.total);
+    ${interactive ? `(${installResumeInlineEditor.toString()})(${JSON.stringify(editableFields).replace(/</g, '\\u003c')},notify);` : ''}
+    ${interactive ? "window.resumeReady.hasPlaceholders=!!document.querySelector('.resume-empty-field');" : ''}
     notify({type:'resume-ready',...window.resumeReady});
-    ${interactive ? `document.querySelectorAll('[data-field]').forEach(element=>{element.tabIndex=0;element.setAttribute('role','button');element.setAttribute('aria-label','Edit '+element.textContent.slice(0,70));});
-    const select=event=>{const field=event.target.closest('[data-field]');if(field){event.preventDefault();notify({type:'resume-field',fieldId:field.dataset.field});}};
-    document.addEventListener('click',select);document.addEventListener('keydown',event=>{if(event.key==='Enter')select(event);});` : ''}
   }catch(error){window.resumeError=error.message;notify({type:'resume-error',message:error.message});}
 })();</script></body></html>`;
 }

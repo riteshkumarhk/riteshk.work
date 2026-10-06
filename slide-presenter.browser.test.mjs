@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright-core";
-import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
+import { openIsolatedBrowserHost, waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
 import { availableStudies } from "./src/js/slide-merge-sections.mjs";
 import { sectionComponentPlan } from "./src/js/slide-merge-section-component.mjs";
 import { publicDeckPayload } from "./src/js/slide-merge-visibility.mjs";
@@ -61,7 +61,7 @@ test("native section renderer displays both before/after images and wires compar
   const browser = await chromium.launch({ executablePath, headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   try {
-    await page.goto(baseURL + "/404.html");
+    await openIsolatedBrowserHost(page, baseURL);
     await page.evaluate(() => {
       const image = document.createElement("canvas"); image.width = 640; image.height = 360;
       const context = image.getContext("2d"); context.fillStyle = "#bc294b"; context.fillRect(0, 0, 640, 360);
@@ -92,7 +92,7 @@ test("every section family renders as a complete native component", { skip: !ena
     try { sectionComponentPlan(block, String, "check", { customIcons: source.customIcons }); if (!representatives.has(block.type)) representatives.set(block.type, block); } catch {}
   }
   try {
-    await page.goto(baseURL + "/404.html");
+    await openIsolatedBrowserHost(page, baseURL);
     const image = await page.evaluate(() => { const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 360; const context = canvas.getContext("2d"); context.fillStyle = "#23a787"; context.fillRect(0, 0, 640, 360); return canvas.toDataURL(); });
     await page.evaluate(() => { const frame = document.createElement("iframe"); frame.id = "families"; frame.style.cssText = "width:1120px;height:720px;border:0"; frame.src = "/studio/slide-runtime/component.html?v=1.0"; document.body.replaceChildren(frame); });
     const native = page.frameLocator("#families");

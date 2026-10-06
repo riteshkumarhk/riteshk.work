@@ -1,4 +1,50 @@
-import { verifyResumePdf } from './resume-pdf.mjs';
+import { readResumePdf, verifyResumePdf } from './resume-pdf.mjs';
+
+export const RESUME_CANVAS_STORAGE_KEY = 'rk:resume-preview:canvas';
+
+export function readResumeCanvasMode() {
+  try { return localStorage.getItem(RESUME_CANVAS_STORAGE_KEY) === 'light' ? 'light' : 'dark'; }
+  catch (error) { console.warn('Resume canvas preference could not be read.', error); return 'dark'; }
+}
+
+export function saveResumeCanvasMode(mode) {
+  try { localStorage.setItem(RESUME_CANVAS_STORAGE_KEY, mode); }
+  catch (error) { console.warn('Resume canvas preference could not be saved.', error); }
+}
+
+export function observeResumeViewControls(tools, banners, frame = null) {
+  const canvas = tools.parentElement;
+  function fit() {
+    const controls = tools.getBoundingClientRect(), bottom = canvas.getBoundingClientRect().bottom - 12;
+    let lift = 0;
+    for (const banner of banners) {
+      if (banner.hidden || !banner.getClientRects().length) continue;
+      const notice = banner.getBoundingClientRect();
+      const offset = banner.ownerDocument !== tools.ownerDocument ? frame?.getBoundingClientRect() : null;
+      const left = notice.left - (offset?.left || 0), right = notice.right - (offset?.left || 0);
+      const top = notice.top - (offset?.top || 0), end = notice.bottom - (offset?.top || 0);
+      if (controls.right > left - 12 && controls.left < right + 12 &&
+          bottom > top - 12 && bottom - controls.height < end + 12) {
+        lift = Math.max(lift, bottom - top + 12);
+      }
+    }
+    canvas.style.setProperty('--resume-view-controls-lift', lift + 'px');
+  }
+  const observer = new ResizeObserver(fit);
+  [canvas, tools, ...banners, frame].filter(Boolean).forEach(element => observer.observe(element));
+  fit();
+  return { fit, dispose() { observer.disconnect(); canvas.style.removeProperty('--resume-view-controls-lift'); } };
+}
+
+export function resumeSaveFailureFeedback({ status, offline = false } = {}) {
+  if (status === 401) return { message: 'Sign in again to save your changes.', actionLabel: '' };
+  if (status === 403) return { message: "You don't have permission to save these changes.", actionLabel: '' };
+  const message = offline ? "You're offline. Reconnect to save."
+    : status === 429 ? "Changes weren't saved. Try again shortly."
+    : status >= 500 && status <= 599 ? "Changes weren't saved. Try again later."
+    : 'Save not confirmed. Try again.';
+  return { message, actionLabel: 'Retry' };
+}
 
 export function createHostedResumeClient({ request, ai, storage = localStorage }) {
   let adapter = null;
@@ -46,27 +92,19 @@ export function createHostedResumeClient({ request, ai, storage = localStorage }
       const result = await (await send(path, options)).json();
       if (!/^resumes\/[a-zA-Z0-9_-]+\/export$/.test(path) || options.method !== 'POST') return result;
       if (result.entry) return result.entry;
-      const id = path.split('/')[1], record = await (await send('resumes/' + id)).json();
+      const id = path.split('/')[1], record = await (await send('resumes/' + id, { signal: options.signal })).json();
       const bytes = Uint8Array.from(atob(result.base64), character => character.charCodeAt(0));
       const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
-      if (sha256 !== result.pending.sha256 || record.version !== result.pending.version) throw new Error('The document or rendered bytes changed. Export again.');
-      const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist/build/pdf.mjs');
-      GlobalWorkerOptions.workerSrc = '/studio/resume-preview/assets/pdf.worker.mjs';
-      const pdf = await getDocument({ data: bytes }).promise, positions = [], links = [];
-      try {
-        for (let number = 1; number <= pdf.numPages; number++) {
-          if (pdf.numPages > 50) throw new Error('PDF exceeds the supported page count.');
-          const page = await pdf.getPage(number), viewport = page.getViewport({ scale: 1 }), text = await page.getTextContent();
-          positions.push({ width: viewport.width, height: viewport.height, items: text.items.filter(item => item.str).map(item => ({ str: item.str, x: item.transform[4], y: viewport.height - item.transform[5], w: item.width, h: item.height })) });
-          links.push(...(await page.getAnnotations()).filter(item => item.subtype === 'Link').map(item => item.url || item.unsafeUrl));
-        }
-      } finally { await pdf.destroy(); }
+      const snapshot = result.pending.transient ? record.versions.find(entry => entry.number === result.pending.version)?.document : record.document;
+      if (!snapshot || sha256 !== result.pending.sha256 || record.version !== (result.pending.expectedVersion ?? result.pending.version)) throw new Error('The document or rendered bytes changed. Export again.');
+      const { pages: positions, links } = await readResumePdf(bytes, { signal: options.signal });
       const expectedPages = Number(options.headers?.['X-Resume-Pages']) || null;
-      verifyResumePdf(record.document, positions, links, expectedPages);
-      return (await send('resumes/' + id + '/finalize', { method: 'POST', headers: options.headers, body: JSON.stringify({ id: result.pending.id, sha256, expectedPages, positions, links }) })).json();
+      verifyResumePdf(snapshot, positions, links, expectedPages);
+      const entry = await (await send('resumes/' + id + '/finalize', { method: 'POST', headers: options.headers, signal: options.signal, body: JSON.stringify({ id: result.pending.id, sha256, expectedPages, positions, links }) })).json();
+      return entry.transient ? { ...entry, base64: result.base64 } : entry;
     },
-    async file(path, type) {
-      const response = await send(path);
+    async file(path, type, options = {}) {
+      const response = await send(path, options);
       return new Blob([await response.arrayBuffer()], { type });
     }
   };

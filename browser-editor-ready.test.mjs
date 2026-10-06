@@ -1,7 +1,27 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
+import { openIsolatedBrowserHost, waitForSlideEditor } from "./tools/browser-editor-ready.mjs";
+
+test("isolated browser hosts install a same-origin document before navigation without SPA redirects", async () => {
+  const calls = [];
+  let routeHandler, location;
+  const page = {
+    route: async (url, handler) => { calls.push(["route", url]); routeHandler = handler; },
+    goto: async url => { calls.push(["goto", url]); location = url; },
+    url: () => location
+  };
+  const host = await openIsolatedBrowserHost(page, "http://127.0.0.1:5510/studio/");
+  assert.equal(host, "http://127.0.0.1:5510/__browser-test-host");
+  assert.deepEqual(calls, [["route", host], ["goto", host]]);
+  await routeHandler({ fulfill: async response => {
+    assert.equal(response.contentType, "text/html");
+    assert.match(response.body, /<!doctype html>/i);
+    assert.doesNotMatch(response.body, /<script|location|http-equiv/i);
+  } });
+  page.url = () => "http://127.0.0.1:5510/";
+  await assert.rejects(openIsolatedBrowserHost(page, host), /navigated unexpectedly/);
+});
 
 function pageFixture(operation) {
   const page = new EventEmitter();

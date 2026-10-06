@@ -30,8 +30,11 @@ import { libraryRoute } from "./slide-library.mjs";
 import { releaseChecksRoute } from "./release-checks.mjs";
 import { readOperationalState, updateOperationalState } from "./operational-state.mjs";
 import { resumeWorkspaceRoute, legacyAtsDestination } from "./resume-workspace.mjs";
+import { assessmentBudgetRoute } from "./resume-assessment-budget.mjs";
+import { assessmentHistoryRoute } from "./resume-assessment-history.mjs";
 import { presenterMetadataRoute } from "./presenter-metadata.mjs";
 import { atsMigrationIdentity } from "../src/js/resume-ats.mjs";
+import { aiEmbeddingInput as aiEmbedInput } from "../src/js/ai-request-limits.mjs";
 import { adminSessionOperation } from "./admin-sessions.mjs";
 export { AdminSessions } from "./admin-sessions.mjs";
 
@@ -140,7 +143,7 @@ export default {
       if (url.pathname.startsWith("/admin/resume/")) {
         const headers = { ...cors, "Cache-Control": "no-store" };
         if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return new Response(null, { status: 403, headers });
-        headers["Access-Control-Allow-Headers"] += ",If-Match,X-Resume-Pages";
+        headers["Access-Control-Allow-Headers"] += ",If-Match,X-Resume-Pages,X-Assessment-Retention";
         return new Response(null, { status: 204, headers });
       }
       return new Response(null, { status: 204, headers: cors });
@@ -178,6 +181,8 @@ export default {
       const headers = Object.assign({}, cors, { "Cache-Control": "no-store" });
       if (!origin || cors["Access-Control-Allow-Origin"] !== origin) return json({ error: "Origin not allowed" }, 403, headers);
       if (!(await verifySession(bearer(request.headers.get("Authorization")), env))) return json({ error: "Unauthorized" }, 401, headers);
+      if (url.pathname.startsWith("/admin/resume/history/")) return assessmentHistoryRoute(request, env, headers);
+      if (url.pathname.startsWith("/admin/resume/assessment/")) return assessmentBudgetRoute(request, env, headers, provider => aiResolveKey(env, provider));
       return resumeWorkspaceRoute(request, env.RESUMES, headers, env.BROWSER, fetch, env.VAULT);
     }
     if (url.pathname === "/admin/slide-library") {
@@ -2136,14 +2141,6 @@ async function aiForward(request, cors, cfg, realKey, subPath, searchParams) {
   const out = new Headers(upstream.headers);
   for (const [k, v] of Object.entries(cors)) out.set(k, v);
   return new Response(upstream.body, { status: upstream.status, headers: out });
-}
-// Normalize an embeddings request body to a clean string[] (or null).
-function aiEmbedInput(b) {
-  let input = b && b.input;
-  if (typeof input === "string") input = [input];
-  if (!Array.isArray(input)) return null;
-  input = input.slice(0, 16).map((s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim().slice(0, 8000)).filter(Boolean);
-  return input.length ? input : null;
 }
 // Shared embeddings core (OpenAI or Gemini; Claude has none). Keys are passed in so callers resolve them.
 async function aiEmbedCore(cors, input, wantProvider, model, openaiKey, geminiKey) {

@@ -1,5 +1,6 @@
 import { createResume, structureResumeText, resumeFields, resumeSignature } from './resume-workspace.mjs';
 import { atsKeywordMatch, atsSemanticFit, atsParseLayout, atsParseScore, atsStructFromChecks, atsBlendScore } from './ats-core.js';
+import { prepareReviewActions, reviewPacket } from './resume-review.mjs';
 
 export async function assessAtsResume({ text, jd = '', level = 'staff', company = '', signal }, { readPages, semantic, complete }) {
   signal?.throwIfAborted();
@@ -18,16 +19,29 @@ export async function assessAtsResume({ text, jd = '', level = 'staff', company 
   return { res, kw, sem, layout, semMode: neural?.ok ? 'neural' : neural?.failed ? 'lexical-fallback' : 'lexical', method: 'ATS blended assessment v2', at: Date.now(), target: { jd, level, company } };
 }
 
-export function atsEditorReview(document, assessment, { historical = false } = {}) {
+export function atsEditorReview(document, assessment, { historical = false, sources = [] } = {}) {
   const fields = resumeFields(document.model).filter(field => field.id !== 'name' && field.group !== 'Contact');
   const fixes = Array.isArray(assessment.res?.fixes) ? assessment.res.fixes : [];
+  const prepared = assessment.res?.responseVersion === 1 && !historical;
+  if (assessment.res?.responseVersion !== undefined && assessment.res.responseVersion !== 1) throw new Error('The ATS review uses an unsupported suggestion format.');
+  const excerpts = prepared ? reviewPacket(document).excerpts : [];
   const findings = fixes.map((fix, index) => {
     const quote = fix.anchor?.quote || '', matches = quote ? fields.filter(field => field.value.includes(quote)) : [];
-    return { criterionId: 'ats-finding-' + index, action: String(fix.point || 'Review finding'), reason: String(fix.how || ''), priority: fix.priority === 'high' ? 'high' : fix.priority === 'low' ? 'low' : 'medium', fieldIds: matches.length === 1 ? [matches[0].id] : [], evidence: matches.length === 1 ? [{ fieldId: matches[0].id, quote: matches[0].value }] : [], replacement: fix.anchor?.replacement || '', anchor: structuredClone(fix.anchor || {}) };
+    let response = prepared ? structuredClone(fix.response) : undefined;
+    if (response?.kind === 'revision') {
+      if (Object.keys(response).some(key => !['kind', 'text', 'reason', 'evidence'].includes(key)) || typeof response.text !== 'string' || !response.text.trim() || response.evidence !== undefined && (!Array.isArray(response.evidence) || response.evidence.some(id => typeof id !== 'string' || !id.startsWith('source-')))) throw new Error('The ATS review returned an invalid proposed revision.');
+      if (matches.length !== 1 || matches[0].value.split(quote).length !== 2) throw new Error('A proposed revision could not be matched to one exact passage. No changes were applied.');
+      const field = matches[0], excerpt = excerpts.find(item => item.fieldId === field.id);
+      if (!excerpt) throw new Error('A proposed revision targets a field that cannot be revised.');
+      const replacement = response.text;
+      response = { kind: 'revision', fieldId: field.id, after: field.value.replace(quote, () => replacement), reason: response.reason, evidence: [excerpt.id, ...(response.evidence || [])] };
+    }
+    return { criterionId: 'ats-finding-' + index, action: String(fix.point || 'Review finding'), reason: String(fix.how || ''), priority: fix.priority === 'high' ? 'high' : fix.priority === 'low' ? 'low' : 'medium', fieldIds: matches.length === 1 ? [matches[0].id] : [], evidence: matches.length === 1 ? [{ fieldId: matches[0].id, quote: matches[0].value }] : [], replacement: fix.anchor?.replacement || '', anchor: structuredClone(fix.anchor || {}), ...(prepared ? { response } : {}) };
   });
-  return { kind: 'ats', version: 2, method: assessment.method || 'Legacy ATS blended assessment', documentId: document.id, signature: historical ? '' : resumeSignature(document), contentSignature: historical ? '' : resumeSignature({ ...document, sourceIds: [] }), sourceIds: [...document.sourceIds],
+  const review = { kind: 'ats', version: 2, method: assessment.method || 'Legacy ATS blended assessment', documentId: document.id, signature: historical ? '' : resumeSignature(document), contentSignature: historical ? '' : resumeSignature({ ...document, sourceIds: [] }), sourceIds: [...document.sourceIds], ...(assessment.provider !== undefined ? { provider: assessment.provider } : {}), ...(assessment.model !== undefined ? { model: assessment.model } : {}),
     score: assessment.res?.score ?? null, band: assessment.res?.band || '', summary: assessment.res?.summary || '', at: assessment.at || 0, target: structuredClone(document.target), findings,
     breakdown: findings.map(finding => ({ id: finding.criterionId, label: finding.action, reason: finding.reason, status: finding.fieldIds.length ? 'anchored' : 'unresolved field', evidence: finding.evidence.map((reference, index) => ({ id: finding.criterionId + '-' + index, fieldId: reference.fieldId, text: reference.quote })), weight: 0 })), result: structuredClone(assessment.res || null), signals: structuredClone(assessment) };
+  return prepared ? prepareReviewActions(document, review, { required: true, sources }) : review;
 }
 
 export function atsMigrationSnapshot(entry) {

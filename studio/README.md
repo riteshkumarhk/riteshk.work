@@ -47,7 +47,31 @@ validate that final tree, including content-dependent backup/restore checks.
 Never force-push over admin publications. Full CI still runs every required test,
 regardless of the local selection, and deploys only its verified artifact after
 every job succeeds. Inventory tests protect browser-shard coverage and partitioning.
+The Resume shard includes candidate UI, PDF structure, Studio-bridge and baseline
+accounting browser tests; none runs in CI's browser-free root job.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
+
+Isolated editor, storage and presenter hosts use the shared
+`openIsolatedBrowserHost` fixture to create a stable same-origin document.
+Do not use the production 404 page as an empty host: its SPA redirect races
+dynamic module loading and can abort initialization.
+
+Native text-width drag tests target the center of Excalidraw's side-resize band,
+4 CSS pixels outside the element bounds, using the editor's viewport offsets.
+The exact element edge is the band's excluded inner boundary and can start a
+move instead. Keep the real pointer gesture, verify its horizontal resize cursor,
+and assert width reduction without moving the text or scaling its font.
+
+The Python preview server uses `PreviewHTTPServer` with a 128-connection listen
+backlog and HTTP/1.1 persistent connections. Python's default five-slot backlog can refuse simultaneous module
+requests from native preview frames, even though the files exist and the server
+is otherwise responsive. Isolated servers must reuse this class and
+`NoCacheHandler`, not construct a plain `ThreadingHTTPServer`. A root regression
+queues 32 real TCP connections before accepting requests, then checks every
+JavaScript body, MIME type and no-cache header, then verifies that repeated GET
+and HEAD requests reuse one socket. HTTP/1.0 connection churn can exhaust Windows
+socket buffers during long browser suites. Browser network failures remain
+failures; do not add retries or suppress page errors.
 
 For Windows-native/capture, browser/OS integration, dependencies and broad changes,
 include the applicable Windows browser suites locally; use full local coverage if
@@ -107,7 +131,22 @@ own 1s bound so an unresponsive renderer cannot stall error reporting. A control
 unsupported-deck regression verifies rejection in under 5s without changing data or
 assertions in normal workflows.
 
-The shared Studio shell keeps Undo/Redo on the left of its working bar. The preview
+The shared Studio working bar reserves fixed **Back / Undo / Redo** positions at
+the far left across Content Studio, case studies, native slides and Resume.
+Unavailable actions leave their slots empty; read-only Resume review has Back
+only, not fake history controls. Applicable but exhausted histories retain disabled
+Undo/Redo. Native deck history mounts into its own slot before the project tabs,
+so keyboard and visual order agree without routing clicks to site-draft history.
+Back keeps each workspace's existing destination and save-before-leaving guard.
+
+Single-row working bars are 48px high with 34px controls, 6px vertical padding,
+`.9rem` desktop / 10px narrow-screen insets, `.6rem` group gaps and `.3rem` between
+Undo and Redo. Text CTAs share the mono font, `.6rem` size, 1.2 line height and
+`.09em` tracking; titles/project tabs use 12px sans labels. Narrow screens may
+wrap secondary actions, but the navigation slots stay on the first row and
+controls do not shrink. Page canvases and document colours are unchanged.
+
+The preview
 mode toggle, screen-size (or slide-view) dropdown, and new-tab (or Rehearse) action
 form a right-aligned group. Preview mode behavior is unchanged: split, editor-only,
 and preview-only.
@@ -246,13 +285,169 @@ retains its role, coaching feedback, scorecards and separate new-prompt sessions
 
 ATS source files, review results and rebuilt canvas content/design settings save
 to the owner-only Cloudflare R2 history, independently of the site draft. The
-canvas autosaves text and design changes; **Saved to Cloudflare** appears only
+canvas autosaves text and design changes; its **Saved** indicator appears only
 after the server confirms the current version. Failed local history/draft writes
 do not block ATS cloud saves. Opening ATS also uploads older local-only history
 after checking the remote list, without replacing newer cloud entries. A fresh
 signed-in browser can restore the source and editable workspace from Cloudflare.
 Pending, failed or signed-out saves are not crash-safe: keep the tab open until
 cloud confirmation. Originals absent from legacy history still need reattachment.
+
+The Resume workspace keeps **Review** on the left, inline document editing
+in the centre and **Document / Design** on the right. Post-check ATS results use
+the same 340px review rail, header, typography and finding treatment, with the
+original PDF in the centre and no empty editing panel. The ATS setup dialog,
+source choices, scoring and explicit re-check consent are unchanged.
+
+Selecting a finding highlights its relevant passage on the page and opens its
+prepared proposal, factual question or guidance. Opening a finding makes no AI
+request. Smaller screens switch between the review rail and document without
+losing the finding. Review and Document retain independent scrolling.
+A selected ATS finding is carried into Edit /
+Continue editing only when the review identity and original finding still match.
+Edits retain the historical score until a new explicit assessment.
+
+Both ATS surfaces share the compact score summary: a66px gold ring with the
+recorded number centred, and the band, target context and full explanation beside
+it. The ring is labelled as a score out of100, not a success probability; missing
+scores are shown as unavailable rather than zero. No animated count-up or new
+scoring calculation is introduced. The editor puts this block first; the
+**Review information** popover contains the target and collapsed source options.
+Recorded essentials remain available without empty diagnostic blocks. Re-check remains
+explicit and available; historical-review warnings remain visible.
+The post-check score summary supplies the single divider above cloud-save
+status; the adjacent status block does not add another border or top padding.
+
+New consented reviews prepare validated suggestions together; Apply stays explicit
+and preserves original sources. The bottommost **Archived suggestions** module
+retains author decisions and supports current-item restoration, while older-review
+items remain historical. Normal views do not show sample authoring controls.
+**Version history** shows PDF downloads and named restore points, not routine
+autosaves; internal recovery versions remain intact. Preview/download of an older
+checkpoint never replaces the draft, and explicit Restore can be undone.
+See the [Resume workspace contracts](resume-preview/README.md) for the combined
+toolbar, PDF floaty, parser pane, inline editor and preservation behavior.
+
+The [unified assessment specification](resume-assessment.md) defines the next
+local assessment contract and evaluation gates. It does not change current
+scores, launch/setup, historical results or assessment execution. Candidate
+contract/evaluator and an opt-in loopback-only Studio pilot connector now exist,
+with inventory/evidence approval, assessment/challenge, actual provider receipts,
+browser-origin phase budgets and full-envelope local history. The55offline tests
+include the real Studio request helpers with fake HTTP responses, not paid AI.
+An additional8tests (2units/6actual-browser cases) now cover the gated local
+candidate dialog, uploaded/original/checked-export iframe binding and scripted development
+examples. Use `candidate=1` on a loopback editor URL, then **Review > Preview
+candidate assessment**. Ordinary/production sessions remain unchanged. The dialog
+assesses only the chosen actual file, never a substituted canvas, and does not
+replace the current score. Checked-export preparation saves pending edits and
+preserves PDF verification; uploaded originals are not automatically attached.
+The document-independent flow is also available from ATS New setup and the
+original review when the parent loopback Studio URL has `candidate=1`. It reuses
+the same iframe/dialog without creating or migrating an editor; one additional
+actual-Studio test covers both launchers, selected site files, stale/missing inputs
+and unchanged legacy history. The local `serve.py` helper now sets JavaScript MIME
+for `.mjs` workers; existing processes require an approved restart. No shared
+server was restarted here. Server-authoritative cross-device budgets/private storage
+and real quality validation still precede any approved scoring cutover.
+
+Checked candidate PDFs now compare authored experience associations and entry
+order against actual native/row-order PDF probes, showing exact field spans and
+unresolved ambiguity before AI consent and in the report. This is not independent
+original-file or column-aware ATS parsing; uploaded originals get no authored
+verdict. Eleven new structure tests include real two-font/multipage PDFs.
+Shared verification tolerates dropped invisible soft-hyphen/zero-width controls,
+not missing visible words/digits/punctuation. Checked evidence omits recognized
+page counters while retaining raw geometry. The owner's original Summary/Phone
+failure is not diagnosed by fictional reproductions. Admin and Prepare remain
+desktop-only; Phone refers to the resume field. JS1.20/CSS1.10/adminCSS1.215.
+Candidate UI and structure suites run in the mandatory `resume-workspace`
+browser shard, not the browser-free root job. New original and checked PDFs also
+receive reference-free order probes: native, row and an unselected two-region
+hypothesis where a repeated gutter permits one. Dates/tables and unsupported
+writing geometry remain ambiguous/unknown, not an ATS failure or employer
+verdict. Candidate extraction separates distant same-row runs; legacy defaults
+remain unchanged. Both judgment passes receive fixed uncertainty metadata without
+excluded positional text.73candidate/structure and8UI cases pass, including a real
+two-column original. Current ResumeJS1.20/CSS1.10/adminCSS1.215.
+Exact excerpt-to-PDF locations are now reconstructed from text items and line
+boundaries, including repeated wording and late-drawn bullets. Shared evidence/
+citation details expose those locations without sending positional arrays to
+models. JD review/report also shows every segment, proposed disposition and
+linked criteria; unscored segments remain inspectable, invalid coverage cannot
+be approved.75candidate/structure and9UI cases pass, plus a final focused PDF
+UI check. Source provenance does not prove semantic attribution or JD accuracy.
+The integrated source-attribution-v1 contract now requires quoted experience
+groups and complete excerpt/JD semantic challenges within the existing calls.
+Disputed/incomplete attribution and unmapped experience text withhold affected
+judgments; unresolved JD segments withhold role conclusions. The report retains
+proposals, exact sources and both passes, including after history restoration.
+82candidate/semantic/PDF cases and10UI cases pass. Four scripted examples are
+development checks, not independent model-quality evidence. Local Steps3-5
+mechanisms are implemented; real-provider/held-out acceptance remains gated.
+The shared candidate presentation now revalidates the full envelope before
+showing one summary and prioritized evidence-linked actions. Shared source/JD
+causes are deduplicated, unused supported alternatives do not become gaps, and
+ambiguous originals never borrow editor field IDs. Native/row-confirmed PDF
+locations are not approved Apply targets. Steps6-7 are implemented locally;
+the owner target now extends throughStep10; Steps8-10 are recorded below.
+46focused contracts,10candidate UI cases,37existing Node cases (including72ATS
+assertions) and3protected browser cases pass. ResumeJS1.21; no score cutover.
+Step8 is now implemented locally: selected checked-PDF fields can receive a
+claim-mapped revision, a question or a no-change decision, with a separate
+challenge and whole-phase budget reservation. Explicit author review precedes
+named-checkpoint/CAS Apply; uncertainty blocks it. Full receipts and provenance
+are retained; undo/redo works and no paid recheck is automatic.56focused contracts,
+11UI cases plus a final focused revision case,37existing Node cases and4protected
+browser cases pass. ResumeJS1.22. Step9 is recorded below; central spending and independent quality remain pending.
+Step9 now supports explicit edited-PDF rechecks with the frozen original
+inventory, fresh evidence/consent and only two new assessment/challenge calls.
+Validated comparisons retain each version's evidence and distinguish improved,
+worsened, unchanged, unresolved and non-comparable observations without a score.
+The original browser budget and full baseline must still exist; target/model/
+inventory changes cannot silently create easier comparisons. Result/comparison
+history is written atomically; cross-reload input restoration remains pending.
+64contracts/11candidate UI/37existing Node/4protected browser cases pass.
+ResumeJS1.23; Step10 is recorded below; independent quality acceptance remains.
+Step10 now has a dedicated owner-gated central worker budget using conditional
+private R2 writes. One fixed owner budget reserves complete phases and claims
+each stage before a single provider attempt; concurrent devices, reloads and
+lost acknowledgements cannot duplicate a stage or reset the ceiling. The server
+owns model prices/caps; failures stay reserved. Studio defaults to this authority;
+browser development mode must be explicitly selected and is never a fallback.
+Central candidate requests alone are covered, not other AI or old local usage.
+`RESUME_ASSESSMENT_POLICY` is deliberately absent from live configuration;
+see the assessment specification for its schema and separate approval gate.
+72candidate contracts/12UI/31worker regressions/37existing Node cases and four
+protected browser journeys pass offline. ResumeJS1.24; Steps1-10local mechanisms
+are implemented. Durable full private history, quality gates and release remain.
+
+ATS suggestion cards share the review's priority badges, title/explanation
+hierarchy and suggested-wording styling in both surfaces. Each suggestion has a
+subtle elevated background, a full 1px border, 12px squircle corners, 12px internal
+padding and 12px separation. Selection adds an accent border/inset marker without
+moving the content. The editor shows the
+explanation instead of repeating the title; suggested wording starts expanded,
+remains collapsible and is explicitly not applied. Original-PDF pin numbers
+remain in the review; the editor uses priority dots without implying a PDF
+location. General recommendations are distinguished from unresolved field
+anchors. All editor functionality remains: rationale/evidence and cited-field
+navigation, preparing revisions, follow-up questions/resolutions, setting aside
+with reasons/evidence and reopening. Detailed mapping status remains under
+Rationale and evidence. Non-ATS rubric cards retain their existing presentation.
+
+Back returns to the owning ATS flow (or the local sample
+library); the duplicate header folder/close controls and privacy labels are gone.
+Save confirmation is a compact **Saved** indicator beside the document name, not
+a storage-provider/version footer. Saving, failed-save and conflict states retain
+their recovery actions and never imply an unconfirmed save succeeded.
+**Preview PDF** is the primary PDF entry; original files, source comparison and
+export history remain under **Review > Files & evidence**. Original/PDF/Sources
+tabs and the static "No live changes"/"AI on request" labels are removed. There is
+no Canvas tab: **Back to document** returns from PDF/original viewing, while
+evidence navigation restores its originating finding and scroll position.
+This is a workspace presentation/navigation change: PDF generation/verification, original bytes,
+version history, AI consent and storage semantics are unchanged.
 
 Local save failures keep changes in memory with an explicit warning and retry.
 Do not close the tab until retry succeeds. Authenticated cloud writes use an

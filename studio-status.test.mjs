@@ -12,12 +12,13 @@ import { contentRevision, publicationConflict, gitContentRevision } from "./src/
 import { createRefreshGate } from "./src/js/studio-refresh.mjs";
 import { agentRequestOptions, prepareRequestOptions } from "./src/js/ai-task-agent.mjs";
 import { normalizeAiModel, rankAiModels } from "./src/js/ai-model-router.mjs";
+import { AI_TEXT_REQUEST_ATTEMPTS } from "./src/js/ai-request-limits.mjs";
 
 const source = readFileSync(new URL("./src/js/admin-studio.js", import.meta.url), "utf8");
 const styles = postcss.parse(readFileSync(new URL("./css/admin.css", import.meta.url), "utf8"));
 test("Prepare transport uses known service capacity or omits optional limits without inventing a cap", async () => {
   const start=source.indexOf('  async function aiTextRequest('),end=source.indexOf('  function aiProviderFailure(',start),requests=[];
-  const request=runInNewContext(source.slice(start,end)+';aiTextRequest',{aiNoTemperature:new Set(),fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {status:200};}});
+  const request=runInNewContext(source.slice(start,end)+';aiTextRequest',{AI_TEXT_REQUEST_ATTEMPTS,aiNoTemperature:new Set(),fetch:async(url,options)=>{requests.push(JSON.parse(options.body));return {status:200};}});
   for(const provider of ['openai','gemini','anthropic']){
     const body=provider==='gemini'?{generationConfig:{maxOutputTokens:500}}:{max_tokens:500,max_completion_tokens:500};
     await request({provider,routingMaxTokens:48000},'service-model','mock',{},body,null,{outputPolicy:'model'});

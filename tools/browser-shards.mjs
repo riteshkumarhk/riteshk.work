@@ -10,7 +10,7 @@ const journey = 'Journey';
 export const browserShards = {
   authoring: [{ files: [deck], pattern: '^' + authoring }],
   sections: [{ files: [deck], skipPattern: '^' + authoring }],
-  'resume-workspace': [{ files: ['resume-workspace.test.mjs'] }],
+  'resume-workspace': [{ files: ['resume-workspace.test.mjs', 'resume-assessment-ui.test.mjs', 'resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs'] }],
   journey: [{ files: [recovery], pattern: journey }],
   recovery: [{ files: [
     'admin-session.browser.test.mjs',

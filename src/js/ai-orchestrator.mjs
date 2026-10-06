@@ -77,7 +77,8 @@ export function createAiOrchestrator({ catalog = createAiCatalog(), store = crea
         const discovered = await catalog.discover(config, { signal: options.signal, refresh: options.refresh, useReference: state.policy.useReference });
         endpoints.set(discovered.scope, config);
         const maxCost = options.maxCost ?? (options.costPolicy === "selection" ? null : state.policy.maxCost);
-        const ranked = rankAiModels(discovered.models, task, { ...options, maxCost, observations: state.observations, now: now(), scope: discovered.scope,
+        const models = options.isEligible === undefined ? discovered.models : discovered.models.filter(options.isEligible);
+        const ranked = rankAiModels(models, task, { ...options, maxCost, observations: state.observations, now: now(), scope: discovered.scope,
           incumbent: state.incumbents[JSON.stringify([discovered.scope, task])] });
         ranked.forEach((choice, index) => choices.push({ ...choice, scope: discovered.scope, preferred: index === 0 }));
       } catch (error) { options.signal?.throwIfAborted(); failures.push(error); }

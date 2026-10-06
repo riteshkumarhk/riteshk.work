@@ -13,6 +13,10 @@
 --------------------------------------------------------------------------- */
 import { build, context } from "esbuild";
 import { uiCornersPlugin } from "./tools/ui-corners.mjs";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+import { baselineCodeFingerprint, BASELINE_CODE_FILES } from "./tools/resume-baseline-accounting.mjs";
 
 const watch = process.argv.includes("--watch");
 
@@ -25,7 +29,17 @@ const options = {
   entryPoints: [...ENTRIES.map((name) => ({ in: `src/js/${name}.js`, out: name })), { in: 'src/js/workflow.jsx', out: 'workflow' }],
   outdir: "js",
   bundle: true,
-  plugins: [uiCornersPlugin()],
+  plugins: [uiCornersPlugin(), {
+    name: "baseline-source-binding",
+    setup(builder) {
+      builder.onLoad({ filter: /[\\/]src[\\/]js[\\/]admin-studio\.js$/ }, async ({ path }) => ({
+        contents: "const BASELINE_SOURCE_SHA256 = " + JSON.stringify(await baselineCodeFingerprint()) + ";\n" + await readFile(path, "utf8"),
+        loader: "js",
+        resolveDir: dirname(path),
+        watchFiles: BASELINE_CODE_FILES.map(name => fileURLToPath(new URL(name, import.meta.url))),
+      }));
+    },
+  }],
   // Safe minification: esbuild renames LOCALS + strips whitespace/dead code only.
   // Property mangling stays OFF, so window.RK.* , localStorage keys and Web-Crypto
   // string params ("AES-GCM"/"PBKDF2") are all preserved.

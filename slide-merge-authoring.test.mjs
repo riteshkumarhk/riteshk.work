@@ -7,6 +7,7 @@ import { COMPOSITION_RESPONSE_SCHEMA, compositionRequest, compositionRevision, p
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { transform } from "esbuild";
+import { AI_TEXT_REQUEST_ATTEMPTS } from "./src/js/ai-request-limits.mjs";
 
 const options = { plain: String, fontFamily: 2 };
 const data = { work: [{ id: "case", title: "Case", study: { blocks: [{ type: "gallery", heading: "A simpler path", items: [{ src: "original.png", caption: "Two steps instead of five" }] }, { type: "metrics", items: [{ value: "20%", label: "Completion increase" }] }] } }] };
@@ -19,6 +20,7 @@ async function textAdapters(fetch, usage = []) {
     return { aiChatOnce, aiStream };
   })()`, {
     fetch,
+    AI_TEXT_REQUEST_ATTEMPTS,
     aiUsageFromJson: runInNewContext(`(${source.slice(source.indexOf("function aiUsageFromJson"), source.indexOf("function aiUsageScheduleFlush")).trim()})`),
     aiUsageRecord: (provider, model, input, output, context) => usage.push([provider, model, input, output, ...(context ? [context] : [])]),
     TextDecoder
