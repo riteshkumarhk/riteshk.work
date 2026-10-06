@@ -59,6 +59,7 @@ import {
   assessResume,
   extractResumePdfText,
   structureResumeText,
+  resumeNeedsSourceRebuild,
 } from "./resume-workspace.mjs";
 import {
   renderResumeHtml,
@@ -79,6 +80,7 @@ import {
 import "../../css/resume-preview.css";
 import { createHostedResumeClient, resumeSaveFailureFeedback, observeResumeViewControls, RESUME_CANVAS_STORAGE_KEY, readResumeCanvasMode, saveResumeCanvasMode } from "./resume-hosted.mjs";
 import { atsEditorReview } from "./resume-ats.mjs";
+import { rebuildResumeWithAI, resumeRebuildPacket, resumeAtsChecks } from "./resume-rebuild.mjs";
 import { resumeReviewSections, resumeFindingTargets, observeResumeContext, observeResumeInfo } from "./resume-review-presentation.mjs";
 import { ResumeCandidateReview } from "./resume-assessment-ui.jsx";
 import { commitAssessmentRevision } from "./resume-assessment-revisions.mjs";
@@ -461,6 +463,8 @@ function App() {
   const [canvasMode, setCanvasMode] = useState(readResumeCanvasMode);
   const [proposalDraft, setProposalDraft] = useState(null);
   const [aiConfiguration, setAiConfiguration] = useState(null);
+  const [rebuildDraft, setRebuildDraft] = useState(null);
+  const [atsChecks, setAtsChecks] = useState([]), [historyTab, setHistoryTab] = useState("versions"), [selectedCheck, setSelectedCheck] = useState(null);
   const [aiConsent, setAiConsent] = useState(false);
   const [aiPacket, setAiPacket] = useState(null);
   const [requirementsConsent, setRequirementsConsent] = useState(false);
@@ -507,6 +511,7 @@ function App() {
     saveTimer = useRef(null),
     inFlight = useRef(null),
     task = useRef(null),
+    sourceRebuild = useRef(null),
     fileInput = useRef(null),
     frame = useRef(null),
     canvas = useRef(null),
@@ -522,6 +527,7 @@ function App() {
   const install = (record) => {
     task.current?.cancel();
     task.current = null;
+    sourceRebuild.current = null;
     setBusy(null);
     const document = structuredClone(record.document);
     live.current = {
@@ -709,6 +715,17 @@ function App() {
     const result = frame.current?.contentWindow?.resumeInline?.finish();
     if (result) acceptInlineEdit(result);
   };
+  const focusReviewNavigation = (reviewNavigation) => {
+    const current = live.current.document, review = current.aiReview;
+    if (reviewNavigation?.reviewId !== (current.ats?.reviewId || current.rebuiltFrom?.reviewId) || !reviewNavigation?.finding || review?.kind !== "ats") return;
+    const index = review.result?.fixes?.findIndex(finding => JSON.stringify(finding) === JSON.stringify(reviewNavigation.finding)) ?? -1;
+    if (index < 0) return;
+    const proposal = current.proposals?.find(item => item.findingIndex === index && item.reviewAt === review.at && !current.dismissed?.includes(item.id));
+    const targets = resumeFindingTargets(review.findings[index], review, resumeFields(current.model), proposal);
+    pendingFindingFocus.current = true; pendingFieldScroll.current = targets[0];
+    setFocusedFinding(index); setPreviewFieldIds(targets); setSelectedField(null);
+    findingContextFocus.current = true; setFindingContextOpen(true); openReview();
+  };
   const load = async (id, initialContext = null) => {
     finishInlineEdit();
     const generation = ++navigation.current;
@@ -741,22 +758,35 @@ function App() {
         setLegacyConflict(true); setConflict(record); setSaveState('conflict'); setDialog('conflict');
         setError('Legacy ATS copies differ. Recover them as separate variants before saving.');
       }
-      const review = live.current.document.aiReview, reviewNavigation = context.reviewNavigation;
+      const reviewNavigation = context.reviewNavigation;
       setReturnToReview(!!reviewNavigation?.reviewId);
+      if (reviewNavigation?.reviewId && !reviewNavigation.editRole && !live.current.conflict) {
+        const data = await refreshLibrary();
+        if (generation !== navigation.current) return;
+        const current = live.current.document;
+        const rebuilt = data.documents.filter(row => !row.document.archived && row.document.rebuiltFrom?.id === id &&
+          row.document.rebuiltFrom.signature === resumeSignature(current) && !resumeNeedsSourceRebuild(row.document));
+        if (!reviewNavigation.rebuild && rebuilt.length === 1) return load(rebuilt[0].document.id, context);
+        if (resumeNeedsSourceRebuild(current)) {
+          const answers = new Set((current.evidenceAnswers || []).map(answer => answer.sourceId));
+          const originals = data.sources.filter(source => current.sourceIds.includes(source.id) && !answers.has(source.id));
+          if (originals.length === 1) await rebuildOriginal(originals[0], reviewNavigation);
+          else {
+            sourceRebuild.current = { documentId: id, reviewNavigation };
+            setDialog("rebuild-source");
+          }
+          return record;
+        }
+      }
+      if (reviewNavigation?.rebuild && !live.current.conflict) {
+        await openFeedbackRebuild();
+        return record;
+      }
       if (reviewNavigation?.editRole && reviewNavigation.reviewId === live.current.document.ats?.reviewId && !context.legacyConflict) {
         setTargetInput(structuredClone(live.current.document.target));
         setDialog("target");
       }
-      if (reviewNavigation?.reviewId === live.current.document.ats?.reviewId && reviewNavigation?.finding && review?.kind === "ats") {
-        const index = review.result?.fixes?.findIndex(finding => JSON.stringify(finding) === JSON.stringify(reviewNavigation.finding)) ?? -1;
-        if (index >= 0) {
-          const proposal = live.current.document.proposals?.find(item => item.findingIndex === index && item.reviewAt === review.at && !live.current.document.dismissed?.includes(item.id));
-          const targets = resumeFindingTargets(review.findings[index], review, resumeFields(live.current.document.model), proposal);
-          pendingFindingFocus.current = true; pendingFieldScroll.current = targets[0];
-          setFocusedFinding(index); setPreviewFieldIds(targets); setSelectedField(null);
-          findingContextFocus.current = true; setFindingContextOpen(true); openReview();
-        }
-      }
+      focusReviewNavigation(reviewNavigation);
       return record;
     } catch (failure) {
       setError(failure.message);
@@ -1399,6 +1429,52 @@ function App() {
     try { setAiConfiguration(await studioBridge.configuration(window)); }
     catch (failure) { setError(failure.message); }
   };
+  const openFeedbackRebuild = async (prepared = live.current.document) => {
+    setAiConsent(false); setError(""); setAiConfiguration(null);
+    setRebuildDraft({ document: structuredClone(prepared), sourceSignature: resumeSignature(live.current.document), review: JSON.stringify(live.current.document.aiReview) });
+    setDialog("feedback-rebuild");
+    try {
+      resumeRebuildPacket(prepared, sources);
+      setAiConfiguration(hosted ? await studioBridge.configuration(window) : await api("ai/config"));
+    } catch (failure) { setError(failure.message); }
+  };
+  const runFeedbackRebuild = async () => {
+    if (busy || !aiConsent || !aiConfiguration?.available || !rebuildDraft) return;
+    if (hosted && aiConfiguration.rebuildResponseVersion !== 1) { setError("Reopen Studio before rebuilding. No AI request was made."); return; }
+    const currentTask = createResumeTask(live.current.document), pending = rebuildDraft;
+    task.current?.cancel(); task.current = currentTask;
+    const current = () => task.current === currentTask && !currentTask.signal.aborted &&
+      resumeSignature(live.current.document) === pending.sourceSignature && JSON.stringify(live.current.document.aiReview) === pending.review;
+    setBusy("feedback-rebuild"); setError("");
+    try {
+      await persist();
+      if (!current()) throw new Error("The resume or feedback changed. Reopen Rebuild; nothing was replaced.");
+      const result = await rebuildResumeWithAI(pending.document, {
+        sources, provider: aiConfiguration.provider, model: aiConfiguration.model, signal: currentTask.signal,
+        getCurrent: () => current() ? pending.document : null,
+        complete: async request => {
+          const { signal, ...input } = request;
+          const payload = { ...input, provider: aiConfiguration.provider, model: aiConfiguration.model };
+          const response = hosted ? await studioBridge.complete(payload, window, signal) : await api("ai/complete", { method: "POST", body: JSON.stringify(payload), signal });
+          return response.text;
+        },
+      });
+      if (!current()) throw new Error("The resume or feedback changed. The late rebuild was discarded.");
+      result.rebuiltFrom.signature = pending.sourceSignature;
+      const record = await api("resumes", { method: "POST", signal: currentTask.signal, body: JSON.stringify({ document: result }) });
+      if (!current()) return;
+      await refreshLibrary();
+      if (!current()) return;
+      install(record); setLeftPane("none"); setLibraryOpen(false); setSheetOpen(true);
+      setDialog(null); setRebuildDraft(null); setAiConsent(false);
+      const unresolved = result.aiRebuild.fixes.filter(fix => fix.status === "needs-fact").length;
+      setMessage("Resume rebuilt using ATS feedback." + (unresolved ? " " + unresolved + " findings need facts; see Rebuild details." : "") + " Run ATS check when you are ready.");
+    } catch (failure) {
+      if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message);
+    } finally {
+      if (task.current === currentTask) { task.current = null; setBusy(null); }
+    }
+  };
   const runHostedAssessment = async () => {
     if (busy || !aiConsent || !aiConfiguration?.available) return;
     if (aiConfiguration.reviewResponseVersion !== 1) { setError("Studio needs to be reopened before this updated review can run. No AI request was made."); return; }
@@ -1418,7 +1494,9 @@ function App() {
       const aiReview = atsEditorReview(currentTask.snapshot, result, { sources });
       const nextProposals = [...proposals.filter(proposal => proposal.origin !== "ai"), ...(aiReview.actions || []).filter(action => action?.kind === "revision").map(action => action.proposal)];
       setProposals(nextProposals);
-      change({ ...live.current.document, assessment, aiReview, proposals: nextProposals, aiQuestion: null, aiResolution: null }, 'ATS checked current PDF', false);
+      const checked = { ...live.current.document, assessment, aiReview, proposals: nextProposals, aiQuestion: null, aiResolution: null };
+      checked.atsChecks = resumeAtsChecks({ document: checked });
+      change(checked, 'ATS checked current PDF', false);
       await persist();
       if (task.current !== currentTask || currentTask.signal.aborted) return;
       setDialog(null); setFocusedFinding(null); setFindingContextOpen(false); setPreviewFieldIds([]); openReview(); setMessage('ATS check saved for this resume and target.');
@@ -1535,6 +1613,8 @@ function App() {
       await persist();
       const record = await api("resumes/" + doc.id);
       const checkpoints = resumeHistoryCheckpoints(record).reverse();
+      const checks = resumeAtsChecks(record);
+      setAtsChecks(checks); setSelectedCheck(checks[0] || null); setHistoryTab("versions");
       setVersions(checkpoints);
       setCompareVersion(checkpoints[0] || null);
       setHistoryPreview(false);
@@ -1688,7 +1768,7 @@ function App() {
       return { left: outer.left + inner.left * ratio, right: outer.left + inner.right * ratio, top: outer.top + inner.top * ratio, bottom: outer.top + inner.bottom * ratio };
     }, frame.current?.contentDocument);
   }, [!!contactEdit, contactEdit?.fieldId, rendering, zoom, pageInfo, availableWidth, availableHeight]);
-  const importFile = async (file, rebuildFrom = null) => {
+  const importFile = async (file, rebuildFrom = null, reviewNavigation = null) => {
     if (!file) return;
     const currentTask = createResumeTask(live.current.document), generation = navigation.current;
     task.current?.cancel(); task.current = currentTask;
@@ -1745,10 +1825,13 @@ function App() {
         throw new Error(
           "The extracted text exceeds the sample limit. Nothing was silently truncated.",
         );
-      setImported({ file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation, rebuildFrom });
+      setImported({ file, bytes, text, pages, unmappedGlyphs, unresolvedMarkers, structure: structureResumeText(text), documentId: currentTask.snapshot.id, generation, rebuildFrom, reviewNavigation });
       setDialog("import");
     } catch (failure) {
-      if (isCurrent()) setError(failure.message);
+      if (isCurrent()) {
+        setError(failure.message);
+        if (rebuildFrom) setDialog("rebuild-source");
+      }
     } finally {
       if (task.current === currentTask) {
         setBusy(null); task.current = null;
@@ -1756,12 +1839,13 @@ function App() {
       }
     }
   };
-  const rebuildOriginal = async (source) => {
+  const rebuildOriginal = async (source, reviewNavigation = null) => {
     if (busy || !source) return;
     document.getElementById("resume-review-info")?.hidePopover();
     const currentTask = createResumeTask(live.current.document), generation = navigation.current;
     task.current?.cancel(); task.current = currentTask;
     setBusy("rebuild-source"); setError("");
+    sourceRebuild.current = { documentId: live.current.document.id, reviewNavigation };
     try {
       await persist();
       let blob;
@@ -1772,15 +1856,16 @@ function App() {
         blob = await response.blob();
       }
       if (task.current !== currentTask || currentTask.signal.aborted || navigation.current !== generation || !currentTask.accept(live.current.document, true)) return;
-      await importFile(new File([blob], source.name, { type: source.type }), structuredClone(live.current.document));
+      await importFile(new File([blob], source.name, { type: source.type }), structuredClone(live.current.document), reviewNavigation);
     } catch (failure) {
-      if (task.current === currentTask && !currentTask.signal.aborted) setError(failure.message);
+      if (task.current === currentTask && !currentTask.signal.aborted) { setError(failure.message); setDialog("rebuild-source"); }
     } finally {
       if (task.current === currentTask) { setBusy(null); task.current = null; }
     }
   };
   const cancelImport = () => {
     task.current?.cancel(); task.current = null;
+    sourceRebuild.current = null;
     setBusy(null); setDialog(null); setImported(null);
   };
   const saveSource = async (createNew) => {
@@ -1790,6 +1875,9 @@ function App() {
     const isCurrent = () => task.current === currentTask && !currentTask.signal.aborted && navigation.current === generation;
     setBusy("import-save"); setError("");
     try {
+      if (createNew && pendingImport.rebuildFrom && resumeNeedsSourceRebuild(pendingImport.structure)) {
+        throw new Error("This source still has no recognizable sections. Choose a text-based original with section headings; no rebuilt copy was created.");
+      }
       let binary = "";
       for (const byte of new Uint8Array(pendingImport.bytes))
         binary += String.fromCharCode(byte);
@@ -1817,8 +1905,16 @@ function App() {
         next.importNotes = { sourcePages: pendingImport.pages, sourceId: source.id, method: pendingImport.structure.method, warnings: pendingImport.structure.warnings };
         if (pendingImport.rebuildFrom) {
           const original = pendingImport.rebuildFrom;
-          next.rebuiltFrom = { id: original.id, signature: resumeSignature(original) };
+          next.rebuiltFrom = { id: original.id, signature: resumeSignature(original), reviewId: original.ats?.reviewId || original.rebuiltFrom?.reviewId };
           if (original.aiReview?.kind === "ats") next.aiReview = atsEditorReview(next, original.aiReview.signals || { res: original.aiReview.result, at: original.aiReview.at }, { historical: true });
+        }
+        if (pendingImport.reviewNavigation?.rebuild) {
+          const original = pendingImport.rebuildFrom;
+          const prepared = { ...structuredClone(original), model: next.model, sourceIds: [...new Set([...original.sourceIds, source.id])], importNotes: next.importNotes };
+          prepared.atsChecks = resumeAtsChecks({ document: original });
+          setImported(null); sourceRebuild.current = null;
+          await openFeedbackRebuild(prepared);
+          return;
         }
         const record = await api("resumes", {
           method: "POST",
@@ -1829,6 +1925,8 @@ function App() {
         await refreshLibrary();
         if (!isCurrent()) return;
         install(record);
+        if (pendingImport.reviewNavigation?.reviewId) setReturnToReview(true);
+        focusReviewNavigation(pendingImport.reviewNavigation);
       } else {
         mutate((next) => {
           if (!next.sourceIds.includes(source.id))
@@ -1843,6 +1941,7 @@ function App() {
       openReview();
       setDialog(null);
       setImported(null);
+      sourceRebuild.current = null;
       setMessage("Original bytes retained. No AI rewrite was applied.");
     } catch (failure) {
       if (isCurrent()) setError(failure.message);
@@ -2104,7 +2203,7 @@ function App() {
   );
 
   return (
-    <div className="adm is-open rws" onPointerDownCapture={finishInlineEdit} data-history={historyTick} data-view={libraryView ? "library" : mode} data-resizing-inspector={resizingInspector ? "true" : undefined} data-resizing-pdf-panel={resizingPdfPanel ? "true" : undefined} data-pdf-panel={pdfPanelVisible ? "open" : "closed"} style={{ "--rws-inspector-width": `${displayedInspectorWidth}px`, "--rws-pdf-panel-width": `${displayedPdfPanelWidth}px` }}>
+    <div className="adm is-open rws" onPointerDownCapture={finishInlineEdit} data-review-panel={doc.aiRebuild && !doc.aiReview ? "closed" : "open"} data-history={historyTick} data-view={libraryView ? "library" : mode} data-resizing-inspector={resizingInspector ? "true" : undefined} data-resizing-pdf-panel={resizingPdfPanel ? "true" : undefined} data-pdf-panel={pdfPanelVisible ? "open" : "closed"} style={{ "--rws-inspector-width": `${displayedInspectorWidth}px`, "--rws-pdf-panel-width": `${displayedPdfPanelWidth}px` }}>
       {!hosted && <header className="rws-header">
         <div className="rws-brand">
           <span className="rws-monogram">RK</span>
@@ -2178,6 +2277,7 @@ function App() {
               </button>
             ))}
           </div>}
+          {hosted && mode === "edit" && <button className="adm__bar-prev" disabled={!!busy} onClick={openAtsCheck}><ScanText size={15} /><span className="adm__bar-prev-tx">ATS check</span></button>}
           <button
             className="adm__bar-prev rws-preview-pdf"
             onClick={() =>
@@ -2199,6 +2299,8 @@ function App() {
             { label: "Download PDF", icon: FileDown, action: () => renderPdf(true) },
             { label: "Rename resume", icon: TextCursorInput, action: () => openDialog("rename", doc.name) },
             { label: "Duplicate resume", icon: Copy, action: () => openDialog("duplicate", doc.name + " / copy") },
+            ...(doc.aiReview?.kind === "ats" ? [{ label: "Rebuild using ATS feedback", icon: RefreshCw, action: () => openFeedbackRebuild() }] : []),
+            ...(doc.aiRebuild ? [{ label: "Rebuild details", icon: Info, action: () => setDialog("rebuild-details") }] : []),
             ...(originalFiles.length === 1 ? [{ label: "Rebuild from original", icon: RefreshCw, action: () => rebuildOriginal(originalFiles[0]) }] : []),
             { label: doc.archived ? "Restore from archive" : "Archive this resume", icon: Archive, action: () => setDialog("archive") },
             { label: "View version history", icon: History, action: showVersions },
@@ -2267,7 +2369,7 @@ function App() {
         </aside>}
         <main className="rws-workspace">
           {mode !== "pdf" && <div className={"rws-document-bar" + (mode === "edit" && proposalVisit?.destination !== "source" ? " is-overlay" : "")}>
-            {!(proposalVisit && mode === "edit") && <IconButton icon={ScanText} label="Review" className="rws-outline-toggle" onClick={() => { setLibraryOpen(value => !value); setSheetOpen(false); }} />}
+            {!(proposalVisit && mode === "edit") && (!doc.aiRebuild || doc.aiReview) && <IconButton icon={ScanText} label="Review" className="rws-outline-toggle" onClick={() => { setLibraryOpen(value => !value); setSheetOpen(false); }} />}
             {mode !== "edit" && <div className="rws-canvas-tools">
               {mode === "source" && (
                 <span className="rws-verified">
@@ -2552,7 +2654,7 @@ function App() {
             )}
           </div>
         </aside>
-        <aside className="rws-review-panel rws-left-panel" aria-label="Resume review" hidden={libraryView || mode === "pdf" || leftPane !== "review"}>
+        <aside className="rws-review-panel rws-left-panel" aria-label="Resume review" hidden={libraryView || mode === "pdf" || leftPane !== "review" || !!doc.aiRebuild && !doc.aiReview}>
           {reviewHeading}
           <div className="rws-inspector-content" ref={inspectorContent}>
                 {candidateEnabled && <button className="rws-text-button" disabled={!!busy} onClick={() => setDialog("candidate-assessment")}><ScanText size={13} />Preview candidate assessment</button>}
@@ -2569,7 +2671,7 @@ function App() {
                         {atsReview.summary && <p>{atsReview.summary}</p>}
                       </div>
                     </div>
-                    <div className="rws-score-actions"><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review again</button></div>
+                    <div className="rws-score-actions"><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />Review again</button><button className="rws-text-button" disabled={!!busy} onClick={() => openFeedbackRebuild()}><Pencil size={13} />Rebuild using feedback</button></div>
                   </> : <><div className="rws-panel-heading"><h3><BookOpen size={17} />Resume review</h3>{reviewContext}</div><button className="rws-text-button" disabled={!!busy} onClick={hosted ? openAtsCheck : openAiReview}><RefreshCw size={13} />{doc.aiReview ? "Review again" : "Review resume"}</button></>}
                   {busy?.startsWith("ai-") && <div className="rws-inline-actions"><span role="status">Review in progress</span><button className="rws-text-button" onClick={cancelAiReview}>Cancel</button></div>}
                   {doc.aiReview ? <>
@@ -2739,7 +2841,11 @@ function App() {
         type="file"
         accept=".pdf,.docx,.txt,.md"
         hidden
-        onChange={(event) => importFile(event.target.files[0])}
+        onChange={(event) => {
+          const recovery = sourceRebuild.current;
+          const rebuilding = recovery?.documentId === live.current.document.id;
+          importFile(event.target.files[0], rebuilding ? structuredClone(live.current.document) : null, rebuilding ? recovery.reviewNavigation : null);
+        }}
       />
       {["rename", "new", "duplicate"].includes(dialog) && (
         <Dialog
@@ -2978,12 +3084,29 @@ function App() {
         {busy && <p role="status">{busy === "ai-requirements" ? "Reading job requirements" : "Assessing resume evidence"}</p>}
         {error && <p role="alert" className="rws-inline-warning">{error}</p>}
       </Dialog>}
+      {dialog === "rebuild-details" && doc.aiRebuild && <Dialog title="Rebuild details" onClose={() => setDialog(null)} actions={<button className="btn" onClick={() => setDialog(null)}>Close</button>}>
+        <p>{doc.aiRebuild.summary}</p>
+        <p>No new ATS check has been run by rebuilding. Choose ATS check when you want fresh results.</p>
+        {doc.aiRebuild.fixes.map(fix => <section className="rws-review-finding" key={fix.id}><h4>{fix.finding}</h4><p>{fix.status.replaceAll("-", " ")}: {fix.reason}</p></section>)}
+      </Dialog>}
+      {dialog === "feedback-rebuild" && <Dialog wide title="Rebuild using ATS feedback" onClose={cancelAiReview} actions={<>
+        <button className="btn" onClick={cancelAiReview}>Cancel</button>
+        <button className="btn btn--primary" disabled={!!busy || !aiConsent || !aiConfiguration?.available || !!error} onClick={runFeedbackRebuild}>{busy === "feedback-rebuild" ? "Rebuilding..." : "Rebuild resume"}</button>
+      </>}>
+        <p>Use all findings from this ATS check and the target job to rewrite the complete resume. Name, contacts, roles, dates and qualifications stay intact. Missing facts are not invented.</p>
+        <p>The rebuilt copy opens in the current editor without the old score or findings. Your previous draft and check stay in history. A new ATS check runs only when you request it.</p>
+        <p>{aiConfiguration?.available ? aiConfiguration.provider + " / " + aiConfiguration.model : "Connect AI in Studio settings to rebuild."}</p>
+        <label className="chk"><input type="checkbox" checked={aiConsent} disabled={!!busy} onChange={event => setAiConsent(event.target.checked)} />Allow this resume, target, ATS feedback and attached evidence to be sent for an AI rebuild.</label>
+        <p className="rws-muted">This is a paid writing request using your Studio configuration, not an ATS recheck.</p>
+        {busy === "feedback-rebuild" && <p role="status">Rewriting the resume using all feedback. Your original is unchanged.</p>}
+        {error && <p className="rws-inline-warning" role="alert">{error}</p>}
+      </Dialog>}
       {dialog === "versions" && (
         <Dialog
           wide
           title="Version history"
           className={"rws-history-dialog" + (historyPreview ? " has-preview" : "")}
-          headingActions={<div className="adm__hm-seg rws-history-toggle" role="group" aria-label="Version preview">
+          headingActions={historyTab === "versions" && <div className="adm__hm-seg rws-history-toggle" role="group" aria-label="Version preview">
             <button className={historyPreview ? "is-on" : ""} aria-pressed={historyPreview} disabled={!compareVersion} onClick={() => setHistoryPreview(true)}>Preview ON</button>
             <button className={!historyPreview ? "is-on" : ""} aria-pressed={!historyPreview} onClick={() => setHistoryPreview(false)}>Preview OFF</button>
           </div>}
@@ -2993,8 +3116,8 @@ function App() {
               <button className="btn" onClick={() => setDialog(null)}>
                 Close
               </button>
-              <button className="btn" disabled={!compareVersion || historyPdfBusy || compareVersion.document.ats && !compareVersion.document.ats.layoutAccepted && !historyLayoutAccepted} onClick={downloadHistoryPdf}><Download size={15} />Download PDF</button>
-              {compareVersion && compareVersion.number !== version && (
+              {historyTab === "versions" && <button className="btn" disabled={!compareVersion || historyPdfBusy || compareVersion.document.ats && !compareVersion.document.ats.layoutAccepted && !historyLayoutAccepted} onClick={downloadHistoryPdf}><Download size={15} />Download PDF</button>}
+              {historyTab === "versions" && compareVersion && compareVersion.number !== version && (
                 <button
                   className="btn btn--primary"
                   onClick={() => restoreVersion(compareVersion.number)}
@@ -3005,6 +3128,23 @@ function App() {
             </>
           }
         >
+          <div className="adm__hm-seg" role="group" aria-label="History type">
+            <button className={historyTab === "versions" ? "is-on" : ""} aria-pressed={historyTab === "versions"} onClick={() => setHistoryTab("versions")}>Versions</button>
+            <button className={historyTab === "ats" ? "is-on" : ""} aria-pressed={historyTab === "ats"} onClick={() => { setHistoryTab("ats"); setHistoryPreview(false); }}>ATS checks</button>
+          </div>
+          {historyTab === "ats" ? <div className="rws-versions-layout">
+            <div className="rws-version-list">
+              {!atsChecks.length && <p>No ATS checks saved for this resume.</p>}
+              {atsChecks.map(check => <button key={check.id} aria-pressed={selectedCheck?.id === check.id} onClick={() => setSelectedCheck(check)}><span><strong>{check.review.score ?? "Unscored"} / {check.review.target?.company || check.review.target?.role || "General ATS check"}</strong><small>{time(check.review.at)}</small></span></button>)}
+            </div>
+            {selectedCheck && <section aria-label="Historical ATS check">
+              <p>This check belongs to its submitted resume, not your current draft. Opening history runs no AI and changes nothing.</p>
+              <h3>{selectedCheck.review.score == null ? "Unscored" : selectedCheck.review.score + " / 100"}{selectedCheck.review.band && " - " + selectedCheck.review.band}</h3>
+              <p>{selectedCheck.review.summary}</p>
+              {selectedCheck.review.findings.map((finding, index) => <section className="rws-review-finding" key={index}><h4>{finding.action}</h4><p>{finding.reason}</p></section>)}
+              <details><summary>Checked resume and target</summary><p>{selectedCheck.input?.target?.jd || selectedCheck.review.target?.jd || "No job description."}</p>{selectedCheck.input ? <>{selectedCheck.input.kind === "document-snapshot" && <p>This is the saved document snapshot. The exact extracted PDF text was not retained for this older check.</p>}<pre className="rws-import-text">{selectedCheck.input.text}</pre></> : <p>The exact checked input is not available in this older record. No current draft is substituted.</p>}</details>
+            </section>}
+          </div> : <>
           <div className="rws-versions-layout">
             <div className="rws-version-sidebar">
             <div className="rws-checkpoint"><TextField label="Restore point name" value={input} onChange={setInput} /><button className="btn" disabled={!input.trim() || !!busy} onClick={async () => { setBusy("checkpoint"); try { await checkpoint(input.trim(), "manual"); setInput(""); await showVersions(); } catch (failure) { setError(failure.message); } finally { setBusy(null); } }}><Plus size={15} />Save restore point</button></div>
@@ -3040,6 +3180,7 @@ function App() {
           <p className="rws-history-note">{compareVersion ? `Saved content and design from version ${compareVersion.number}. Your current draft is unchanged until you choose Restore.` : "Edits are autosaved without adding history checkpoints."}</p>
           {compareVersion?.document.ats && !compareVersion.document.ats.layoutAccepted && <label className="chk"><input type="checkbox" checked={historyLayoutAccepted} disabled={!historyPdf} onChange={event => setHistoryLayoutAccepted(event.target.checked)} />I have reviewed this regenerated migrated layout before downloading.</label>}
           {historyPdfError && <p role="alert" className="rws-inline-warning">{historyPdfError}</p>}
+          </>}
           {error && <p role="alert" className="rws-inline-warning">{error}</p>}
         </Dialog>
       )}
@@ -3107,6 +3248,17 @@ function App() {
           </div>
         </Dialog>
       )}
+      {dialog === "rebuild-source" && (
+        <Dialog title="Rebuild from the original source" onClose={cancelImport} actions={
+          <>
+            <button className="btn" onClick={cancelImport}>Cancel</button>
+            <button className="btn btn--primary" disabled={!!busy} onClick={() => fileInput.current.click()}>Choose original file</button>
+          </>
+        }>
+          <p>This saved draft contains an unstructured import. Choose its original PDF, DOCX or text file to recover the name, contacts and sections into a separate copy. Your existing draft and history stay unchanged.</p>
+          {originalFiles.map(source => <button className="rws-text-button" key={source.id} disabled={!!busy} onClick={() => rebuildOriginal(source, sourceRebuild.current?.reviewNavigation)}>{source.name}<RefreshCw size={13} /></button>)}
+        </Dialog>
+      )}
       {dialog === "import" && imported && (
         <Dialog
           wide
@@ -3117,8 +3269,8 @@ function App() {
               <button className="btn" onClick={cancelImport}>
                 Cancel
               </button>
-              <button className="btn" disabled={!!busy} onClick={() => saveSource(true)}>
-                {imported.rebuildFrom ? "Create rebuilt copy" : "Create resume from text"}
+              <button className="btn" disabled={!!busy || !!imported.rebuildFrom && resumeNeedsSourceRebuild(imported.structure)} onClick={() => saveSource(true)}>
+                {imported.reviewNavigation?.rebuild ? "Continue to AI rebuild" : imported.rebuildFrom ? "Create rebuilt copy" : "Create resume from text"}
               </button>
               {!imported.rebuildFrom && <button
                 className="btn btn--primary"
@@ -3146,10 +3298,17 @@ function App() {
             The original file stays byte-for-byte. Creating a resume imports
             editable text, not the original document's design.
           </p>
-          {imported.rebuildFrom && <p>Your current resume, edits and history stay unchanged. The rebuilt copy retains your target role and original review as historical guidance, with findings matched to the new fields.</p>}
-          <p>Attaching adds a source without replacing your draft or earlier files. Existing reviews stay tied to their original inputs; review again after attaching a different file.</p>
+          {imported.rebuildFrom && <p>Your current resume, edits and history stay unchanged. {imported.reviewNavigation?.rebuild ? "These recovered fields become the source for the AI rebuild using all ATS feedback. No revised copy is saved until that rebuild succeeds." : "The rebuilt copy retains your target role and original review as historical guidance, with findings matched to the new fields."}</p>}
+          {!imported.rebuildFrom && <p>Attaching adds a source without replacing your draft or earlier files. Existing reviews stay tied to their original inputs; review again after attaching a different file.</p>}
+          {!!imported.rebuildFrom && resumeNeedsSourceRebuild(imported.structure) && <p className="rws-error" role="alert">This source still has no recognizable sections. No rebuilt copy will be created. Cancel and choose a text-based original with section headings.</p>}
           {!!imported.unmappedGlyphs && <p className="rws-error" role="alert">{imported.unmappedGlyphs} characters have no readable mapping in this PDF. They remain marked in the extracted text and need comparison with the original.</p>}
           {!!imported.unresolvedMarkers && <p className="rws-error" role="alert">{imported.unresolvedMarkers} bullet markers could not be matched to a line. Check their positions against the original.</p>}
+          <section aria-label="Recognized profile">
+            <p><strong>Name:</strong> {imported.structure.model.name || "Not identified"}</p>
+            <p><strong>Professional title:</strong> {imported.structure.model.title || "Not identified"}</p>
+            <p><strong>Email:</strong> {imported.structure.model.contact.email || "Not identified"}</p>
+            <p><strong>Phone:</strong> {imported.structure.model.contact.phone || "Not identified"}</p>
+          </section>
           <ul aria-label="Recognized sections">
             {imported.structure.model.sections.map(section => <li key={section.id}>{section.heading}: {section.kind}{section.items ? ' / ' + section.items.length + ' entries' : ''}</li>)}
           </ul>

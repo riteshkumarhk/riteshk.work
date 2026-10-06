@@ -124,7 +124,7 @@ export async function startPreview({ port = 5530, directory = join(tmpdir(), 'rk
         if (request.headers.origin !== origin && request.headers.origin !== 'http://localhost:' + port) throw fault('Same-origin AI request required.', 403);
         if (!ai) throw fault('Connect the existing Studio AI session before requesting a review.', 503);
         const input = await body();
-        if (!['requirements', 'assessment', 'revision'].includes(input.stage) || typeof input.system !== 'string' || typeof input.user !== 'string' || input.system.length + input.user.length > 100000 || !Number.isInteger(input.maxTokens) || input.maxTokens < 1 || input.maxTokens > 12000) throw fault('Invalid bounded AI request.');
+        if (!['requirements', 'assessment', 'revision', 'rebuild'].includes(input.stage) || typeof input.system !== 'string' || typeof input.user !== 'string' || input.system.length + input.user.length > 100000 || !Number.isInteger(input.maxTokens) || input.maxTokens < 1 || input.maxTokens > 12000) throw fault('Invalid bounded AI request.');
         const controller = new AbortController();
         const close = () => { if (!response.writableEnded) controller.abort(); };
         response.on('close', close);

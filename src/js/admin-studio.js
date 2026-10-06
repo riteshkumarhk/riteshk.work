@@ -3527,7 +3527,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   async function atsRebuildOpen(ctx) {
     const id = ctx?.sessionId || atsvSessId;
     if (!id) { status("Open a saved ATS review first."); return; }
-    openResumeStudio({ entryId: id, reviewNavigation: atsvEditorNavigation(ctx) });
+    openResumeStudio({ entryId: id, reviewNavigation: { ...atsvEditorNavigation(ctx), rebuild: true } });
   }
   /* ---------- editable résumé workspace: edit the structured model in-place, re-check ATS
      live, then generate the vector PDF from the edited model. One model, three consumers
@@ -4845,7 +4845,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       }
       if (event.target.closest("[data-atsv-context-close]")) closeContext();
       if (event.target.closest("[data-atsv-address]")) {
-        if (ctx.wsId || ctx.resumeId) openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: atsvEditorNavigation(ctx) });
+        if (ctx.wsId || ctx.resumeId) openResumeStudio({ ...(ctx.wsId ? { entryId: ctx.wsId } : { resumeId: ctx.resumeId }), reviewNavigation: { ...atsvEditorNavigation(ctx), rebuild: true } });
         else atsRebuildOpen(ctx);
       }
     }, { signal: ctx.lifetime.signal });
@@ -21620,7 +21620,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
   function resumeStudioConfiguration(caller) {
     if (!resumeFrame || caller !== resumeFrame.contentWindow || !adminSession() || (adminSessionInfo()?.sessionId || adminSession()) !== resumeSession) throw new Error('This ATS editor session is closed.');
     const cfg = aiCfg('txt');
-    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection', reviewResponseVersion: 1 };
+    return { available: aiHasKey('txt'), provider: cfg.provider, model: cfg.model || 'Studio automatic selection', reviewResponseVersion: 1, rebuildResponseVersion: 1 };
   }
   async function resumeStudioAssessmentSource(document, exportId, caller, signal) {
     const config = resumeStudioConfiguration(caller);
@@ -21648,11 +21648,11 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     const file = new File([blob], artifact.name, { type: 'application/pdf' });
     const text = ((await fbExtractFile(file)) || '').replace(/\s+/g, ' ').trim();
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
-    return { config, file, text, signature };
+    return { config, file, text, signature, pdfSha256: artifact.sha256 };
   }
   async function resumeStudioAssess(document, exportId, caller, signal, baselineAccounting) {
     if (baselineAccounting && !resumeCandidateEnabled()) throw new Error('Bounded baseline execution is available only in the local candidate development workspace.');
-    const { config, file, text, signature } = await resumeStudioAssessmentSource(document, exportId, caller, signal);
+    const { config, file, text, signature, pdfSha256 } = await resumeStudioAssessmentSource(document, exportId, caller, signal);
     let supportingEvidence = [];
     if (!baselineAccounting && document.sourceIds.length) {
       const response = await resumeStudioRequest('library', { signal }, caller);
@@ -21662,13 +21662,14 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     }
     const result = await atsEvaluate(text, file, document.target.level, document.target.company, document.target.jd, signal, baselineAccounting, { prepareActions: !baselineAccounting, supportingEvidence });
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
-    return { ...result, provider: config.provider, model: config.model, exportId: typeof exportId === 'object' ? exportId.entry.id : exportId, signature };
+    return { ...result, provider: config.provider, model: config.model, exportId: typeof exportId === 'object' ? exportId.entry.id : exportId, signature,
+      checkedInput: { kind: 'submitted-text', text, target: structuredClone(document.target), pdfSha256 } };
   }
   async function resumeStudioComplete(input, caller, signal) {
     const config = resumeStudioConfiguration(caller);
     if (!config.available || input.provider !== config.provider || input.model !== config.model) throw new Error('The Studio AI configuration changed. Reopen the revision request.');
-    if (input.stage !== 'revision' || typeof input.system !== 'string' || typeof input.user !== 'string' || input.user.length > 60000 || input.system.length > 20000) throw new Error('Invalid ATS revision request.');
-    const text = await prepareAiText(aiCfg('txt'), input.system, input.user, { task: 'analysis', json: true, temperature: 0, signal });
+    if (!['revision', 'rebuild'].includes(input.stage) || typeof input.system !== 'string' || typeof input.user !== 'string' || input.user.length > (input.stage === 'rebuild' ? 120000 : 60000) || input.system.length > 20000) throw new Error('Invalid ATS revision request.');
+    const text = await prepareAiText(aiCfg('txt'), input.system, input.user, { task: input.stage === 'rebuild' ? 'writing' : 'analysis', json: true, temperature: 0, signal });
     resumeStudioConfiguration(caller); signal?.throwIfAborted();
     return { text };
   }

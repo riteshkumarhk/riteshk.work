@@ -4,6 +4,12 @@ export const RESUME_DESIGN = Object.freeze({ font: 'inter', size: 'a4', accent: 
 const copy = value => structuredClone(value);
 export const resumeSignature = document => JSON.stringify([document.id, document.name, document.target, document.model, document.design, document.sourceIds]);
 
+export function resumeNeedsSourceRebuild(document) {
+  const sections = document.model?.sections;
+  return !!(sections?.length === 1 && sections[0].kind === 'text' &&
+    sections[0].heading === 'Imported content' && sections[0].text?.trim());
+}
+
 export function validateResumeCheckpoint(kind = null) {
   if (kind !== null && kind !== 'manual' && kind !== 'export') throw Object.assign(new Error('Invalid resume checkpoint type.'), { status: 400 });
   return kind;

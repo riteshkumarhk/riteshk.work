@@ -192,6 +192,7 @@
 }
 .rws-left-panel { grid-area: navigation; min-width: 0; }
 .rws-left-panel[hidden] { display: none !important; }
+.rws[data-view="edit"][data-review-panel="closed"] .rws-body { grid-template-columns: minmax(0, 1fr) var(--rws-inspector-width, 316px); grid-template-areas: "document properties"; }
 .rws-workspace { grid-area: document; }
 .rws-inspector { grid-area: properties; }
 .rws-review-panel {

@@ -1,6 +1,6 @@
 # Resume Studio
 
-Studio has one resume workflow: Prepare > Resume ATS Check > review > Rebuild your resume / Continue editing > Review again > checked PDF. Saved resumes remain in ATS history; there is no separate Resumes tab or legacy editable canvas. The editor uses dedicated private storage and the authenticated parent bridge. The separate local preview uses a filesystem store and its experimental evidence rubric; it is not a second production workflow. Automated hosted tests use synthetic authentication and Miniflare, not real account or device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
+Studio has one resume workflow: Prepare > Resume ATS Check > review > Rebuild your resume > clean editable resume > explicit ATS check > further refinement. Saved resumes remain in ATS history; there is no separate Resumes tab or legacy editable canvas. The editor uses dedicated private storage and the authenticated parent bridge. The separate local preview uses a filesystem store and its experimental evidence rubric; it is not a second production workflow. Automated hosted tests use synthetic authentication and Miniflare, not real account or device acceptance. Enhancv is the baseline to surpass, not a claim of proven superiority.
 
 The reviewer toolbar's Rebuild/Continue actions and each finding's **Rebuild to
 fix** action use the same hosted editor. PDF extraction retains actual line
@@ -12,13 +12,42 @@ unmapped PDF glyphs remain explicit, not guessed or rewritten. Section anchors
 and uniquely matching quotes navigate to the corresponding field; ambiguous
 and document-wide guidance never invent a text target.
 
-For an already-saved flattened import, **Rebuild from original** is available
-under source options (and Resume options when there is one original). It opens
-the import review and creates a separate rebuilt copy, retaining the target and
-historical ATS guidance. It does not overwrite the draft, original bytes,
-exports or history, approve findings or invoke a paid model. Reconstruction is
-not an automatic AI rewrite or regrade. New migrations can re-extract retained
+**Rebuild your resume** and **Rebuild to fix** now use all saved ATS feedback
+and the target job for a complete AI-assisted rewrite, not just editor
+navigation or a source import. Explicit consent uses the existing Studio AI
+configuration, model-capacity output policy and writing transport. The local
+experimental transport retains its priced reservation and 12,000-token output
+ceiling; it does not override production Prepare policy. Every editable field, section, entry and
+finding must be accounted for. Name, contacts, roles, employers, dates and
+credentials remain protected; changed wording requires source citations.
+Source numbers cannot be dropped or changed and unsupported skills cannot be
+inserted. Citations establish provenance, not independent semantic verification.
+Missing facts remain unresolved rather than invented. Invalid, incomplete or
+late output fails without overwriting the source draft or silently retrying.
+Sections/entries can be reordered, but the rebuild does not merge roles or
+delete achievements to force a page count.
+
+An already-saved flattened import first reconstructs from retained original
+bytes and shows recognized name/contact fields and sections. **Continue to AI
+rebuild** then opens consent; no source-only intermediate is passed off as the
+completed rewrite. Missing or ambiguous originals require explicit file
+selection; an unstructured result cannot be confirmed. **Continue editing
+resume** reuses a unique rebuilt copy of the unchanged source without an AI
+call. **Rebuild from original** remains a separate source-only recovery action
+that creates a copy and keeps historical guidance. Neither path overwrites the
+original draft, source bytes or history. New migrations can re-extract retained
 original bytes without modifying the legacy review snapshot or its identity.
+
+The AI-rebuilt copy opens in the modern editor with no old score/findings panel
+or empty navigation column. **ATS check** is explicit; rebuilding never runs
+an assessment. **Rebuild details** in Resume options explains each finding's
+disposition and missing facts. After a requested check, the new results appear
+and **Rebuild using feedback** supports another iteration. Existing version
+history now includes an **ATS checks** tab with dated, read-only results,
+targets and submitted text. Older document snapshots are labelled as such;
+unavailable checked text is disclosed rather than replaced with today's draft.
+Opening history runs no AI, restores nothing and creates no version checkpoint.
+Visible versions remain export/manual checkpoints only.
 Every supported section's authored bullet text, including education/custom
 entries, prints and remains subject to strict PDF text verification. Original
 page count is not imposed on recovery copies by shrinking or omitting content.

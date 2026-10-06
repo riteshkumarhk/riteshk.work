@@ -3,7 +3,7 @@ import { assessmentResponseSchema } from './resume-assessment-output.mjs';
 
 export const REVIEW_VERSION = 1;
 export const REVIEW_PROMPT_VERSION = 3;
-export const RESUME_COMPLETION_LIMITS = Object.freeze({ requirements: 8000, assessment: 12000, revision: 4000, challenge: 12000 });
+export const RESUME_COMPLETION_LIMITS = Object.freeze({ requirements: 8000, assessment: 12000, revision: 4000, challenge: 12000, rebuild: 12000 });
 export function resumeCompletionReservation(request, pricing, at = Date.now()) {
   if (!Number.isFinite(at) || !pricing || !Number.isFinite(pricing.input) || !Number.isFinite(pricing.output) || pricing.input <= 0 || pricing.output <= 0 || !Number.isFinite(pricing.checkedAt) || at - pricing.checkedAt > 86400000 || pricing.checkedAt > at) throw new Error('Verified current input and output pricing is required.');
   if (!Object.hasOwn(RESUME_COMPLETION_LIMITS, request.stage) || !Number.isInteger(request.maxTokens) || request.maxTokens < 1 || request.maxTokens > RESUME_COMPLETION_LIMITS[request.stage] || typeof request.system !== 'string' || typeof request.user !== 'string') throw new Error('Invalid bounded review request.');

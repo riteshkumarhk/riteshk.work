@@ -9,7 +9,7 @@ import { runInNewContext } from 'node:vm';
 import { reviewPacket, validateRequirements, validateReview, reviewResumeWithAI, inventoryResumeWithAI, reviseResumeWithAI, boundedResumeCompletion, decideResumeFinding, resumeFindingDecision, resumeReviewFindings } from './src/js/resume-review.mjs';
 import { readResumePdf, verifyResumePdf } from './src/js/resume-pdf.mjs';
 import { createHostedResumeClient, resumeSaveFailureFeedback } from './src/js/resume-hosted.mjs';
-import { extractResumePdfText, structureResumeText } from './src/js/resume-workspace.mjs';
+import { extractResumePdfText, structureResumeText, resumeNeedsSourceRebuild } from './src/js/resume-workspace.mjs';
 import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorReview } from './src/js/resume-ats.mjs';
 import { AI_TEXT_REQUEST_ATTEMPTS } from './src/js/ai-request-limits.mjs';
 import { assertStudioToolbar, assertResumeViewTools } from './tools/studio-toolbar-assertions.mjs';
@@ -195,6 +195,13 @@ test('Structured import preserves clear roles, dates, bullets and uncertain sour
 });
 
 const rebuildSourceText = 'Alex Example\nSenior Product Designer\nalex@example.test\n+44 1234567890\nexample.test\nLondon, UK\n\nSUMMARY\nDesigning accessible services\nwith research evidence.\n\nEXPERIENCE\nSenior Designer\nExample Studio\n03/2022 - Present\nLondon, UK\n- Led accessible product\nresearch and prototyping.\n\nEXPERIENCE\nProduct Designer\nEarlier Studio\n01/2018 - 02/2022\nRemote, UK\n- Built useful workflows.\n\nEDUCATION\nBachelor in Design\nExample University\n2014 - 2018\n- Communication Design\n\nPROJECTS\nPortfolio project\nIndependent work\n- Shipped an accessible demo.';
+
+test('Only the unstructured import fallback requires source reconstruction', () => {
+  assert.equal(resumeNeedsSourceRebuild(structureResumeText(rebuildSourceText.replace(/\s+/g, ' '))), true);
+  assert.equal(resumeNeedsSourceRebuild(structureResumeText(rebuildSourceText)), false);
+  assert.equal(resumeNeedsSourceRebuild(fixture()), false);
+  assert.equal(resumeNeedsSourceRebuild({ model: { sections: [{ kind: 'text', heading: 'Experience', text: 'An authored narrative.' }] } }), false);
+});
 
 test('ATS source reconstruction fills header and typed sections, merges repeated headings and anchors guidance', async () => {
   const entry = { id: 'line-rebuild', tool: 'ats', kind: 'review', at: 42, payload: { text: rebuildSourceText.replace(/\s+/g, ' '), res: { score: 63, fixes: [
@@ -1925,7 +1932,9 @@ describe('Resume browser acceptance', () => {
       assert.equal(await page.locator('.prep-dialog').count(), 0);
       assert.equal(await page.locator('.adm__main').evaluate(element => element.inert), false);
       await page.locator('[data-act="prep-open"][data-tool="ats"]').click();
-      const review = { id: 'migration-review', tool: 'ats', kind: 'review', at: 10, payload: { text: 'Original immutable resume before edits.', state: { mode: 'job', jd: 'Design accessible enterprise workflows', company: 'SyntheticCo' }, res: { score: 62, summary: 'Original assessment', checks: [], fixes: [{ point: 'Clarify summary', priority: 'high', anchor: { quote: 'Preserved edited summary.' } }] }, resumeDocument: { version: 1, sha256: row.document.sourceIds[0], name: 'original.txt', size: bytes.length, type: 'text/plain', lastModified: 0 } } };
+      const rebuildBytes = Buffer.from(rebuildSourceText);
+      const rebuildSource = await store.source({ name: 'rebuild-original.txt', type: 'text/plain', text: rebuildSourceText }, rebuildBytes);
+      const review = { id: 'migration-review', tool: 'ats', kind: 'review', at: 10, payload: { text: rebuildSourceText.replace(/\s+/g, ' '), state: { mode: 'job', jd: 'Design accessible enterprise workflows', company: 'SyntheticCo' }, res: { score: 62, summary: 'Original assessment', checks: [], fixes: [{ point: 'Clarify summary', priority: 'high', anchor: { quote: 'Preserved edited summary.' } }] }, resumeDocument: { version: 1, sha256: rebuildSource.id, name: 'rebuild-original.txt', size: rebuildBytes.length, type: 'text/plain', lastModified: 0 } } };
       review.payload.res.fixes.push(
         { category: 'story', point: 'Explain the role transition', priority: 'low', anchor: { type: 'none' } },
         { category: 'interview', point: 'Prepare for scrutiny', priority: 'low', anchor: { type: 'none' } },
@@ -1959,10 +1968,101 @@ describe('Resume browser acceptance', () => {
         await page.setViewportSize({ width: 1440, height: 1000 });
       };
       await assertReviewerAction('Rebuild your resume');
+      const brokenImport = await store.create(await migrateAtsResume(review, null, [rebuildSource.id]));
+      assert.equal(resumeNeedsSourceRebuild(brokenImport.document), true);
+      await page.evaluate(() => {
+        window.rebuildCalls = [];
+        window.originalRebuildComplete = window.__RKStudio.resume.complete;
+        window.originalRebuildConfiguration = window.__RKStudio.resume.configuration;
+        window.__RKStudio.resume.configuration = caller => ({ ...window.originalRebuildConfiguration(caller), available: true, provider: 'scripted', model: 'fixture' });
+        window.__RKStudio.resume.complete = async input => {
+          window.rebuildCalls.push(input);
+          const packet = JSON.parse(input.user);
+          return { text: JSON.stringify({
+            fields: packet.fields.map(field => ({ id: field.id, text: field.id === 'summary' ? 'Accessible services designed through research.' : field.text, evidence: [packet.evidence.find(item => item.fieldId === field.id).id] })),
+            sectionOrder: packet.sections.map(section => section.id),
+            entryOrder: packet.sections.filter(section => section.items).map(section => ({ sectionId: section.id, itemIds: section.items.map(item => item.id) })),
+            fixes: packet.fixes.map((fix, index) => ({ id: fix.id, status: index === 0 ? 'applied' : 'needs-fact', reason: index === 0 ? 'Clarified research approach.' : 'More source facts are needed.', fieldIds: index === 0 ? ['summary'] : [] })),
+            summary: 'Rephrased the summary using existing evidence.',
+          }) };
+        };
+      });
       await page.getByRole('button', { name: 'Rebuild your resume', exact: true }).click();
+      const importReview = editor.getByRole('dialog', { name: 'Review imported source', exact: true });
+      await importReview.waitFor();
+      assert.match(await importReview.getByRole('region', { name: 'Recognized profile' }).innerText(), /Alex Example[\s\S]*alex@example.test[\s\S]*\+44 1234567890/);
+      assert.equal((await store.list()).documents.filter(row => row.document.rebuiltFrom?.id === brokenImport.document.id).length, 0, 'Opening Rebuild does not create or overwrite a draft');
+      await importReview.getByRole('button', { name: 'Cancel', exact: true }).click();
       await editor.getByRole('button', { name: 'Back to review', exact: true }).waitFor();
       await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
       await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      const sourceMetadata = await (await bucket.get('sources/meta/' + rebuildSource.id + '.json')).text();
+      await bucket.delete('sources/meta/' + rebuildSource.id + '.json');
+      await page.locator('.atsv__item[data-fi="0"]').press('Enter');
+      await page.getByRole('region', { name: 'Finding details', exact: true }).getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
+      await editor.getByRole('dialog', { name: 'Rebuild from the original source', exact: true }).waitFor();
+      await editor.locator('input[type=file]').setInputFiles({ name: 'unstructured.txt', mimeType: 'text/plain', buffer: Buffer.from('Still a single unstructured block without headings.') });
+      await importReview.waitFor();
+      assert.equal(await importReview.getByRole('button', { name: 'Continue to AI rebuild', exact: true }).isDisabled(), true);
+      assert.match(await importReview.getByRole('alert').innerText(), /no recognizable sections/);
+      assert.deepEqual(await store.get(brokenImport.document.id), brokenImport);
+      await importReview.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await bucket.put('sources/meta/' + rebuildSource.id + '.json', sourceMetadata);
+      await page.locator('.atsv__item[data-fi="0"]').press('Enter');
+      await page.getByRole('region', { name: 'Finding details', exact: true }).getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
+      await importReview.waitFor();
+      await importReview.getByRole('button', { name: 'Continue to AI rebuild', exact: true }).click();
+      await importReview.waitFor({ state: 'detached' });
+      const rebuildDialog = editor.getByRole('dialog', { name: 'Rebuild using ATS feedback', exact: true });
+      await rebuildDialog.waitFor();
+      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 0);
+      await rebuildDialog.getByRole('checkbox').check();
+      await rebuildDialog.getByRole('button', { name: 'Rebuild resume', exact: true }).click();
+      await rebuildDialog.waitFor({ state: 'detached' });
+      const repaired = (await store.list()).documents.find(row => row.document.rebuiltFrom?.id === brokenImport.document.id).document;
+      assert.equal(repaired.model.name, 'Alex Example');
+      assert.equal(repaired.model.contact.email, 'alex@example.test');
+      assert.equal(repaired.model.contact.phone, '+44 1234567890');
+      assert.equal(resumeNeedsSourceRebuild(repaired), false);
+      assert.equal(repaired.model.summary, 'Accessible services designed through research.');
+      assert.equal(repaired.aiReview, undefined, 'The previous score is not a review of the rebuilt resume');
+      assert.equal(repaired.atsChecks[0].review.score, 62);
+      assert.equal(await editor.getByRole('complementary', { name: 'Resume review', exact: true }).isVisible(), false);
+      assert.equal(await editor.getByRole('button', { name: 'Review again', exact: true }).isVisible(), false);
+      const rebuildCalls = await page.evaluate(() => window.rebuildCalls);
+      assert.equal(rebuildCalls.length, 1); assert.equal(rebuildCalls[0].stage, 'rebuild');
+      assert.equal(JSON.parse(rebuildCalls[0].user).fixes.length, review.payload.res.fixes.length);
+      const repairedCanvas = editor.frameLocator('.rws-paper');
+      await repairedCanvas.locator('.pagedjs_page [data-field="name"]').filter({ hasText: 'Alex Example' }).waitFor();
+      await repairedCanvas.locator('.pagedjs_page [data-field="contact.email"]').filter({ hasText: 'alex@example.test' }).waitFor();
+      await repairedCanvas.locator('.pagedjs_page [data-field="contact.phone"]').filter({ hasText: '+44 1234567890' }).waitFor();
+      assert.deepEqual(await store.get(brokenImport.document.id), brokenImport);
+      assert.deepEqual(Buffer.from((await store.sourceFile(rebuildSource.id)).bytes), rebuildBytes);
+      await resumeOption(editor, 'View version history');
+      const rebuiltHistory = editor.getByRole('dialog', { name: 'Version history', exact: true });
+      await rebuiltHistory.getByRole('button', { name: 'ATS checks', exact: true }).click();
+      assert.match(await rebuiltHistory.getByRole('region', { name: 'Historical ATS check' }).innerText(), /62[\s\S]*Clarify summary/);
+      await rebuiltHistory.getByRole('button', { name: 'Close', exact: true }).click();
+      await editor.getByRole('button', { name: 'ATS check', exact: true }).click();
+      await editor.getByRole('dialog', { name: 'Re-check ATS', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      assert.equal((await page.evaluate(() => window.rebuildCalls)).length, 1, 'Opening or cancelling a new check never calls AI');
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.locator('.atsv__bar [data-atsv-close]').click();
+      await page.locator('[data-act="ats-hist-open"][data-id="migration-review"]').click();
+      await page.getByRole('button', { name: 'Continue editing resume', exact: true }).click();
+      await repairedCanvas.locator('.pagedjs_page [data-field="name"]').filter({ hasText: 'Alex Example' }).waitFor();
+      assert.equal(await importReview.count(), 0, 'Reopening the unchanged source reuses its unique rebuilt copy');
+      assert.equal((await store.list()).documents.filter(row => row.document.rebuiltFrom?.id === brokenImport.document.id).length, 1);
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.evaluate(() => {
+        window.__RKStudio.resume.complete = window.originalRebuildComplete;
+        window.__RKStudio.resume.configuration = window.originalRebuildConfiguration;
+      });
       await page.locator('.atsv__bar [data-atsv-close]').click();
       await legacy.put('prep/ats/' + workspace.id + '.json', JSON.stringify(workspace));
       await page.evaluate(entries => localStorage.setItem('rk:prep:hist', JSON.stringify({ ats: entries })), [review, workspace]);
@@ -2014,6 +2114,11 @@ describe('Resume browser acceptance', () => {
       await readOnlyFinding.waitFor({ state: 'detached' });
       await reviewCard.press('Enter');
       await readOnlyFinding.getByRole('button', { name: 'Rebuild to fix', exact: true }).click();
+      await editor.getByRole('dialog', { name: 'Rebuild using ATS feedback', exact: true }).waitFor();
+      await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await editor.getByRole('button', { name: 'Back to review', exact: true }).click();
+      await page.locator('.adm__resume-host').waitFor({ state: 'detached' });
+      await page.getByRole('button', { name: 'Continue editing resume', exact: true }).click();
       await editor.locator('[data-context-finding="0"]').waitFor();
       assert.equal(await editor.locator('[data-ats-migration]').count(), 0);
       await editor.getByRole('button', { name: 'Review information', exact: true }).click();
@@ -2078,6 +2183,7 @@ describe('Resume browser acceptance', () => {
       await page.evaluate(() => {
         for (const [key, value] of Object.entries({ 'rk:ai:same': '0', 'rk:ai:mode': 'local', 'rk:ai:txt:provider': 'custom', 'rk:ai:txt:key': 'synthetic-only', 'rk:ai:txt:model': 'fixture-model', 'rk:ai:txt:base': location.origin + '/fake-ai' })) localStorage.setItem(key, value);
         window.atsMigrationCalls = [];
+        window.rebuildTransportCalls = [];
         const originalFetch = window.fetch;
         window.fetch = async (resource, options = {}) => {
           if (!String(resource).includes('/fake-ai')) return originalFetch(resource, options);
@@ -2087,12 +2193,28 @@ describe('Resume browser acceptance', () => {
             const packet = JSON.parse(user), decision = packet.candidate ? { action: 'finish', summary: 'Validated fixture result' } : { action: 'draft', modelRef: packet.draftModels[0], task: 'analysis', instruction: '', inputs: [], summary: 'Use the current saved resume' };
             return Response.json({ choices: [{ message: { content: JSON.stringify({ decision }) }, finish_reason: 'stop' }] });
           }
+          if (system.startsWith("Rebuild the author's COMPLETE resume")) {
+            window.rebuildTransportCalls.push(input);
+            const packet = JSON.parse(user);
+            return Response.json({ choices: [{ message: { content: JSON.stringify({ fields: packet.fields }) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
+          }
           window.atsMigrationCalls.push({ system, user });
           if (window.deferMigrationCheck) await new Promise(resolve => { window.releaseMigrationCheck = resolve; });
           const value = { responseVersion: 1, score: 79, band: 'Good', summary: 'Checked the current exported resume', checks: [], fixes: [{ point: 'Clarify research impact', priority: 'high', anchor: { quote: 'Current edited summary with accessibility and research outcomes.' }, response: { kind: 'question', question: 'Which outcome can you substantiate?', reason: 'No new metric was supplied.' } }], keywords: { present: [], missing: [] } };
           return Response.json({ choices: [{ message: { content: JSON.stringify(value) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
         };
       });
+      const transportResult = await page.evaluate(async () => {
+        const caller = document.querySelector('.adm__resume-host').contentWindow;
+        const configuration = window.__RKStudio.resume.configuration(caller);
+        return window.__RKStudio.resume.complete({ ...window.rebuildCalls[0], provider: configuration.provider, model: configuration.model }, caller);
+      });
+      assert.ok(JSON.parse(transportResult.text).fields.length > 0);
+      const transportCalls = await page.evaluate(() => window.rebuildTransportCalls);
+      assert.equal(transportCalls.length, 1);
+      assert.equal(transportCalls[0].max_tokens, undefined, 'Hosted Prepare retains its existing model-capacity output policy, not an arbitrary task cap');
+      assert.equal(transportCalls[0].max_completion_tokens, undefined);
+      assert.equal(await page.evaluate(() => window.atsMigrationCalls.length), 0, 'The actual writing bridge does not launch an ATS assessment');
       await openReviewPanel(editor);
       await page.evaluate(() => {
         window.originalReviewConfiguration = window.__RKStudio.resume.configuration;
@@ -2124,6 +2246,9 @@ describe('Resume browser acceptance', () => {
       const assessed = await store.get(migratedId);
       assert.equal(assessed.document.aiReview.kind, 'ats');
       assert.equal(assessed.document.aiReview.signature, resumeSignature(assessed.document));
+      assert.equal(assessed.document.atsChecks[0].input.kind, 'submitted-text');
+      assert.ok(assessed.document.atsChecks[0].input.text.includes('Current edited summary'));
+      assert.ok(assessed.document.atsChecks[0].input.pdfSha256);
       const inputs = await page.evaluate(() => window.atsMigrationCalls);
       assert.ok(inputs.some(input => input.user.includes('Current edited summary') && input.user.includes('Design accessible enterprise workflows')));
       assert.ok(inputs.every(input => !input.user.split('\n\nSUPPORTING EVIDENCE')[0].includes('Original immutable resume before edits')));
