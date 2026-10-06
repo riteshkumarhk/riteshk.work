@@ -1292,8 +1292,11 @@ test("slide eyedropper samples screen results over inserted sections and outside
     await page.locator('.merge-section-choices button').filter({ hasText: 'Inserted colour section' }).click();
     const section = page.locator('.lab-canvas > .merge-native-sections .merge-native-section').first();
     await section.waitFor();
+    const sectionContent = section.frameLocator('iframe.lab-section-component').locator('[data-section-runtime][data-component-type="text"]');
+    await sectionContent.waitFor();
     const original = await page.evaluate(() => JSON.stringify(window.__slideMerge.api.getSceneElements().find(element => element.customData?.sectionComponent)));
     await section.evaluate(element => { element.style.background = '#237b70'; });
+    await sectionContent.evaluate(element => { element.style.background = '#237b70'; });
     await page.locator('.merge-inspector').getByRole('button', { name: 'Close panel', exact: true }).click();
     await page.evaluate(() => {
       const api = window.__slideMerge.api;

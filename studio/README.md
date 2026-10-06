@@ -64,6 +64,10 @@ Presenter exit tests
 retain real clicks and closure/focus assertions, while accepting only the
 specific target-closed click error when the clicked DJ window actually closed.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
+Screen-eyedropper fixtures wait for inserted section content and color both its
+wrapper and rendered iframe stage; coloring only the wrapper leaves the actual
+section's theme background over the expected pixel. Keep screenshot sampling,
+exact color assertions and original scene-preservation checks.
 
 Case-study iframe tests wait for the embedded button to load, drain finite
 ancestor animations including transitions started while earlier ones finish,
