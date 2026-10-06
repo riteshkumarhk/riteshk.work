@@ -734,7 +734,7 @@ function App() {
       setBusy(null);
       const context = initialContext || (hosted ? await studioBridge.initialize(window, id) : {});
       const record = await api("resumes/" + id);
-      if (generation !== navigation.current || hosted && !window.frameElement?.isConnected) return;
+      if (generation !== navigation.current || studioBridge && !window.frameElement?.isConnected) return;
       install(record);
       let pending;
       try {
@@ -790,7 +790,7 @@ function App() {
       focusReviewNavigation(reviewNavigation);
       return record;
     } catch (failure) {
-      if (hosted && !window.frameElement?.isConnected) return;
+      if (studioBridge && !window.frameElement?.isConnected) return;
       setError(failure.message);
       if (initialContext?.reviewNavigation?.rebuild) studioBridge?.rebuildProgress?.(window, "error", failure.message);
     }
@@ -814,7 +814,7 @@ function App() {
         else setSaveState("saved");
       })
       .catch((failure) => {
-        if (hosted && !window.frameElement?.isConnected) return;
+        if (studioBridge && !window.frameElement?.isConnected) return;
         setSaveState("error");
         setError(failure.message);
         studioBridge?.rebuildProgress?.(window, "error", failure.message);

@@ -1138,6 +1138,8 @@ describe('Resume browser acceptance', () => {
       assert.equal(preview.store.get(document.id).document.model.sections[0].text, text + ' Composed text.');
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(document.id).document.model.sections[0].text, text, 'Toolbar Undo also works while typing');
+      await page.waitForFunction(signature => document.querySelector('.rws-paper')?.contentWindow?.resumeReady?.signature === signature,
+        resumeSignature(preview.store.get(document.id).document));
       const name = await inlineField(page, 'name');
       await name.press('Tab');
       await paper.locator('[data-inline-field="title"]:focus').waitFor();

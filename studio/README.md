@@ -56,7 +56,11 @@ CI bounds the browser-free build job to 15 minutes and each browser shard to
 CI uses the same persistent Python preview server as local validation.
 Cross-frame inline-edit tests await the matching save response after composition
 ends before inspecting Saved/outbox state; a previous Saved badge can still be
-visible before the parent receives the iframe message. Presenter exit tests
+visible before the parent receives the iframe message.
+Undo keyboard-navigation tests also await the matching rendered revision:
+a saved model or an earlier non-busy badge does not mean its replacement
+paginated frame is ready. The real Tab action and target-focus assertion remain.
+Presenter exit tests
 retain real clicks and closure/focus assertions, while accepting only the
 specific target-closed click error when the clicked DJ window actually closed.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
