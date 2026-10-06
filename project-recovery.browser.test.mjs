@@ -18,15 +18,21 @@ const launchOptions = { ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { execu
 async function clickSettledFrameButton(page, selector) {
   const frame = page.locator(selector);
   await frame.scrollIntoViewIfNeeded();
+  const button = page.frameLocator(selector).getByRole("button");
+  await button.waitFor({ state: "visible" });
   await frame.evaluate(async element => {
-    const animations = [];
-    for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
-      animations.push(...ancestor.getAnimations().filter(animation =>
-        animation.playState !== "finished" && Number.isFinite(animation.effect?.getComputedTiming().endTime)));
+    for (;;) {
+      const animations = [];
+      for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+        animations.push(...ancestor.getAnimations().filter(animation =>
+          animation.playState !== "finished" && Number.isFinite(animation.effect?.getComputedTiming().endTime)));
+      }
+      if (!animations.length) return;
+      await Promise.allSettled(animations.map(animation => animation.finished));
     }
-    await Promise.allSettled(animations.map(animation => animation.finished));
   });
-  await page.frameLocator(selector).getByRole("button").click();
+  await frame.click({ trial: true });
+  await button.click();
 }
 
 test("case-study iframe clicks wait for ancestor motion, not just the inner button", { timeout: 30000 }, async () => {
@@ -54,6 +60,43 @@ test("case-study iframe clicks wait for ancestor motion, not just the inner butt
     assert.equal(first, "motion-observed", "The iframe must not be clicked while ancestor motion is paused");
     assert.equal(await page.evaluate(() => window.clickedWhile), undefined);
     await page.evaluate(() => window.motion.finish());
+    await click;
+    assert.equal(await page.evaluate(() => window.clickedWhile), "finished");
+    assert.equal(await page.frameLocator("iframe").getByRole("button").innerText(), "Clicked");
+  } finally { await browser.close(); }
+});
+
+test("case-study iframe clicks also wait for motion started while an earlier transition finishes", { timeout: 30000 }, async () => {
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage();
+    await page.setContent('<div id="moving"><iframe srcdoc="<button onclick=&quot;parent.clickedWhile=parent.followUp.playState;this.textContent=\'Clicked\'&quot;>Prototype</button>"></iframe></div>');
+    await page.frameLocator("iframe").getByRole("button").waitFor();
+    await page.evaluate(() => {
+      const moving = document.getElementById("moving");
+      window.motion = moving.animate([{ transform: "translateY(60px)" }, { transform: "translateY(0)" }], { duration: 1000, fill: "both" });
+      window.motion.pause();
+      window.motion.finished.then(() => {
+        window.followUp = moving.animate([{ transform: "translateY(0)" }, { transform: "translateY(30px)" }], { duration: 1000, fill: "both" });
+        window.followUp.pause();
+      });
+      const getAnimations = moving.getAnimations.bind(moving);
+      moving.getAnimations = (...args) => {
+        window.motionObserved = true;
+        if (window.followUp) window.followUpObserved = true;
+        return getAnimations(...args);
+      };
+    });
+    const click = clickSettledFrameButton(page, "iframe");
+    await page.waitForFunction(() => window.motionObserved);
+    await page.evaluate(() => window.motion.finish());
+    const next = await Promise.race([
+      click.then(() => "clicked"),
+      page.waitForFunction(() => window.followUpObserved).then(() => "waiting"),
+    ]);
+    assert.equal(next, "waiting", "A completed animation snapshot does not mean the frame has stopped moving");
+    assert.equal(await page.evaluate(() => window.clickedWhile), undefined);
+    await page.evaluate(() => window.followUp.finish());
     await click;
     assert.equal(await page.evaluate(() => window.clickedWhile), "finished");
     assert.equal(await page.frameLocator("iframe").getByRole("button").innerText(), "Clicked");

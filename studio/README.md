@@ -61,6 +61,12 @@ retain real clicks and closure/focus assertions, while accepting only the
 specific target-closed click error when the clicked DJ window actually closed.
 Do not remove tests, add blanket retries or deploy through failed CI for speed.
 
+Case-study iframe tests wait for the embedded button to load, drain finite
+ancestor animations including transitions started while earlier ones finish,
+and check the outer iframe's actionability before the real inner-button click.
+One animation snapshot is insufficient; inner-frame stability does not prove
+that its parent has stopped moving. The prototype state assertions remain intact.
+
 Isolated editor, storage and presenter hosts use the shared
 `openIsolatedBrowserHost` fixture to create a stable same-origin document.
 Do not use the production 404 page as an empty host: its SPA redirect races
