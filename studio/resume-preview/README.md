@@ -117,6 +117,10 @@ PDF-export Worker: releasing these changes requires the matching Worker bundle,
 not only the Pages assets. A Pages-only release would leave editor/export
 rendering inconsistent.
 
+Browser coverage keeps optional-metadata assertions in the dedicated
+`optional-layout` fixture, which owns the award entry and canvas locator.
+Run it together with the inline-editing case when changing either fixture.
+
 The prompt supplies each field's numeric tokens and original skill list;
 numeric magnitude suffixes and plus signs must remain intact.
 Visible versions remain export/manual checkpoints only.

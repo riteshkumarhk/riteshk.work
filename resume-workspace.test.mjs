@@ -995,13 +995,6 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.equal(preview.store.get(document.id).document.model.summary, document.model.summary);
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
-      await canvas.locator('.pagedjs_page [data-field="award.title"]').first().click();
-      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('');
-      await saved(page);
-      await canvas.locator('.pagedjs_page [data-field="award.meta"]').waitFor({ state: 'detached' });
-      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('Example\nResearch practice');
-      await saved(page);
-      assert.equal(preview.store.get(document.id).document.model.sections.at(-2).items[0].meta, 'Example\nResearch practice');
       assert.equal(preview.store.get(document.id).document.model.summary, 'Typing on the page.\nNo lost caret.');
       const cancelled = await inlineField(page, 'summary');
       await cancelled.fill('Discard this edit'); await cancelled.press('Escape'); await saved(page);
@@ -1284,6 +1277,13 @@ describe('Resume browser acceptance', () => {
       await page.getByRole('button', { name: 'Undo', exact: true }).click(); await saved(page);
       assert.deepEqual(preview.store.get(document.id).document.model, before.model);
       await page.getByRole('button', { name: 'Redo', exact: true }).click(); await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="award.title"]').first().click();
+      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('');
+      await saved(page);
+      await canvas.locator('.pagedjs_page [data-field="award.meta"]').waitFor({ state: 'detached' });
+      await page.getByRole('textbox', { name: 'Details (optional)', exact: true }).fill('Example\nResearch practice');
+      await saved(page);
+      assert.equal(preview.store.get(document.id).document.model.sections.at(-2).items[0].meta, 'Example\nResearch practice');
       await canvas.locator('.pagedjs_page [data-field="practice.items"]').first().click();
       await page.getByRole('textbox', { name: 'Skill group title', exact: true }).fill('Design practice');
       await saved(page);
