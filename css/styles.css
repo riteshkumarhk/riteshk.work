@@ -253,10 +253,14 @@ html.lite .page { animation: none; }
   position: fixed; inset: 0; z-index: 850;
   background: var(--bg); padding: 6rem var(--pad) 2rem;
   display: flex; flex-direction: column; justify-content: center;
-  clip-path: inset(0 0 100% 0); transition: clip-path .6s var(--ease);
+  clip-path: inset(0 0 100% 0); transition: clip-path .6s var(--ease), visibility 0s linear .6s;
   pointer-events: none;
+  /* Closed = not painted at all, so a mobile-Safari repaint can never flash the overlay while scrolling. */
+  visibility: hidden;
 }
-.menu.is-open { clip-path: inset(0 0 0 0); pointer-events: auto; }
+.menu.is-open { clip-path: inset(0 0 0 0); pointer-events: auto; visibility: visible; transition: clip-path .6s var(--ease), visibility 0s; }
+/* The overlay only exists where the hamburger does (see the 720px rule below); on tablets and desktop it must never paint. */
+@media (min-width: 721px) { .menu { display: none; } }
 .menu__inner { display: flex; flex-direction: column; gap: .4rem; }
 .menu__inner a {
   font-family: var(--serif); font-size: clamp(2.4rem, 11vw, 4rem); line-height: 1.1;
