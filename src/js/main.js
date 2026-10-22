@@ -260,33 +260,43 @@ import { initNodeWeb } from "./particles.js";
   // direction as data-par / data-par-max (from the studio control, or the default up / 50 the
   // editor shows), so the homepage motion always matches exactly what the studio shows.
   const parLite = document.documentElement.classList.contains("lite");
+  // Two phases (all layout reads, then all style writes): interleaving a getBoundingClientRect with a
+  // style write per tile forced a synchronous layout for every tile on every scroll frame.
   const updateParallax = () => {
     if (parLite) return;
     const pars = document.querySelectorAll(".case__par, .jrn-tile");
     const vh = window.innerHeight;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const writes = [];
     for (let i = 0; i < pars.length; i++) {
-      if (pars[i].classList.contains('jrn-tile')) {
-        const anchor = pars[i].getBoundingClientRect();
-        const steady = matchMedia('(prefers-reduced-motion: reduce)').matches || pars[i].closest('.is-peeking');
-        const drift = steady ? 0 : Math.max(-16, Math.min(16, (anchor.top + anchor.height / 2 - vh / 2) / vh * 48));
-        const frame = pars[i].querySelector('.jrn-tile__image');
-        pars[i].style.setProperty('--jrn-par-scale', steady || !frame?.clientHeight ? '1' : String(1 + 32 / frame.clientHeight));
-        pars[i].style.setProperty('--jrn-par-y', drift.toFixed(1) + 'px');
+      const el = pars[i];
+      const r = el.getBoundingClientRect();
+      if (el.classList.contains('jrn-tile')) {
+        if (r.bottom < -vh || r.top > vh * 2) continue; // far offscreen: drift is clamped, nothing visible
+        const steady = reduced || el.closest('.is-peeking');
+        const drift = steady ? 0 : Math.max(-16, Math.min(16, (r.top + r.height / 2 - vh / 2) / vh * 48));
+        const frame = el.querySelector('.jrn-tile__image');
+        const fh = steady ? 0 : (frame ? frame.clientHeight : 0);
+        writes.push(() => {
+          el.style.setProperty('--jrn-par-scale', fh ? String(1 + 32 / fh) : '1');
+          el.style.setProperty('--jrn-par-y', drift.toFixed(1) + 'px');
+        });
         continue;
       }
-      const r = pars[i].getBoundingClientRect();
       if (r.bottom < -100 || r.top > vh + 100) continue; // skip offscreen
       const h = r.height;
       const t = (r.top + h / 2 - vh / 2) / vh;            // 0 when centred in the viewport
-      const ds = pars[i].dataset;
+      const ds = el.dataset;
       const factor = (ds.par !== undefined && ds.par !== "") ? (parseFloat(ds.par) || 0) : 0.12;   // default = up / 50
       const maxFrac = (ds.parMax !== undefined && ds.parMax !== "") ? (parseFloat(ds.parMax) || 0.08) : 0.08;
-      if (!factor) { pars[i].style.transform = "translate3d(0,0,0)"; continue; } // intensity 0 = static
+      if (!factor) { writes.push(() => { el.style.transform = "translate3d(0,0,0)"; }); continue; } // intensity 0 = static
       let yv = t * h * factor;
       const max = h * maxFrac;                            // stay within the 20% headroom
       if (yv > max) yv = max; else if (yv < -max) yv = -max;
-      pars[i].style.transform = "translate3d(0," + yv.toFixed(1) + "px,0)";
+      const tf = "translate3d(0," + yv.toFixed(1) + "px,0)";
+      writes.push(() => { el.style.transform = tf; });
     }
+    for (let i = 0; i < writes.length; i++) writes[i]();
   };
 
   // Marquee chip chrome fades in as the second (stats) marquee scrolls into view: in the
@@ -296,21 +306,23 @@ import { initNodeWeb } from "./particles.js";
   const updateMarqueeChrome = () => {
     const logosEl = document.querySelector(".logos");
     const himarqEl = document.querySelector(".himarq");
-    if (!logosEl || !himarqEl || himarqEl.hidden) return;
+    if (!logosEl || !himarqEl || himarqEl.hidden) return null;
     const vh = window.innerHeight;
     const top = himarqEl.getBoundingClientRect().top;
     let p = (vh - top) / (vh * 0.55);   // 0 as m2's top touches the fold, 1 after ~0.55vh of scroll
     p = p < 0 ? 0 : p > 1 ? 1 : p;
     const v = p.toFixed(3);
-    logosEl.style.setProperty("--chrome", v);
-    himarqEl.style.setProperty("--chrome", v);
+    return () => {
+      logosEl.style.setProperty("--chrome", v);
+      himarqEl.style.setProperty("--chrome", v);
+    };
   };
 
   // "Jump to work" bait (fixed bottom-right): visible only while the work tiles are still below the
   // fold, so on tall desktops / phones where the grid is already on screen at load it never appears.
   const workCueEl = document.querySelector(".workcue");
   const updateWorkCue = () => {
-    if (!workCueEl) return;
+    if (!workCueEl) return null;
     const RK = window.RK;
     const enabled = !(RK && RK.data && RK.data.landing && RK.data.landing.show && RK.data.landing.show.cue === false);
     const cases = document.getElementById("cases");
@@ -320,7 +332,7 @@ import { initNodeWeb } from "./particles.js";
       const r = cases.getBoundingClientRect();
       show = r.top > window.innerHeight - 60; // tiles still below the fold
     }
-    workCueEl.classList.toggle("is-in", show);
+    return () => workCueEl.classList.toggle("is-in", show);
   };
 
   const onScroll = () => {
@@ -335,14 +347,14 @@ import { initNodeWeb } from "./particles.js";
     if (y > lastY + 8) { lastY = y; if (y > 400 && !nav.classList.contains("is-open")) nav.classList.add("is-hidden"); }
     else if (y < lastY - 8) { lastY = y; nav.classList.remove("is-hidden"); }
 
-    if (progress) {
-      const h = document.documentElement.scrollHeight - window.innerHeight;
-      progress.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
-    }
-
+    // Reads first, writes last, so the frame needs at most one layout.
+    const h = progress ? document.documentElement.scrollHeight - window.innerHeight : 0;
+    const writeChrome = updateMarqueeChrome();
+    const writeCue = updateWorkCue();
     updateParallax();
-    updateMarqueeChrome();
-    updateWorkCue();
+    if (progress) progress.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
+    if (writeChrome) writeChrome();
+    if (writeCue) writeCue();
   };
   // Drive from ONE frame-throttled path: binding both window scroll AND lenis fired onScroll twice per
   // frame with slightly different y reads, flip-flopping the hide/show direction → the shiver.
@@ -351,7 +363,13 @@ import { initNodeWeb } from "./particles.js";
   window.addEventListener("scroll", scheduleScroll, { passive: true });
   if (lenis) lenis.on("scroll", scheduleScroll);
   onScroll();
-  window.addEventListener("resize", () => { updateParallax(); updateMarqueeChrome(); updateWorkCue(); }, { passive: true });
+  window.addEventListener("resize", () => {
+    const writeChrome = updateMarqueeChrome();
+    const writeCue = updateWorkCue();
+    updateParallax();
+    if (writeChrome) writeChrome();
+    if (writeCue) writeCue();
+  }, { passive: true });
 
   /* -------------------------------------------------
      6b. Marquee engine — continuous scroll where each chip springs in from the
@@ -835,6 +853,17 @@ import { initNodeWeb } from "./particles.js";
       var twoSig = 2 * cfg.radius * cfg.radius, t = now / 1000;
       var breathK = LT_HOVER ? (LT.pointer ? 0.28 : 1) : 0;
       if (LT.frame % 6 === 0) ltMeasure();
+      // Read every card's rect BEFORE any style write this frame: a read after a write forces a
+      // synchronous layout, and doing that per card per frame is what made scrolling stutter.
+      var cardG = LT.cardG || (LT.cardG = []);
+      if (cards && cards.length && LT.pointer && LT_REACT) {
+        var cSig0 = 2 * 260 * 260;
+        for (var c0 = 0; c0 < cards.length; c0++) {
+          var r0 = cards[c0].el.getBoundingClientRect(), g0 = 0;
+          if (r0.width) { var ddx = r0.left + r0.width / 2 - LT.mx, ddy = r0.top + r0.height / 2 - LT.my; g0 = Math.exp(-(ddx * ddx + ddy * ddy) / cSig0); }
+          cardG[c0] = g0;
+        }
+      } else if (cards) { for (var c1 = 0; c1 < cards.length; c1++) cardG[c1] = 0; }
       for (var i = 0; i < units.length; i++) {
         var u = units[i], target = u.w0, g = 0;
         if (LT.pointer && LT_REACT) { var dx = u.cx - LT.mx, dy = u.cy - LT.my; g = Math.exp(-(dx * dx + dy * dy) / twoSig); target += (u.wMax - u.w0) * g; }
@@ -845,10 +874,8 @@ import { initNodeWeb } from "./particles.js";
         if (u.lift) { var ly = (LT.pointer && LT_REACT) ? -(u.lift * g) : 0; u.el.style.transform = ly ? "translate3d(0," + ly.toFixed(2) + "px,0)" : ""; }
       }
       if (cards && cards.length) {
-        var cSig = 2 * 260 * 260;
         for (var c = 0; c < cards.length; c++) {
-          var cd = cards[c], gg = 0;
-          if (LT.pointer && LT_REACT) { var r = cd.el.getBoundingClientRect(); if (r.width) { var mdx = r.left + r.width / 2 - LT.mx, mdy = r.top + r.height / 2 - LT.my; gg = Math.exp(-(mdx * mdx + mdy * mdy) / cSig); } }
+          var cd = cards[c], gg = cardG[c] || 0;
           cd.cur += (gg - cd.cur) * 0.16;
           if (cd.cur < 0.005) { if (cd.applied) { cd.el.style.transform = ""; cd.applied = false; } }
           else { cd.el.style.transform = "translate3d(0," + (-12 * cd.cur).toFixed(2) + "px,0) scale(" + (1 + 0.09 * cd.cur).toFixed(4) + ")"; cd.applied = true; }
@@ -905,4 +932,20 @@ import { initNodeWeb } from "./particles.js";
   window.__rkInitDepth = initDepth;
   if (window.__siteRendered) initDepth();
   document.addEventListener("site:rendered", initDepth);
+
+  // Decode work covers shortly BEFORE they reach the viewport. The covers are large originals shown
+  // small; decoding on first paint stalled the main thread for 70-90ms the first time each scrolled in.
+  const predecodeCovers = () => {
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        io.unobserve(e.target);
+        if (e.target.decode) e.target.decode().catch(() => {});
+      });
+    }, { rootMargin: "200% 0px" });
+    document.querySelectorAll(".case__img").forEach((im) => io.observe(im));
+  };
+  if (window.__siteRendered) predecodeCovers();
+  document.addEventListener("site:rendered", predecodeCovers);
 })();
