@@ -100,6 +100,8 @@ export const ResumePdfViewer = forwardRef(function ResumePdfViewer({ url, label,
         if (disposed) return;
         viewer.currentScaleValue = initialFit;
         setPosition({ page: 1, total: viewer.pagesCount });
+        // Enable printing with the page count so the toolbar settles before it becomes clickable.
+        onReadyChange?.(true);
       });
       eventBus.on("pagechanging", event => { if (!disposed) setPosition({ page: event.pageNumber, total: viewer.pagesCount }); });
       eventBus.on("scalechanging", () => { if (!disposed) setFitMode(viewer.currentScaleValue); });
@@ -120,7 +122,7 @@ export const ResumePdfViewer = forwardRef(function ResumePdfViewer({ url, label,
       // Own the initial request so rapid teardown cannot reject a reset viewer capability.
       await Promise.all([document.getMetadata(), document.getPage(1)]);
       if (disposed) return;
-      pdfDocument.current = document; onReadyChange?.(true);
+      pdfDocument.current = document;
       linkService.setDocument(document); viewer.setDocument(document);
     };
     open().catch(() => { if (!disposed) setError(current => current || "The PDF could not be loaded. Retry or download the original file."); });

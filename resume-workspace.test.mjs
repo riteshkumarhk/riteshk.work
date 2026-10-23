@@ -2302,6 +2302,8 @@ describe('Resume browser acceptance', () => {
       await editor.locator('.rws[data-view="pdf"]').waitFor();
       assert.equal(rendered, renderBefore + 1);
       assert.equal(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 0);
+      await editor.locator('[aria-label="Print this PDF"]:not([disabled])').waitFor();
+      assert.equal(await editor.locator('.rws-pdf-loading').count(), 0, 'Print stays disabled until the PDF pages and toolbar have settled');
       await editor.getByRole('button', { name: 'Print this PDF', exact: true }).click();
       try { await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click(); }
       catch (failure) {
