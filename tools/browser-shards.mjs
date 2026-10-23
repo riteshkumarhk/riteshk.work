@@ -3,14 +3,26 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
 
+// Split files use named partitions plus one catch-all that skips their union,
+// so every current and future test runs in exactly one shard.
 const deck = 'slide-studio-deck.test.mjs';
-const authoring = '(?:Prepare |Resume canvas |AI |Draft entire deck |fixed cover |empty hosted deck |linked cover )';
+const prepare = 'Prepare ';
+const authoring = '(?:Resume canvas |AI |Draft entire deck |fixed cover |empty hosted deck |linked cover )';
 const recovery = 'project-recovery.browser.test.mjs';
 const journey = 'Journey';
+const workspace = 'resume-workspace.test.mjs';
+const workspaceFirst = '(?:Hosted |PDF |Inline |Source |Studio |Compact )';
+const probe = 'resume-assessment-probe.test.mjs';
+const structuredSmoke = 'Structured smoke ';
 export const browserShards = {
+  prepare: [{ files: [deck], pattern: '^' + prepare }],
   authoring: [{ files: [deck], pattern: '^' + authoring }],
-  sections: [{ files: [deck], skipPattern: '^' + authoring }],
-  'resume-workspace': [{ files: ['resume-workspace.test.mjs', 'resume-assessment-ui.test.mjs', 'resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs', 'resume-assessment-probe.test.mjs'] }],
+  sections: [{ files: [deck], skipPattern: '^(?:' + prepare + '|' + authoring.slice(3, -1) + ')' }],
+  'resume-workspace': [{ files: [workspace], pattern: '^' + workspaceFirst }],
+  'resume-editor': [{ files: [workspace], skipPattern: '^' + workspaceFirst }],
+  'resume-review': [{ files: ['resume-assessment-ui.test.mjs'] }],
+  'resume-probe': [{ files: [probe], pattern: '^' + structuredSmoke }],
+  'resume-cli': [{ files: [probe], skipPattern: '^' + structuredSmoke }, { files: ['resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs'] }],
   journey: [{ files: [recovery], pattern: journey }],
   recovery: [{ files: [
     'admin-session.browser.test.mjs',

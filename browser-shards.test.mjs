@@ -11,15 +11,15 @@ test('browser shards retain every release file and partition all test registrati
   const tasks = Object.values(browserShards).flat();
   const expected = ['admin-session.browser.test.mjs', 'resume-workspace.test.mjs', 'resume-assessment-ui.test.mjs', 'resume-pdf-structure.test.mjs', 'resume-assessment-studio-bridge.test.mjs', 'resume-baseline-accounting.test.mjs', 'resume-assessment-probe.test.mjs', 'ai-ribbon.test.mjs', 'ai-appearance.browser.test.mjs', 'project-recovery.browser.test.mjs', 'slide-studio-deck.test.mjs', 'slide-presenter-readonly.browser.test.mjs', 'release-checks.browser.test.mjs', 'presenter-dj.browser.test.mjs', 'presenter-macos.browser.test.mjs', 'presenter-native.browser.test.mjs', 'presenter-web.browser.test.mjs', 'slide-presenter.browser.test.mjs', 'studio-capture-download.browser.test.mjs'];
   assert.deepEqual([...new Set(tasks.flatMap(task => task.files))].sort(), expected.sort());
-  const splitFiles = ['slide-studio-deck.test.mjs', 'project-recovery.browser.test.mjs'];
+  const splitFiles = ['slide-studio-deck.test.mjs', 'project-recovery.browser.test.mjs', 'resume-workspace.test.mjs', 'resume-assessment-probe.test.mjs'];
   for (const file of expected) {
     const selections = tasks.filter(task => task.files.includes(file));
-    assert.equal(selections.length, splitFiles.includes(file) ? 2 : 1, file);
+    assert.equal(selections.length > 1, splitFiles.includes(file), file);
     if (splitFiles.includes(file)) {
-      assert.equal(selections[0].pattern, selections[1].skipPattern, file + ' must have exact complements');
-      assert.ok(selections[0].pattern);
-      assert.equal(selections[0].skipPattern, undefined);
-      assert.equal(selections[1].pattern, undefined);
+      const catchAll = selections.filter(task => !task.pattern);
+      assert.equal(catchAll.length, 1, file + ' needs exactly one catch-all partition for future tests');
+      assert.ok(catchAll[0].skipPattern, file + ' catch-all must skip the named partitions');
+      assert.ok(selections.filter(task => task.pattern).every(task => !task.skipPattern), file + ' named partitions select by pattern only');
       assert.ok(selections.every(task => task.files.length === 1), file + ' filters must not affect other files');
     } else {
       assert.equal(selections[0].pattern, undefined, file);
@@ -31,9 +31,15 @@ test('browser shards retain every release file and partition all test registrati
     assert.equal(registrations.length, [...source.matchAll(/^\s*test\(/gm)].length, file + ' registration parser must cover every test');
     if (file === splitFiles[0]) assert.ok(registrations.length >= 64);
     if (file === splitFiles[1]) assert.ok(registrations.length >= 40);
+    if (file === splitFiles[2]) assert.ok(registrations.length >= 44);
+    if (file === splitFiles[3]) assert.ok(registrations.length >= 25);
     const selected = (task, name) => (!task.pattern || new RegExp(task.pattern).test(name)) && (!task.skipPattern || !new RegExp(task.skipPattern).test(name));
-    for (const name of [...registrations, 'Future regression', 'Prepare future regression', 'Journey future regression', 'Studio and Journey future regression']) {
+    for (const name of [...registrations, 'Future regression', 'Prepare future regression', 'Journey future regression', 'Studio and Journey future regression', 'Hosted future regression', 'Structured smoke future regression']) {
       assert.equal(selections.filter(task => selected(task, name)).length, 1, file + ': ' + name);
+    }
+    if (file === 'resume-workspace.test.mjs') for (const selection of selections) {
+      // A named pattern matching the parent suite would run every child; a skip matching it would run none.
+      assert.equal(selected(selection, 'Resume browser acceptance'), !selection.pattern, 'parent suite name must not decide the partition');
     }
     for (const selection of selections) assert.ok(registrations.some(name => selected(selection, name)), file + ' must not create an empty partition');
   }
@@ -50,7 +56,9 @@ test('browser shards retain every release file and partition all test registrati
   }
   assert.match(workflow, /run: npm run test:root/);
   assert.match(workflow, /verify-build:\s*\n\s*runs-on: ubuntu-latest\s*\n\s*timeout-minutes: 15/);
-  assert.match(workflow, /browser-checks:\s*\n\s*needs: verify-build\s*\n\s*runs-on: ubuntu-latest\s*\n\s*timeout-minutes: 45/);
+  // Browser shards start alongside verify-build so CI wall time is the slowest job, not the sum.
+  assert.match(workflow, /browser-checks:\s*\n\s*runs-on: ubuntu-latest\s*\n\s*timeout-minutes: 45/);
+  assert.doesNotMatch(workflow.slice(workflow.indexOf('browser-checks:'), workflow.indexOf('deploy-pages:')), /needs:/);
   assert.match(workflow, /python3 -u serve\.py/);
 });
 
@@ -76,22 +84,25 @@ test('Node executes complementary shards once without a parent-file pattern matc
   const directory = mkdtempSync(join(fileURLToPath(new URL('.', import.meta.url)), '.browser-shards-fixture-'));
   try {
     const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
-    for (const [name, shards, names] of [
-      ['slide-studio-deck.test.mjs', ['authoring', 'sections'], ['Prepare synthetic', 'AI synthetic', 'Sections synthetic', 'Future synthetic']],
-      ['project-recovery.browser.test.mjs', ['journey', 'recovery'], ['Journey synthetic', 'Studio and Journey synthetic', 'Recovery synthetic', 'Future synthetic']]
+    for (const [name, shards, names, suite] of [
+      ['slide-studio-deck.test.mjs', ['prepare', 'authoring', 'sections'], ['Prepare synthetic', 'AI synthetic', 'Sections synthetic', 'Future synthetic']],
+      ['project-recovery.browser.test.mjs', ['journey', 'recovery'], ['Journey synthetic', 'Studio and Journey synthetic', 'Recovery synthetic', 'Future synthetic']],
+      ['resume-workspace.test.mjs', ['resume-workspace', 'resume-editor'], ['Hosted synthetic', 'Compact synthetic', 'Review synthetic', 'Future synthetic'], 'Resume browser acceptance'],
+      ['resume-assessment-probe.test.mjs', ['resume-probe', 'resume-cli'], ['Structured smoke synthetic', 'Structured smoke other', 'Fixed smoke synthetic', 'Future synthetic']]
     ]) {
       const file = join(directory, name);
-      writeFileSync(file, "import test from 'node:test';\n" + names.map(name => 'test(' + JSON.stringify(name) + ', () => {});').join('\n'));
+      const tests = names.map(name => 'test(' + JSON.stringify(name) + ', () => {});').join('\n');
+      writeFileSync(file, "import { describe, test } from 'node:test';\n" + (suite ? 'describe(' + JSON.stringify(suite) + ', () => {\n' + tests + '\n});' : tests));
       const observed = [];
       for (const shard of shards) {
         const args = shardCommands(shard).find(args => args.includes(name)).map(value => value === name ? file : value);
         const result = spawnSync(process.execPath, ['--test-reporter=tap', ...args], { encoding: 'utf8', env });
         assert.equal(result.status, 0, result.stderr + result.stdout);
-        assert.match(result.stdout, /# tests 2\b/);
-        observed.push(...[...result.stdout.matchAll(/^ok \d+ - (.+)$/gm)].map(match => match[1]));
+        assert.match(result.stdout, /# tests [1-9]\d*\b/, shard + ' must run at least one test');
+        observed.push(...[...result.stdout.matchAll(/^\s*ok \d+ - (.+)$/gm)].map(match => match[1]).filter(test => test !== suite));
       }
-      assert.deepEqual(observed.sort(), names.sort(), name);
-      assert.equal(new Set(observed).size, 4);
+      assert.deepEqual(observed.sort(), [...names].sort(), name);
+      assert.equal(new Set(observed).size, names.length);
     }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -199,15 +210,20 @@ test('shard CLI fails before executing tests when the required server is missing
   assert.match(unknown.stderr, /Unknown browser shard/);
 });
 
-test('Pages requires the build and every browser shard against the same tested artifact', () => {
+test('Pages requires the build and every browser shard against the same tested commit', () => {
   const workflow = readFileSync(new URL('./.github/workflows/build-check.yml', import.meta.url), 'utf8');
   assert.match(workflow, /needs: \[verify-build, browser-checks\]/);
-  assert.deepEqual(Object.keys(browserShards), ['authoring', 'sections', 'resume-workspace', 'journey', 'recovery', 'presenters']);
+  assert.deepEqual(Object.keys(browserShards), ['prepare', 'authoring', 'sections', 'resume-workspace', 'resume-editor', 'resume-review', 'resume-probe', 'resume-cli', 'journey', 'recovery', 'presenters']);
   assert.equal(workflow.match(/shard: \[([^\]]+)\]/)[1], Object.keys(browserShards).join(', '));
   assert.match(workflow, /fail-fast: false/);
   assert.match(workflow, /node tools\/browser-shards\.mjs/);
-  assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40} # v4\./);
+  const browserJob = workflow.slice(workflow.indexOf('browser-checks:'), workflow.indexOf('deploy-pages:'));
+  // A plain checkout of the triggering SHA equals verify-build's git archive (no export-ignore, bundles committed).
+  assert.match(browserJob, /actions\/checkout@[0-9a-f]{40} # v4\./);
+  assert.doesNotMatch(browserJob, /\bref:/);
+  assert.doesNotMatch(readFileSync(new URL('./.gitattributes', import.meta.url), 'utf8'), /export-(?:ignore|subst)/);
   assert.match(workflow, /git archive --format=tar HEAD/);
+  assert.match(browserJob, /Acquire::https?::Timeout "15"[\s\S]*Acquire::Retries "5"[\s\S]*npx playwright-core install --with-deps chromium/);
   assert.match(workflow, /BROWSER_SHARD_REPORT: browser-timings-\$\{\{ matrix\.shard \}\}\.json/);
   assert.match(workflow, /Preserve browser task timings\s+if: always\(\)/);
   assert.match(workflow, /Preserve browser failure evidence\s+if: failure\(\)/);

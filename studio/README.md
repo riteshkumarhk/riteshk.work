@@ -47,8 +47,29 @@ validate that final tree, including content-dependent backup/restore checks.
 Never force-push over admin publications. Full CI still runs every required test,
 regardless of the local selection, and deploys only its verified artifact after
 every job succeeds. Inventory tests protect browser-shard coverage and partitioning.
-The Resume shard includes candidate UI, PDF structure, Studio-bridge, baseline
-accounting and assessment-probe tests. The probe indirectly launches Chromium
+
+CI principles: full CI on every push is mandatory and is the only path to
+production. Path-filtered partial CI is not used because the public site, Studio,
+Resume, Slides and admin all load from `index.html`, `js/main.js` and the shared
+stylesheet, so a "public-only" change still executes inside every browser shard.
+Speed comes from parallelism instead: the browser shards check out the same commit
+and run alongside the build job (the Pages artifact is a `git archive` of that
+commit with committed bundles, so both see identical files), and Pages deploys
+only after the build and every shard pass. Local pre-push checks are risk-tiered:
+a small contained public-site fix needs `npm run build`, bundle `node --check` and
+a targeted browser check; Studio/Resume/Slides/Presenter/admin changes use
+`--shard` for the affected areas; shared plumbing (build, dependencies, workflow,
+tests, auth, Worker, content schema) uses `check:release:full` or `--tooling`.
+
+Long test files are partitioned by test-name prefix: each split file has named
+`pattern` partitions plus exactly one catch-all that skips their union, so new
+tests always run exactly once. Deck tests use `prepare`, `authoring` and
+`sections`; the Resume suites use `resume-workspace`, `resume-editor`,
+`resume-review`, `resume-probe` and `resume-cli` (candidate UI, PDF structure,
+Studio-bridge, baseline accounting and assessment-probe tests). Named patterns
+must not match a parent `describe` name, or every child would run. Browser
+installs set short apt timeouts with retries so a stalled Ubuntu mirror retries
+quickly instead of holding a shard for minutes. The probe indirectly launches Chromium
 through real PDF rendering, so it must not run in CI's browser-free root job.
 Inventory checks cover both direct launches and preview/PDF-render helpers.
 CI bounds the browser-free build job to 15 minutes and each browser shard to
@@ -392,8 +413,8 @@ not missing visible words/digits/punctuation. Checked evidence omits recognized
 page counters while retaining raw geometry. The owner's original Summary/Phone
 failure is not diagnosed by fictional reproductions. Admin and Prepare remain
 desktop-only; Phone refers to the resume field. JS1.20/CSS1.10/adminCSS1.215.
-Candidate UI and structure suites run in the mandatory `resume-workspace`
-browser shard, not the browser-free root job. New original and checked PDFs also
+Candidate UI and structure suites run in the mandatory `resume-*`
+browser shards, not the browser-free root job. New original and checked PDFs also
 receive reference-free order probes: native, row and an unselected two-region
 hypothesis where a repeated gutter permits one. Dates/tables and unsupported
 writing geometry remain ambiguous/unknown, not an ATS failure or employer

@@ -62,32 +62,22 @@ jobs:
           git archive --format=tar HEAD > "$RUNNER_TEMP/tested-source.tar"
           tar -xf "$RUNNER_TEMP/tested-source.tar" -C "$RUNNER_TEMP/site"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: tested-source
-          path: ${{ runner.temp }}/tested-source.tar
-          retention-days: 1
-
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         if: github.event_name != 'pull_request'
         with:
           path: ${{ runner.temp }}/site
 
+  # Browser shards test the same commit in parallel with verify-build; Pages
+  # deploys only after verify-build and every shard succeed for that commit.
   browser-checks:
-    needs: verify-build
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        shard: [authoring, sections, resume-workspace, journey, recovery, presenters]
+        shard: [prepare, authoring, sections, resume-workspace, resume-editor, resume-review, resume-probe, resume-cli, journey, recovery, presenters]
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: tested-source
-
-      - name: Extract verified source and bundles
-        run: tar -xf tested-source.tar
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -103,7 +93,10 @@ jobs:
           key: ${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
       - name: Install test browser
-        run: npx playwright-core install --with-deps chromium
+        run: |
+          # Abandon stalled Ubuntu mirror downloads quickly instead of waiting minutes.
+          printf 'Acquire::http::Timeout "15";\nAcquire::https::Timeout "15";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
+          npx playwright-core install --with-deps chromium
 
       - name: Run required browser shard
         env:
