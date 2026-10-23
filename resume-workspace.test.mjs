@@ -2302,8 +2302,12 @@ describe('Resume browser acceptance', () => {
       await editor.locator('.rws[data-view="pdf"]').waitFor();
       assert.equal(rendered, renderBefore + 1);
       assert.equal(await editor.getByRole('link', { name: 'Download this PDF', exact: true }).count(), 0);
-      await editor.locator('[aria-label="Print this PDF"]:not([disabled])').waitFor();
-      assert.equal(await editor.locator('.rws-pdf-loading').count(), 0, 'Print stays disabled until the PDF pages and toolbar have settled');
+      const printReady = editor.locator('[aria-label="Print this PDF"]:not([disabled])');
+      await printReady.waitFor();
+      const printBox = await printReady.boundingBox();
+      await page.waitForTimeout(600);
+      assert.equal(await editor.locator('.rws-pdf-loading').count(), 0, 'An enabled Print button must not precede or follow a PDF reload');
+      assert.deepEqual(await printReady.boundingBox(), printBox, 'PDF controls stay in place once Print is enabled');
       await editor.getByRole('button', { name: 'Print this PDF', exact: true }).click();
       try { await editor.getByRole('button', { name: 'Keep reviewing', exact: true }).click(); }
       catch (failure) {

@@ -138,7 +138,7 @@ export const ResumePdfViewer = forwardRef(function ResumePdfViewer({ url, label,
   const toolbar = <div className={"rws-pdf-controls" + (controlsTarget ? " resume-view-tools" : "")} role="toolbar" aria-label="PDF controls" data-fit-mode={fitMode} data-two-page={twoPage}>
       <button className="rws-icon" title="Previous PDF page" aria-label="Previous PDF page" disabled={position.page <= (twoPage ? 2 : 1)} onClick={() => { active.current.previousPage(); }}><ChevronLeft size={17} /></button>
       <input type="number" aria-label="PDF page" min="1" max={position.total || 1} value={position.page} disabled={!position.total} onChange={event => { const page = Number(event.target.value); if (Number.isInteger(page) && page > 0 && page <= position.total) active.current.currentPageNumber = page; }} />
-      <span>/ {position.total || "..."}</span>
+      <span>/ {position.total || "-"}</span>
       <button className="rws-icon" title="Next PDF page" aria-label="Next PDF page" disabled={!position.total || position.page >= position.total - (twoPage && position.total % 2 === 0 ? 1 : 0)} onClick={() => { active.current.nextPage(); }}><ChevronRight size={17} /></button>
       <button className="rws-icon" data-pdf-separator title="Zoom PDF out" aria-label="Zoom PDF out" disabled={!position.total} onClick={() => { active.current.currentScale = Math.max(0.25, active.current.currentScale / 1.2); }}><ZoomOut size={17} /></button>
       <button className="rws-icon" title="Zoom PDF in" aria-label="Zoom PDF in" disabled={!position.total} onClick={() => { active.current.currentScale = Math.min(4, active.current.currentScale * 1.2); }}><ZoomIn size={17} /></button>

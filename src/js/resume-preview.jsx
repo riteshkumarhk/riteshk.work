@@ -853,16 +853,10 @@ function App() {
   useEffect(() => {
     if (!doc) return;
     let active = true;
-    let transientUrl;
     const source = sources.find(item => item.id === sourceId) || sources.find(item => doc.sourceIds.includes(item.id));
     const files = [];
     if (hostedClient && source) files.push(["sources/" + source.id, source.type === "application/pdf" ? "application/pdf" : "application/octet-stream"]);
-    if (exported?.blob) {
-      const path = "resumes/" + doc.id + "/exports/" + exported.id;
-      transientUrl = URL.createObjectURL(exported.blob);
-      retainedUrls.current.set(path, transientUrl);
-      setFileUrls(Object.fromEntries(retainedUrls.current));
-    } else if (hostedClient && exported) files.push(["resumes/" + doc.id + "/exports/" + exported.id, "application/pdf"]);
+    if (hostedClient && exported && !exported.blob) files.push(["resumes/" + doc.id + "/exports/" + exported.id, "application/pdf"]);
     (async () => {
       for (const [path, type] of files) {
         if (retainedUrls.current.has(path)) continue;
@@ -872,8 +866,16 @@ function App() {
         setFileUrls(Object.fromEntries(retainedUrls.current));
       }
     })().catch(failure => { if (active) setError(failure.message); });
-    return () => { active = false; if (transientUrl) { URL.revokeObjectURL(transientUrl); retainedUrls.current.delete("resumes/" + doc.id + "/exports/" + exported.id); } };
+    return () => { active = false; };
   }, [doc?.id, sourceId, sources, exported?.id]);
+  // Keep the transient export URL stable across library refreshes so the PDF viewer does not reload.
+  useEffect(() => {
+    if (!doc || !exported?.blob) return;
+    const path = "resumes/" + doc.id + "/exports/" + exported.id, url = URL.createObjectURL(exported.blob);
+    retainedUrls.current.set(path, url);
+    setFileUrls(Object.fromEntries(retainedUrls.current));
+    return () => { URL.revokeObjectURL(url); if (retainedUrls.current.get(path) === url) retainedUrls.current.delete(path); };
+  }, [doc?.id, exported?.id, exported?.blob]);
   useEffect(() => () => { for (const url of retainedUrls.current.values()) URL.revokeObjectURL(url); retainedUrls.current.clear(); }, []);
   const fileHref = (path, download = false) => fileUrls[path] || (hosted ? undefined : (path.startsWith("sources/") ? "/__resume/" : "/__resume/api/") + path + (download ? "?download" : ""));
   useEffect(() => {
