@@ -2313,7 +2313,10 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     var qrcode = await ensureQrLib();
     var d = data, c = d.contact || {}, L = d.landing || {};
     var SITE = LIVE_ORIGIN;
-    var work = (d.work || []).filter(function (w) { return w && !w.hidden && !w.encWork; }).slice(0, 4);
+    // Same set and order as the live home page (render.js): featured, not hidden, not encrypted - read from
+    // the PUBLISHED content, since every link/QR points at the live site. Falls back to the draft if unknown.
+    var liveSrc = (window.RK && window.RK.published) || d;
+    var work = (liveSrc.work || []).filter(function (w) { return w && w.featured && !w.hidden && !w.encWork; });
     var highs = (d.highlights || []).slice(0, 6);
     var caps = d.capabilities || [], path = d.path || [], rec = d.recognition || [], edu = d.education || [];
 
@@ -10501,9 +10504,9 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
         "</div>" +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
-          '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, your top four case studies (each a live link), experience, skills, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
+          '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, every case study live on your site (each a live link), experience, skills, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">' + extIcon("dl", 15) + ' Download PDF r\u00e9sum\u00e9</button></div>' +
-          '<div class="af__hint">Built from what you have in admin right now \u2014 publish first so the case-study links resolve on your live site (they point to riteshk.work/work/\u2026).</div>' +
+          '<div class="af__hint">Case studies follow your <b>published</b> site exactly \u2014 the same featured, visible cards in the same order, so every link and QR opens a live page. The rest of the page uses what you have in admin right now.</div>' +
         "</div>" +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("media") + '</span><div><b>Media library</b><span>See every uploaded file, spot unused ones, free up space</span></div></div>' +
