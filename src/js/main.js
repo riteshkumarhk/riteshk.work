@@ -714,22 +714,26 @@ import { initNodeWeb } from "./particles.js";
   }
   function ltEnc(u) { return !u || /^vault:/i.test(u) || /\.enc(\b|$)/i.test(u); }
   function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
+  // Same rule as the landing work list (render.js): every case live on the site, no cap.
   function ltMediaSrcs() {
     var w = (window.RK && window.RK.data && window.RK.data.work) || [], out = [];
-    w.filter(function (x) { return x && x.featured && !x.hidden; }).forEach(function (x) {
+    w.filter(function (x) { return x && x.featured && !x.encWork && !x.hidden; }).forEach(function (x) {
       var s = x.image || (x.study && x.study.cover);
-      if (s && !ltEnc(s)) out.push(s);
+      if (s && !ltEnc(s) && out.indexOf(s) < 0) out.push(s);
     });
-    return out.slice(0, 5);
+    return out;
   }
+  // Images carry data-src and load one step ahead of the fade, so a long case list doesn't fetch every cover at once.
+  function ltMediaLoad(img) { if (img && !img.getAttribute("src") && img.dataset.src) img.src = img.dataset.src; }
   var ltMediaTimer = 0, ltMediaIdx = 0;
   function ltStartMediaFade() {
     if (ltMediaTimer) return;
     ltMediaTimer = setInterval(function () {
       if (document.body.dataset.heroAmb !== "media") return;
       var imgs = document.querySelectorAll("#lt-media img"); if (imgs.length < 2) return;
-      imgs[ltMediaIdx].classList.remove("on");
-      ltMediaIdx = (ltMediaIdx + 1) % imgs.length; imgs[ltMediaIdx].classList.add("on");
+      if (imgs[ltMediaIdx]) imgs[ltMediaIdx].classList.remove("on");
+      ltMediaIdx = (ltMediaIdx + 1) % imgs.length; ltMediaLoad(imgs[ltMediaIdx]); imgs[ltMediaIdx].classList.add("on");
+      ltMediaLoad(imgs[(ltMediaIdx + 1) % imgs.length]);
     }, 4600);
   }
   function ltBuildAmbient(cfg, onLanding) {
@@ -742,10 +746,18 @@ import { initNodeWeb } from "./particles.js";
       document.body.insertBefore(scrim, amb.nextSibling);
     }
     var media = document.getElementById("lt-media");
-    if (media && onLanding && cfg.ambient === "media" && !media.dataset.built) {
-      media.innerHTML = ltMediaSrcs().map(function (s) { return '<img src="' + mediaUrl(s) + '" alt="" />'; }).join("");
-      media.dataset.built = "1";
-      var imgs = media.querySelectorAll("img"); if (imgs[0]) imgs[0].classList.add("on");
+    if (media && onLanding && cfg.ambient === "media") {
+      // Rebuild whenever the live case set changes (new/unhidden case, studio edit, refreshed publish).
+      var srcs = ltMediaSrcs().map(mediaUrl), key = srcs.join("\n");
+      if (media.dataset.built !== key) {
+        media.innerHTML = "";
+        srcs.forEach(function (s) { var im = document.createElement("img"); im.alt = ""; im.decoding = "async"; im.dataset.src = s; media.appendChild(im); });
+        media.dataset.built = key;
+        ltMediaIdx = 0;
+        var imgs = media.querySelectorAll("img");
+        if (imgs[0]) { ltMediaLoad(imgs[0]); imgs[0].classList.add("on"); }
+        ltMediaLoad(imgs[1]);
+      }
       ltStartMediaFade();
     }
     document.body.dataset.heroAmb = onLanding ? cfg.ambient : "off";
