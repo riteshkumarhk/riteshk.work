@@ -14,6 +14,7 @@ import { migrateAtsResume, atsMigrationIdentity, assessAtsResume, atsEditorRevie
 import { AI_TEXT_REQUEST_ATTEMPTS } from './src/js/ai-request-limits.mjs';
 import { rebuildResumeWithAI } from './src/js/resume-rebuild.mjs';
 import { assertStudioToolbar, assertResumeViewTools } from './tools/studio-toolbar-assertions.mjs';
+import { R2_TEST_WORKER, r2TestBucket } from './tools/r2-test-bucket.mjs';
 
 test('Resume save feedback gives evidence-based causes and recovery without ineffective auth retry', () => {
   assert.deepEqual(resumeSaveFailureFeedback(), {message:'Save not confirmed. Try again.',actionLabel:'Retry'});
@@ -692,7 +693,7 @@ describe('Resume browser acceptance', () => {
     const { chromium } = await import('playwright-core');
     await buildPreview();
     directory = mkdtempSync(join(tmpdir(), 'rk-resume-browser-'));
-    preview = await startPreview({ port: Number(process.env.RESUME_TEST_PORT || 5561), directory });
+    preview = await startPreview({ port: Number(process.env.RESUME_TEST_PORT || 0), directory });
     browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   });
   after(async () => {
@@ -1833,13 +1834,13 @@ describe('Resume browser acceptance', () => {
   test('Hosted Studio bridge saves private resumes, verifies PDFs and keeps failed-close edits', { timeout: 120000 }, async () => {
     const { Miniflare } = await import('miniflare');
     const { resumeWorkspaceRoute, createHostedResumeStore } = await import('./worker/resume-workspace.mjs');
-    const runtime = new Miniflare({ modules: true, script: 'export default { fetch() { return new Response("ok"); } }', r2Buckets: ['RESUMES', 'VAULT'] });
+    const runtime = new Miniflare({ modules: true, script: R2_TEST_WORKER, r2Buckets: ['RESUMES', 'VAULT'] });
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1.25 });
     const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.stack || error.message));
     let failedSave = false, expireFirstRender = true, rendered = 0, calls = 0;
     let holdSave = false, saveStarted, releaseSave;
     try {
-      const bucket = await runtime.getR2Bucket('RESUMES'), legacy = await runtime.getR2Bucket('VAULT'), store = createHostedResumeStore(bucket, legacy);
+      const bucket = r2TestBucket(runtime, 'RESUMES'), legacy = r2TestBucket(runtime, 'VAULT'), store = createHostedResumeStore(bucket, legacy);
       const { build } = await import('esbuild');
       const studioBundle = await build({ entryPoints: ['src/js/admin-studio.js'], bundle: true, write: false, format: 'iife' });
       const ownerContent = JSON.parse(readFileSync(new URL('./content.json', import.meta.url), 'utf8'));
@@ -4181,9 +4182,9 @@ test('PDF bounds distinguish zero-height synthetic spacing from out-of-page visi
 test('ATS migration storage verifies originals, retries without duplication and blocks late legacy edits', async () => {
   const { Miniflare } = await import('miniflare');
   const { createHostedResumeStore } = await import('./worker/resume-workspace.mjs');
-  const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("ok")}}', r2Buckets: ['RESUMES', 'VAULT'] });
+  const runtime = new Miniflare({ modules: true, script: R2_TEST_WORKER, r2Buckets: ['RESUMES', 'VAULT'] });
   try {
-    const bucket = await runtime.getR2Bucket('RESUMES'), legacy = await runtime.getR2Bucket('VAULT'), store = createHostedResumeStore(bucket, legacy);
+    const bucket = r2TestBucket(runtime, 'RESUMES'), legacy = r2TestBucket(runtime, 'VAULT'), store = createHostedResumeStore(bucket, legacy);
     const bytes = new TextEncoder().encode('Original immutable resume');
     const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join('');
     const review = { id: 'original', tool: 'ats', kind: 'review', payload: { text: 'Original immutable resume', resumeDocument: { sha256, size: bytes.length, name: 'original.txt', type: 'text/plain', data: Buffer.from(bytes).toString('base64') } } };

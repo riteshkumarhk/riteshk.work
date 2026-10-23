@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, copyFileSync, readdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, readdirSync, rmSync } from 'node:fs';
 import { join, resolve, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
@@ -48,12 +48,22 @@ export function createPreviewStore(directory) {
   };
 }
 
+// Concurrent test shards rebuild these shared assets while browsers read them, so only changed
+// bytes are written and each write lands atomically.
+function writeIfChanged(file, bytes) {
+  if (existsSync(file) && readFileSync(file).equals(bytes)) return;
+  const temporary = file + '.' + process.pid + '-' + randomUUID() + '.tmp';
+  writeFileSync(temporary, bytes);
+  renameSync(temporary, file);
+}
+
 export async function buildPreview({ clean = false } = {}) {
   const outdir = join(root, 'studio/resume-preview/assets');
   mkdirSync(outdir, { recursive: true });
-  const result = await build({ absWorkingDir: root, entryPoints: ['src/js/resume-preview.jsx'], bundle: true, format: 'esm', target: 'es2022', outdir, entryNames: 'app', splitting: true, chunkNames: '[name]-[hash]', jsx: 'automatic', conditions: ['production'], plugins: [cornerEnginePlugin(), mergerThemePlugin(), uiCornersPlugin()], loader: { '.woff2': 'file', '.svg': 'file', '.gif': 'file' }, define: { 'process.env.NODE_ENV': '"production"' }, minify: true, metafile: true, logLevel: 'warning' });
-  copyFileSync(join(root, 'node_modules/pagedjs/dist/paged.polyfill.js'), join(outdir, 'paged.polyfill.js'));
-  copyFileSync(join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'), join(outdir, 'pdf.worker.mjs'));
+  const result = await build({ absWorkingDir: root, entryPoints: ['src/js/resume-preview.jsx'], bundle: true, format: 'esm', target: 'es2022', outdir, entryNames: 'app', splitting: true, chunkNames: '[name]-[hash]', jsx: 'automatic', conditions: ['production'], plugins: [cornerEnginePlugin(), mergerThemePlugin(), uiCornersPlugin()], loader: { '.woff2': 'file', '.svg': 'file', '.gif': 'file' }, define: { 'process.env.NODE_ENV': '"production"' }, minify: true, metafile: true, logLevel: 'warning', write: false });
+  for (const output of result.outputFiles) writeIfChanged(output.path, Buffer.from(output.contents));
+  writeIfChanged(join(outdir, 'paged.polyfill.js'), readFileSync(join(root, 'node_modules/pagedjs/dist/paged.polyfill.js')));
+  writeIfChanged(join(outdir, 'pdf.worker.mjs'), readFileSync(join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs')));
   if (clean) {
     const outputs = new Set([...Object.keys(result.metafile.outputs).map(path => resolve(root, path)), join(outdir, 'paged.polyfill.js'), join(outdir, 'pdf.worker.mjs')]);
     for (const entry of readdirSync(outdir, { withFileTypes: true })) if (entry.isFile() && !outputs.has(join(outdir, entry.name))) rmSync(join(outdir, entry.name));

@@ -9,6 +9,7 @@ import { captureAssessmentSource } from './src/js/resume-assessment-pilot.mjs';
 import { sampleResumes } from './src/js/resume-sample.mjs';
 import { createResume } from './src/js/resume-workspace.mjs';
 import { Miniflare } from 'miniflare';
+import { R2_TEST_WORKER, r2TestBucket } from './tools/r2-test-bucket.mjs';
 import { createAssessmentBudgetStore, assessmentBudgetRoute } from './worker/resume-assessment-budget.mjs';
 import { assessmentHistoryRoute, createAssessmentHistoryStore } from './worker/resume-assessment-history.mjs';
 import { assessmentResponseSchema } from './src/js/resume-assessment-output.mjs';
@@ -58,7 +59,7 @@ describe('Candidate visible review browser acceptance', () => {
     const studio = readFileSync(new URL('./src/js/admin-studio.js', import.meta.url), 'utf8');
     bridgeSource = studio.slice(studio.indexOf('  async function resumeAiConfiguration()'), studio.lastIndexOf('})();'));
     directory = mkdtempSync(join(tmpdir(), 'rk-candidate-ui-'));
-    preview = await startPreview({ port: Number(process.env.RESUME_CANDIDATE_TEST_PORT || 5564), directory });
+    preview = await startPreview({ port: Number(process.env.RESUME_CANDIDATE_TEST_PORT || 0), directory });
     browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
   });
   after(async () => {
@@ -457,8 +458,8 @@ describe('Candidate visible review browser acceptance', () => {
         maxOutputTokens: 12000, maxInputTokens: structured ? 110000 : 128000, contextWindow: structured ? 1000000 : 140000, reasoning: future,
         ...(future ? { structuredOutput: true } : {}) }
     ] };
-    const runtime = scope === 'server' ? new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("offline")}}', r2Buckets: ['BUDGET'] }) : null;
-    const privateBucket = runtime && await runtime.getR2Bucket('BUDGET');
+    const runtime = scope === 'server' ? new Miniflare({ modules: true, script: R2_TEST_WORKER, r2Buckets: ['BUDGET'] }) : null;
+    const privateBucket = runtime && r2TestBucket(runtime, 'BUDGET');
     const centralStore = runtime && createAssessmentBudgetStore(privateBucket, centralPolicy);
     const privateHistory = runtime && createAssessmentHistoryStore(privateBucket);
     let centralUnavailable = scope === 'server';
@@ -829,7 +830,7 @@ describe('Candidate visible review browser acceptance', () => {
         const reserved = (await centralStore.status()).reserved;
         assert.equal(reserved, Math.round(paired.reservations.reduce((sum, plan) => sum + plan.amount, 0) * 1e6) / 1e6);
         await page.evaluate(key => localStorage.removeItem(key), ledgerKey);
-        assert.equal((await createAssessmentBudgetStore(await runtime.getR2Bucket('BUDGET'), centralPolicy).status()).reserved, reserved);
+        assert.equal((await createAssessmentBudgetStore(r2TestBucket(runtime, 'BUDGET'), centralPolicy).status()).reserved, reserved);
         await page.reload();
         await frame.locator('.rws-status.is-saved').waitFor();
         await frame.getByRole('heading', { name: 'Review', exact: true }).waitFor();

@@ -248,7 +248,7 @@ describe('Authored PDF real-rendering checks', () => {
   before(async () => {
     const { startPreview } = await import('./tools/resume-preview.mjs');
     directory = mkdtempSync(join(tmpdir(), 'rk-pdf-structure-'));
-    preview = await startPreview({ port: 5565, directory });
+    preview = await startPreview({ port: 0, directory });
   });
   after(async () => { await preview?.close(); if (directory) rmSync(directory, { recursive: true, force: true }); });
   test('Real PDFs retain raw phone, date and achievement punctuation without glyph recovery', async () => {

@@ -40,15 +40,18 @@ export function validateLocalServer(value) {
 
 export function parseReleaseOptions(args) {
   args = [...args];
-  const options = { mode: 'local', shards: [], files: [], pattern: null, tooling: false, report: null };
+  const options = { mode: 'local', shards: [], files: [], pattern: null, tooling: false, report: null, jobs: null };
   if (['root', 'all', 'full'].includes(args[0])) options.mode = args.shift() === 'root' ? 'root' : 'all';
   while (args.length) {
     const flag = args.shift();
     if (flag === '--tooling') { options.tooling = true; continue; }
-    if (!['--shard', '--file', '--pattern', '--report'].includes(flag)) throw new Error('Unknown release option: ' + flag);
+    if (!['--shard', '--file', '--pattern', '--report', '--jobs'].includes(flag)) throw new Error('Unknown release option: ' + flag);
     const value = args.shift();
     if (!value || value.startsWith('--')) throw new Error('Missing value for ' + flag);
-    if (flag === '--shard') {
+    if (flag === '--jobs') {
+      if (!/^[1-9]\d{0,1}$/.test(value)) throw new Error('--jobs must be a whole number from 1 to 99');
+      options.jobs = Number(value);
+    } else if (flag === '--shard') {
       if (!Object.hasOwn(browserShards, value)) throw new Error('Unknown browser shard: ' + value);
       if (!options.shards.includes(value)) options.shards.push(value);
     } else if (flag === '--file') {
@@ -131,38 +134,53 @@ export function inputFingerprint(directory = root) {
   return hash.digest('hex');
 }
 
-function runCommand(args) {
+function runCommand(args, { live = true } = {}) {
   return new Promise((resolveResult, reject) => {
     const test = args.includes('--test');
     const child = spawn(process.execPath, test ? ['--test-reporter=tap', ...args] : args, {
       cwd: root, env: { ...process.env, NODE_DISABLE_COLORS: '1' }, stdio: ['ignore', 'pipe', 'pipe']
     });
-    let tail = '';
-    const capture = (stream, chunk) => { stream.write(chunk); tail = (tail + chunk.toString()).slice(-65536); };
+    let tail = '', output = '';
+    const capture = (stream, chunk) => {
+      if (live) stream.write(chunk); else output += chunk.toString();
+      tail = (tail + chunk.toString()).slice(-65536);
+    };
     child.stdout.on('data', chunk => capture(process.stdout, chunk));
     child.stderr.on('data', chunk => capture(process.stderr, chunk));
     child.on('error', reject);
-    child.on('close', (code, signal) => resolveResult({ exitCode: code ?? 1, signal, ...(test ? { summary: testSummary(tail) } : {}) }));
+    child.on('close', (code, signal) => resolveResult({ exitCode: code ?? 1, signal, ...(live ? {} : { output }), ...(test ? { summary: testSummary(tail) } : {}) }));
   });
 }
 
-export async function runReleaseCommands(commands, execute = runCommand) {
-  const results = [];
-  for (const [label, args] of commands) {
-    console.log('\n=== ' + label + ' ===');
+// Build and syntax steps run in order and stop at the first failure. Browser commands are
+// independent, so they share a pool of `jobs` workers and every failure is collected.
+export async function runReleaseCommands(commands, execute = runCommand, { jobs = 1 } = {}) {
+  const results = [], live = jobs === 1;
+  const runOne = async index => {
+    const [label, args] = commands[index];
+    if (live) console.log('\n=== ' + label + ' ===');
+    else console.log('[started] ' + label);
     const startedAt = new Date().toISOString(), start = performance.now();
     let outcome;
-    try { outcome = await execute(args); }
+    try { outcome = await execute(args, { live }); }
     catch (error) { outcome = { exitCode: 1, error: error.message }; }
-    const empty = args.includes('--test') && outcome.exitCode === 0 && !outcome.summary?.passed;
-    const result = { label, args, startedAt, durationMs: Math.round(performance.now() - start), ...outcome,
-      exitCode: empty ? 1 : outcome.exitCode, ...(empty ? { error: 'No passing tests executed; empty/skipped-only selections are not validation.' } : {}) };
-    results.push(result);
-    if (result.exitCode !== 0) {
-      console.error('Release check failed: ' + label + (result.error ? ': ' + result.error : ''));
-      if (!label.startsWith('Browser:')) break;
-    }
+    const { output, ...recorded } = outcome;
+    const empty = args.includes('--test') && recorded.exitCode === 0 && !recorded.summary?.passed;
+    const result = { label, args, startedAt, durationMs: Math.round(performance.now() - start), ...recorded,
+      exitCode: empty ? 1 : recorded.exitCode, ...(empty ? { error: 'No passing tests executed; empty/skipped-only selections are not validation.' } : {}) };
+    if (!live) console.log('\n=== ' + label + ' (' + (result.durationMs / 1000).toFixed(1) + 's) ===\n' + (output || ''));
+    if (result.exitCode !== 0) console.error('Release check failed: ' + label + (result.error ? ': ' + result.error : ''));
+    results[index] = result;
+    return result;
+  };
+  let next = 0;
+  while (next < commands.length && !commands[next][0].startsWith('Browser:')) {
+    if ((await runOne(next++)).exitCode !== 0) return results;
   }
+  const workers = Array.from({ length: Math.min(jobs, commands.length - next) }, async () => {
+    while (next < commands.length) await runOne(next++);
+  });
+  await Promise.all(workers);
   return results;
 }
 
@@ -187,7 +205,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
     }
     report.inputFingerprint = inputFingerprint();
-    report.commands = await runReleaseCommands(selectedCommands(options));
+    report.jobs = options.jobs ?? 1;
+    report.commands = await runReleaseCommands(selectedCommands(options), runCommand, { jobs: report.jobs });
     if (git(['rev-parse', 'HEAD']).trim() !== revision || inputFingerprint() !== report.inputFingerprint) {
       throw new Error('Release inputs changed during checks; validate the final integrated tree before pushing.');
     }

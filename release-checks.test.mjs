@@ -78,7 +78,7 @@ test("real local R2 conditional saves retain one winner and survive runtime rest
   if (!global.gc) {
     const env = { ...process.env };
     delete env.NODE_TEST_CONTEXT;
-    const { stdout } = await promisify(execFile)(process.execPath, ["--expose-gc", "--test", "--test-reporter=tap",
+    const { stdout } = await promisify(execFile)(process.execPath, ["--expose-gc", "--test", "--test-isolation=none", "--test-reporter=tap",
       "--test-name-pattern=^" + context.name + "$", fileURLToPath(import.meta.url)], { env, timeout: 55000 });
     assert.equal(testSummary(stdout).passed, 1, stdout);
     assert.ok(stdout.includes("ok 1 - " + context.name), stdout);

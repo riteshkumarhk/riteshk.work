@@ -141,6 +141,34 @@ test('release timing collects independent browser failures without reruns or suc
   assert.match(launchFailure[0].error, /Cannot start process/);
 });
 
+test('local browser checks run in a bounded parallel pool after serial build gates and keep every failure', async () => {
+  assert.equal(parseReleaseOptions(['--shard', 'authoring']).jobs, null);
+  assert.equal(parseReleaseOptions(['--shard', 'authoring', '--jobs', '4']).jobs, 4);
+  assert.equal(parseReleaseOptions(['all', '--jobs', '1']).jobs, 1);
+  for (const value of ['0', '-1', '2.5', 'many', '100']) assert.throws(() => parseReleaseOptions(['--shard', 'authoring', '--jobs', value]), /--jobs must be/);
+
+  const commands = [['Root regressions', ['--test', 'root']], ['Public bundles', ['build']],
+    ...['a', 'b', 'c', 'd', 'e'].map(name => ['Browser: ' + name, ['--test', name]])];
+  let running = 0, peak = 0;
+  const modes = [];
+  const results = await runReleaseCommands(commands, async (args, { live }) => {
+    modes.push(live); running++; peak = Math.max(peak, running);
+    await new Promise(resolve => setTimeout(resolve, args.at(-1) === 'a' ? 40 : 10));
+    running--;
+    return { exitCode: ['b', 'd'].includes(args.at(-1)) ? 1 : 0, output: 'buffered', ...(args.includes('--test') ? { summary: { passed: 1 } } : {}) };
+  }, { jobs: 2 });
+  assert.equal(peak, 2);
+  assert.deepEqual(modes, Array(7).fill(false));
+  assert.deepEqual(results.map(result => result.label), commands.map(([label]) => label));
+  assert.deepEqual(results.map(result => result.exitCode), [0, 0, 0, 1, 0, 1, 0]);
+  assert.ok(results.every(result => !('output' in result)));
+
+  const started = [];
+  const failedGate = await runReleaseCommands(commands, async args => { started.push(args.at(-1)); return { exitCode: args.at(-1) === 'build' ? 1 : 0, summary: { passed: 1 } }; }, { jobs: 4 });
+  assert.deepEqual(started, ['root', 'build']);
+  assert.equal(failedGate.length, 2);
+});
+
 test('zero-match and skipped-only browser selections fail explicitly while ordinary TODOs do not hide passing tests', async () => {
   for (const output of ['# tests 0\n# pass 0\n# fail 0\n', '# tests 4\n# pass 0\n# skipped 4\n']) {
     const results = await runReleaseCommands([['Browser: selected', ['--test']]],

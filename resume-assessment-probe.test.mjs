@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, unlinkSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Miniflare } from 'miniflare';
+import { R2_TEST_WORKER, r2TestBucket } from './tools/r2-test-bucket.mjs';
 import { createAssessmentProbe, PROBE_KEY, PROBE_PHASES, probePolicy, CONTINUATION_KEY, CONTINUATION_CLAIM_KEY, CONTINUATION_PHASES, SMOKE_KEY, SMOKE_CLAIM_KEY, SMOKE_PHASES, STRUCTURED_SMOKE_KEY, STRUCTURED_SMOKE_CLAIM_KEY } from './tools/resume-assessment-probe.mjs';
 import { renderProbeExport, runProbeCommand } from './tools/resume-assessment-probe-cli.mjs';
 import { resumeSignature } from './src/js/resume-workspace.mjs';
@@ -67,8 +68,8 @@ function providerAnswer(stage, data) {
   semantic: { version: 'source-attribution-v1', excerpts: data.evidence.map(item => ({ id: item.id, kind: assigned.includes(item.id) ? 'experience' : 'general', reason: 'Scripted classification.' })), groups } };
 }
 async function fixture(persistence = {}) {
-  const options = { modules: true, script: 'export default {fetch(){return new Response("offline")}}', r2Buckets: ['PROBE'], ...persistence };
-  const runtime = new Miniflare(options), bucket = await runtime.getR2Bucket('PROBE'), calls = [];
+  const options = { modules: true, script: R2_TEST_WORKER, r2Buckets: ['PROBE'], ...persistence };
+  const runtime = new Miniflare(options), bucket = r2TestBucket(runtime, 'PROBE'), calls = [];
   const control = { reject: false };
   const request = async (action, body, checkedAt, signal, retainResponse) => {
     const pending = assessmentBudgetRoute(new Request('https://offline.invalid/admin/resume/assessment/' + action, {
@@ -358,7 +359,7 @@ test('Fixed smoke CLI preserves its identity marker if both registration records
     assert.equal(JSON.parse(readFileSync(join(directory, 'identity.json'))).smokeApprovalSha256, reviewed.approvalSha256);
     const runtime = new Miniflare(value.options);
     try {
-      const bucket = await runtime.getR2Bucket('PROBE');
+      const bucket = r2TestBucket(runtime, 'PROBE');
       await bucket.delete(SMOKE_KEY); await bucket.delete(SMOKE_CLAIM_KEY);
     } finally { await runtime.dispose(); }
     await assert.rejects(command(['status', '--smoke']), /smoke anchor or state disappeared/);
@@ -530,7 +531,7 @@ test('Structured smoke CLI binds durable registration, survives restarts and fin
   let active = true;
   const withStore = async action => {
     const runtime = new Miniflare(value.options);
-    try { return await action(await runtime.getR2Bucket('PROBE')); } finally { await runtime.dispose(); }
+    try { return await action(r2TestBucket(runtime, 'PROBE')); } finally { await runtime.dispose(); }
   };
   try {
     const originals = await stoppedSmokes(value);
@@ -638,7 +639,7 @@ test('Continuation preserves the stopped parent and original ledger prefix throu
     assert.equal((await parent.status()).spending.reserved, 2.904006);
     await assert.rejects(runNext(value, { transport: 'studio' }), /Additional calls/);
     await runtime.dispose(); runtime = new Miniflare(value.options);
-    const restored = createAssessmentProbe({ bucket: await runtime.getR2Bucket('PROBE'), renderExport: render, continuation: true,
+    const restored = createAssessmentProbe({ bucket: r2TestBucket(runtime, 'PROBE'), renderExport: render, continuation: true,
       request: () => assert.fail('Restart audit must not contact any provider') });
     assert.deepEqual(await restored.status(), status);
   } finally { await runtime.dispose(); rmSync(directory, { recursive: true, force: true }); }
@@ -771,8 +772,8 @@ test('Studio CLI continuation uses one identity anchor and eight cumulative call
   const parent = mkdtempSync(join(tmpdir(), 'rk-studio-continuation-')), directory = join(parent, 'probe');
   const session = studioCliFixture(directory), { command } = session, timestamp = new Date().toISOString();
   const withStore = async action => {
-    const runtime = new Miniflare({ modules: true, script: 'export default {fetch(){return new Response("offline")}}', r2Buckets: ['PROBE'], r2Persist: join(directory, 'r2') });
-    try { return await action(await runtime.getR2Bucket('PROBE')); } finally { await runtime.dispose(); }
+    const runtime = new Miniflare({ modules: true, script: R2_TEST_WORKER, r2Buckets: ['PROBE'], r2Persist: join(directory, 'r2') });
+    try { return await action(r2TestBucket(runtime, 'PROBE')); } finally { await runtime.dispose(); }
   };
   try {
     await command(['prepare']);
@@ -890,7 +891,7 @@ test('Rejected semantic and malformed JSON responses survive restart as private 
       await assert.rejects(runNext(value), fault === 'json' ? /Provider attempt failed/ : /invalid record fields at challenge.semantic/);
       const before = await value.probe.status();
       await runtime.dispose(); runtime = new Miniflare(value.options);
-      const bucket = await runtime.getR2Bucket('PROBE');
+      const bucket = r2TestBucket(runtime, 'PROBE');
       const restored = createAssessmentProbe({ bucket, renderExport: render, request: () => { throw new Error('No provider access during restart validation'); } });
       const status = await restored.status(), failed = status.operations[1];
       assert.deepEqual(status, before); assert.equal(status.stopped, true); assert.equal(status.next, null);
@@ -943,7 +944,7 @@ test('Persistent probe and originals survive runtime restart; stale approvals an
     await value.probe.prepare();
     const previous = await value.probe.review({ pricesCheckedAt: value.pricesCheckedAt });
     await runNext(value); await runtime.dispose(); runtime = new Miniflare(value.options);
-    const bucket = await runtime.getR2Bucket('PROBE');
+    const bucket = r2TestBucket(runtime, 'PROBE');
     const restored = createAssessmentProbe({ bucket, renderExport: render, request: () => { throw new Error('No paid call authorized on this restored fixture'); } });
     assert.equal((await restored.status()).spending.reserved, 0.33);
     assert.match((await restored.original('negation')).extraction.text, /No experience with Python/);
