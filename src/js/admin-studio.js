@@ -2308,15 +2308,27 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       return true;
     } catch (e) { return false; }
   }
+  // The PDF mirrors the LIVE site, so fetch the published content.json fresh at build time (R2 first, then
+  // the Pages copy - same order as the site's own loader). Fallbacks: the copy loaded with the studio, then the draft.
+  async function rpdfLiveContent() {
+    var urls = [MEDIA_ORIGIN + "/content.json?t=" + Date.now(), LIVE_ORIGIN + "/content.json?t=" + Date.now()];
+    for (var i = 0; i < urls.length; i++) {
+      try {
+        var res = await fetch(urls[i], { cache: "no-store" });
+        if (res.ok) { var j = await res.json(); if (j && Array.isArray(j.work)) return { content: j, live: true }; }
+      } catch (e) { /* network/CORS - try the next source */ }
+    }
+    if (window.RK && window.RK.published) return { content: window.RK.published, live: true };
+    return { content: data, live: false };
+  }
   async function resumePdfBuild() {
     var jsPDF = await ensureJsPdf();
     var qrcode = await ensureQrLib();
-    var d = data, c = d.contact || {}, L = d.landing || {};
+    var src = await rpdfLiveContent();
+    var d = src.content, c = d.contact || {}, L = d.landing || {};
     var SITE = LIVE_ORIGIN;
-    // Same set and order as the live home page (render.js): featured, not hidden, not encrypted - read from
-    // the PUBLISHED content, since every link/QR points at the live site. Falls back to the draft if unknown.
-    var liveSrc = (window.RK && window.RK.published) || d;
-    var work = (liveSrc.work || []).filter(function (w) { return w && w.featured && !w.hidden && !w.encWork; });
+    // Same set and order as the live home page (render.js): featured, not hidden, not encrypted.
+    var work = (d.work || []).filter(function (w) { return w && w.featured && !w.hidden && !w.encWork; });
     var highs = (d.highlights || []).slice(0, 6);
     var caps = d.capabilities || [], path = d.path || [], rec = d.recognition || [], edu = d.education || [];
 
@@ -2430,6 +2442,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
       doc.text("Scan a code or tap a link to open the live, interactive case study.", M, PH - 6.2);
       var sw = doc.getTextWidth(rpdfNoProto(SITE)); doc.text(rpdfNoProto(SITE), PW - M - sw, PH - 6.2);
     }
+    doc.__rkLive = src.live;
     return doc;
   }
   async function resumePdfDownload(btn) {
@@ -2437,7 +2450,8 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
     try {
       var doc = await resumePdfBuild();
       doc.save("Ritesh-Kumar-Portfolio.pdf");
-      status("PDF downloaded \u2014 with clickable, live case-study links.", true);
+      if (doc.__rkLive) status("PDF downloaded \u2014 built from your live site, with clickable case-study links.", true);
+      else status("PDF downloaded from your admin draft \u2014 the live site couldn\u2019t be reached, so check the case-study links.", false);
     } catch (e) {
       status("PDF failed: " + (e && e.message || e));
     } finally {
@@ -10506,7 +10520,7 @@ import { whiteboardFocus, startWhiteboardRecording, isWhiteboardVideoProvider, w
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("doc") + '</span><div><b>One-page r\u00e9sum\u00e9 \u2014 PDF</b><span>Clickable case-study links + QR codes</span></div></div>' +
           '<p class="adm__ext-lead">A print-ready A4 one-pager built live from your content: positioning, key metrics, every case study live on your site (each a live link), experience, skills, recognition and education. A real PDF with clickable links \u2014 no browser print dialog.</p>' +
           '<div class="imgblk__row"><button class="btn btn--primary" data-act="resume-pdf">' + extIcon("dl", 15) + ' Download PDF r\u00e9sum\u00e9</button></div>' +
-          '<div class="af__hint">Case studies follow your <b>published</b> site exactly \u2014 the same featured, visible cards in the same order, so every link and QR opens a live page. The rest of the page uses what you have in admin right now.</div>' +
+          '<div class="af__hint">Built from your <b>live, published</b> site each time you download \u2014 the same case studies in the same order, so every link and QR opens a live page. Publish first if you want unpublished edits in the PDF.</div>' +
         "</div>" +
         '<div class="adm__ext">' +
           '<div class="adm__ext-head"><span class="adm__ext-logo">' + extIcon("media") + '</span><div><b>Media library</b><span>See every uploaded file, spot unused ones, free up space</span></div></div>' +
