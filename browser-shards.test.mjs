@@ -223,7 +223,9 @@ test('Pages requires the build and every browser shard against the same tested c
   assert.doesNotMatch(browserJob, /\bref:/);
   assert.doesNotMatch(readFileSync(new URL('./.gitattributes', import.meta.url), 'utf8'), /export-(?:ignore|subst)/);
   assert.match(workflow, /git archive --format=tar HEAD/);
-  assert.match(browserJob, /Acquire::https?::Timeout "15"[\s\S]*Acquire::Retries "5"[\s\S]*npx playwright-core install --with-deps chromium/);
+  // System packages come from a runner-image-keyed cache; the browser install itself is unchanged.
+  assert.match(browserJob, /path: ~\/apt-debs\s*\n\s*key: .*steps\.runner-image\.outputs\.version/);
+  assert.match(browserJob, /sudo cp ~\/apt-debs\/\*\.deb \/var\/cache\/apt\/archives\/[\s\S]*npx playwright-core install --with-deps chromium\s*\n\s*cp \/var\/cache\/apt\/archives\/\*\.deb ~\/apt-debs\//);
   assert.match(workflow, /BROWSER_SHARD_REPORT: browser-timings-\$\{\{ matrix\.shard \}\}\.json/);
   assert.match(workflow, /Preserve browser task timings\s+if: always\(\)/);
   assert.match(workflow, /Preserve browser failure evidence\s+if: failure\(\)/);

@@ -68,8 +68,9 @@ tests always run exactly once. Deck tests use `prepare`, `authoring` and
 `resume-review`, `resume-probe` and `resume-cli` (candidate UI, PDF structure,
 Studio-bridge, baseline accounting and assessment-probe tests). Named patterns
 must not match a parent `describe` name, or every child would run. Browser
-installs set short apt timeouts with retries so a stalled Ubuntu mirror retries
-quickly instead of holding a shard for minutes. The probe indirectly launches Chromium
+system packages are cached per runner image because the Azure Ubuntu mirror can
+fall to ~40 kB/s and hold a shard for ten minutes; the full browser install and
+its dependencies still run every time. The probe indirectly launches Chromium
 through real PDF rendering, so it must not run in CI's browser-free root job.
 Inventory checks cover both direct launches and preview/PDF-render helpers.
 CI bounds the browser-free build job to 15 minutes and each browser shard to

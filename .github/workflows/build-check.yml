@@ -92,11 +92,25 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
 
+      - name: Identify runner image
+        id: runner-image
+        run: echo "version=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+
+      # The Azure Ubuntu mirror can crawl (~40 kB/s), so reuse the browser's
+      # system packages; the key refreshes whenever GitHub updates the image.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/apt-debs
+          key: ${{ runner.os }}-browser-debs-${{ steps.runner-image.outputs.version }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install test browser
         run: |
-          # Abandon stalled Ubuntu mirror downloads quickly instead of waiting minutes.
-          printf 'Acquire::http::Timeout "15";\nAcquire::https::Timeout "15";\nAcquire::Retries "5";\n' | sudo tee /etc/apt/apt.conf.d/99ci-network > /dev/null
+          echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99keep-debs > /dev/null
+          mkdir -p ~/apt-debs
+          sudo cp ~/apt-debs/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           npx playwright-core install --with-deps chromium
+          cp /var/cache/apt/archives/*.deb ~/apt-debs/ 2>/dev/null || true
+          echo "Cached system packages: $(ls ~/apt-debs | wc -l)"
 
       - name: Run required browser shard
         env:
