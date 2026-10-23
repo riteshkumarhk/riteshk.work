@@ -206,14 +206,21 @@ test('Pages requires the build and every browser shard against the same tested a
   assert.equal(workflow.match(/shard: \[([^\]]+)\]/)[1], Object.keys(browserShards).join(', '));
   assert.match(workflow, /fail-fast: false/);
   assert.match(workflow, /node tools\/browser-shards\.mjs/);
-  assert.match(workflow, /actions\/download-artifact@v4/);
+  assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40} # v4\./);
   assert.match(workflow, /git archive --format=tar HEAD/);
   assert.match(workflow, /BROWSER_SHARD_REPORT: browser-timings-\$\{\{ matrix\.shard \}\}\.json/);
   assert.match(workflow, /Preserve browser task timings\s+if: always\(\)/);
   assert.match(workflow, /Preserve browser failure evidence\s+if: failure\(\)/);
-  assert.match(workflow, /actions\/cache@v4/);
-  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /actions\/cache@[0-9a-f]{40} # v4\./);
+  assert.match(workflow, /actions\/upload-pages-artifact@[0-9a-f]{40} # v3\./);
   assert.doesNotMatch(workflow, /continue-on-error:/);
+});
+
+test('every workflow action is pinned to a full commit SHA with its version noted', () => {
+  const dir = new URL('./.github/workflows/', import.meta.url);
+  const uses = readdirSync(dir).filter(file => file.endsWith('.yml')).flatMap(file => [...readFileSync(new URL(file, dir), 'utf8').matchAll(/^\s*(?:-\s*)?uses:\s*(.+)$/gm)].map(match => file + ': ' + match[1].trim()));
+  assert.ok(uses.length > 0);
+  for (const use of uses) assert.match(use, /: [\w.-]+\/[\w.\/-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/, use);
 });
 
 test('native web capture belongs only to presenters while authoring retains its deck partition', () => {
