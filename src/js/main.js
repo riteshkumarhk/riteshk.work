@@ -714,14 +714,18 @@ import { initNodeWeb } from "./particles.js";
   }
   function ltEnc(u) { return !u || /^vault:/i.test(u) || /\.enc(\b|$)/i.test(u); }
   function mediaUrl(ref) { try { return (window.RK && window.RK.mediaUrl) ? window.RK.mediaUrl(ref) : ref; } catch (e) { return ref; } }
-  // Same rule as the landing work list (render.js): every case live on the site, no cap.
+  // Same rule as the landing work list (render.js), then a random 5. Each cover gets one random rank per
+  // page load: a reload reshuffles, but studio edits/re-renders keep the same picks (no jumping backdrop),
+  // and a newly added case draws its own rank so it has a fair chance to appear.
+  var LT_MEDIA_MAX = 5, ltMediaRank = {};
   function ltMediaSrcs() {
     var w = (window.RK && window.RK.data && window.RK.data.work) || [], out = [];
     w.filter(function (x) { return x && x.featured && !x.encWork && !x.hidden; }).forEach(function (x) {
       var s = x.image || (x.study && x.study.cover);
       if (s && !ltEnc(s) && out.indexOf(s) < 0) out.push(s);
     });
-    return out;
+    out.forEach(function (s) { if (!(s in ltMediaRank)) ltMediaRank[s] = Math.random(); });
+    return out.sort(function (a, b) { return ltMediaRank[a] - ltMediaRank[b]; }).slice(0, LT_MEDIA_MAX);
   }
   // Images carry data-src and load one step ahead of the fade, so a long case list doesn't fetch every cover at once.
   function ltMediaLoad(img) { if (img && !img.getAttribute("src") && img.dataset.src) img.src = img.dataset.src; }
